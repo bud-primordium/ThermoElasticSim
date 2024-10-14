@@ -1,0 +1,39 @@
+# src/docs/Doxyfile
+
+# 项目名称
+PROJECT_NAME           = "ThermoElasticSim"
+
+# 输出目录
+OUTPUT_DIRECTORY       = ../docs/html
+
+# 输入文件和目录
+INPUT                  = ../python ../fortran
+
+# 文件模式
+FILE_PATTERNS          = *.py *.f90
+
+# 输入编码
+INPUT_ENCODING         = UTF-8
+
+# 语言设置
+PROJECT_LANGUAGE       = Chinese
+
+# 生成 HTML 文档
+GENERATE_HTML          = YES
+
+# 禁用其他格式
+GENERATE_LATEX         = NO
+GENERATE_RTF           = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = NO
+GENERATE_DOCBOOK       = NO
+
+# 使用自定义 CSS 文件以支持中文字体
+HTML_EXTRA_STYLESHEET  = custom.css
+
+# 启用递归查找子目录
+RECURSIVE              = YES
+
+# 图形生成
+HAVE_DOT               = YES
+DOT_PATH               = /usr/bin/dot
