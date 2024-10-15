@@ -33,8 +33,8 @@ class Visualizer:
         """
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
-        for particle in crystal_structure.particles:
-            ax.scatter(*particle.position, label=particle.symbol)
+        for atom in crystal_structure.atoms:
+            ax.scatter(*atom.position, label=atom.symbol)
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")

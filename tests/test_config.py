@@ -29,7 +29,7 @@ class TestConfigManager(unittest.TestCase):
                     [0.0, 3.405, 0.0],
                     [0.0, 0.0, 3.405],
                 ],
-                "particles": [
+                "atoms": [
                     {"symbol": "Al", "mass": 26.9815, "position": [0.0, 0.0, 0.0]},
                     {
                         "symbol": "Al",

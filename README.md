@@ -139,10 +139,10 @@ unit_cell:
     - [3.615, 0.0, 0.0]
     - [0.0, 3.615, 0.0]
     - [0.0, 0.0, 3.615]
-  particles:
+  atoms:
     - {symbol: 'Al', mass: 26.9815, position: [0.0, 0.0, 0.0]}
     - {symbol: 'Al', mass: 26.9815, position: [1.8075, 1.8075, 1.8075]}
-    # 添加更多粒子
+    # 添加更多原子
 
 potential:
   type: 'EAM'  # 或 'LennardJones'

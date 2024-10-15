@@ -56,16 +56,16 @@ class MDSimulator:
         """
         # 实现MD模拟逻辑
         # 调用Fortran实现的时间积分算法（如 Runge-Kutta）
-        # positions = np.array([p.position for p in self.crystal_structure.particles])
-        # velocities = np.array([p.velocity for p in self.crystal_structure.particles])
+        # positions = np.array([p.position for p in self.crystal_structure.atoms])
+        # velocities = np.array([p.velocity for p in self.crystal_structure.atoms])
         # updated_positions, updated_velocities = run_md_simulation_fortran(
         #     positions, velocities, self.crystal_structure.lattice_vectors,
         #     self.temperature, self.pressure, self.timestep, self.thermostat, self.barostat, steps, self.potential.parameters, self.potential.cutoff
         # )
         # 更新晶体结构
-        # for i, particle in enumerate(self.crystal_structure.particles):
-        #     particle.position = updated_positions[i]
-        #     particle.velocity = updated_velocities[i]
+        # for i, atom in enumerate(self.crystal_structure.atoms):
+        #     atom.position = updated_positions[i]
+        #     atom.velocity = updated_velocities[i]
         pass
 
     def collect_stress(self) -> np.ndarray:

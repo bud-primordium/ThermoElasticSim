@@ -7,7 +7,7 @@
 
 import unittest
 from src.python.visualization import Visualizer
-from src.python.structure import CrystalStructure, Particle
+from src.python.structure import CrystalStructure, Atom
 import numpy as np
 import matplotlib
 
@@ -24,16 +24,12 @@ class TestVisualizer(unittest.TestCase):
         """
         @brief 测试前的初始化。
         """
-        particles = [
-            Particle(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Particle(
-                id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]
-            ),
+        atoms = [
+            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
+            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
         ]
         lattice_vectors = [[3.405, 0.0, 0.0], [0.0, 3.405, 0.0], [0.0, 0.0, 3.405]]
-        self.crystal = CrystalStructure(
-            lattice_vectors=lattice_vectors, particles=particles
-        )
+        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
         self.visualizer = Visualizer()
 
     def test_plot_crystal_structure(self) -> None:

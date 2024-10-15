@@ -7,7 +7,7 @@
 
 import unittest
 import numpy as np
-from src.python.structure import CrystalStructure, Particle
+from src.python.structure import CrystalStructure, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.stress_evaluator import LennardJonesStressEvaluator
 
@@ -22,14 +22,12 @@ class TestLennardJonesStressEvaluator(unittest.TestCase):
         """
         @brief 测试前的初始化。
         """
-        particles = [
-            Particle(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Particle(id=2, symbol="Al", mass=26.9815, position=[3.405, 0.0, 0.0]),
+        atoms = [
+            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
+            Atom(id=2, symbol="Al", mass=26.9815, position=[3.405, 0.0, 0.0]),
         ]
         lattice_vectors = [[3.405, 0.0, 0.0], [0.0, 3.405, 0.0], [0.0, 0.0, 3.405]]
-        self.crystal = CrystalStructure(
-            lattice_vectors=lattice_vectors, particles=particles
-        )
+        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
         self.potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )

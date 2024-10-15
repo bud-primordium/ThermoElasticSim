@@ -50,7 +50,7 @@ class EAMStressEvaluator(StressEvaluator):
         @return numpy.ndarray: 应力张量（Voigt 形式，形状为 (6,)）。
         """
         # 调用Fortran实现的EAM应力计算函数
-        # positions = np.array([p.position for p in crystal_structure.particles])
+        # positions = np.array([p.position for p in crystal_structure.atoms])
         # stress_voigt = calculate_stress_fortran(positions, crystal_structure.volume, potential.parameters, potential.cutoff)
         # return stress_voigt
         raise NotImplementedError("EAMStressEvaluator.compute_stress 尚未实现。")
@@ -73,7 +73,7 @@ class LennardJonesStressEvaluator(StressEvaluator):
         @return numpy.ndarray: 应力张量（Voigt 形式，形状为 (6,)）。
         """
         # 调用Fortran实现的Lennard-Jones应力计算函数
-        # positions = np.array([p.position for p in crystal_structure.particles])
+        # positions = np.array([p.position for p in crystal_structure.atoms])
         # stress_voigt = calculate_stress_fortran(positions, crystal_structure.volume, potential.parameters, potential.cutoff)
         # return stress_voigt
         raise NotImplementedError(

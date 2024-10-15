@@ -11,12 +11,12 @@ contains
     !> @brief 优化晶体结构（共轭梯度法示例）。
     !
     !> @param lattice_vectors (double precision, dimension(3, 3), intent(in)) 初始晶胞向量。
-    !> @param positions (double precision, dimension(3, num_atoms), intent(in)) 初始粒子位置。
-    !> @param num_atoms (integer, intent(in)) 粒子数量。
+    !> @param positions (double precision, dimension(3, num_atoms), intent(in)) 初始原子位置。
+    !> @param num_atoms (integer, intent(in)) 原子数量。
     !> @param potential_params (double precision, dimension(*), intent(in)) 势能参数数组。
     !> @param cutoff (double precision, intent(in)) 截断半径。
     !> @param optimized_lattice (double precision, dimension(3,3), intent(out)) 优化后的晶胞向量。
-    !> @param optimized_positions (double precision, dimension(3, num_atoms), intent(out)) 优化后的粒子位置。
+    !> @param optimized_positions (double precision, dimension(3, num_atoms), intent(out)) 优化后的原子位置。
     subroutine optimize_structure(lattice_vectors, positions, num_atoms, potential_params, cutoff, optimized_lattice, optimized_positions) bind(C, name="optimize_structure")
         use iso_c_binding
         implicit none
@@ -55,7 +55,7 @@ contains
             ! 计算步长（示例：固定步长）
             step_size = 0.01d0
 
-            ! 更新晶胞向量和粒子位置
+            ! 更新晶胞向量和原子位置
             optimized_lattice = optimized_lattice - step_size * grad_lattice
             optimized_positions = optimized_positions - step_size * grad_positions
 
@@ -73,13 +73,13 @@ contains
     !> @brief 计算能量和梯度。
     !
     !> @param lattice_vectors (double precision, dimension(3,3), intent(in)) 晶胞向量。
-    !> @param positions (double precision, dimension(3, num_atoms), intent(in)) 粒子位置。
-    !> @param num_atoms (integer, intent(in)) 粒子数量。
+    !> @param positions (double precision, dimension(3, num_atoms), intent(in)) 原子位置。
+    !> @param num_atoms (integer, intent(in)) 原子数量。
     !> @param potential_params (double precision, dimension(*), intent(in)) 势能参数数组。
     !> @param cutoff (double precision, intent(in)) 截断半径。
     !> @param energy (double precision, intent(out)) 当前总能量。
     !> @param grad_lattice (double precision, dimension(3,3), intent(out)) 晶胞向量的梯度。
-    !> @param grad_positions (double precision, dimension(3, num_atoms), intent(out)) 粒子位置的梯度。
+    !> @param grad_positions (double precision, dimension(3, num_atoms), intent(out)) 原子位置的梯度。
     subroutine calculate_energy_gradient(lattice_vectors, positions, num_atoms, potential_params, cutoff, energy, grad_lattice, grad_positions)
         use iso_c_binding
         implicit none

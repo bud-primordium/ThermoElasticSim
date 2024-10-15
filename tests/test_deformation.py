@@ -8,7 +8,7 @@
 import unittest
 import numpy as np
 from src.python.deformation import Deformer
-from src.python.structure import CrystalStructure, Particle
+from src.python.structure import CrystalStructure, Atom
 
 
 class TestDeformer(unittest.TestCase):
@@ -21,17 +21,13 @@ class TestDeformer(unittest.TestCase):
         """
         @brief 测试前的初始化。
         """
-        particles = [
-            Particle(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Particle(
-                id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]
-            ),
-            # 添加更多粒子
+        atoms = [
+            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
+            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
+            # 添加更多原子
         ]
         lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(
-            lattice_vectors=lattice_vectors, particles=particles
-        )
+        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
         self.deformer = Deformer()
 
     def test_generate_deformations(self) -> None:
@@ -59,9 +55,9 @@ class TestDeformer(unittest.TestCase):
             deformed_crystal.lattice_vectors, expected_lattice_vectors
         )
 
-        for i, particle in enumerate(deformed_crystal.particles):
-            expected_position = np.dot(F, np.array(self.crystal.particles[i].position))
-            np.testing.assert_array_almost_equal(particle.position, expected_position)
+        for i, atom in enumerate(deformed_crystal.atoms):
+            expected_position = np.dot(F, np.array(self.crystal.atoms[i].position))
+            np.testing.assert_array_almost_equal(atom.position, expected_position)
 
 
 if __name__ == "__main__":

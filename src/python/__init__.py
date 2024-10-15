@@ -8,7 +8,7 @@
 """
 
 # 导入子模块（可选）
-from .structure import CrystalStructure, Particle
+from .structure import CrystalStructure, Atom
 from .potentials import Potential, EAMPotential, LennardJonesPotential
 from .optimizers import (
     StructureOptimizer,

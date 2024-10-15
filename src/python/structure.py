@@ -2,24 +2,24 @@
 
 """
 @file structure.py
-@brief 管理晶体结构和粒子信息的模块。
+@brief 管理晶体结构和原子信息的模块。
 """
 
 import numpy as np
 from typing import List, Optional
 
 
-class Particle:
+class Atom:
     """
-    @class Particle
-    @brief 表示晶体结构中的单个粒子。
+    @class Atom
+    @brief 表示晶体结构中的单个原子。
 
     属性:
-        id (int): 粒子的唯一标识符。
+        id (int): 原子的唯一标识符。
         symbol (str): 元素符号（例如 'Al', 'C'）。
-        mass (float): 粒子的质量。
-        position (numpy.ndarray): 粒子的位置向量。
-        velocity (numpy.ndarray): 粒子的速度向量。
+        mass (float): 原子的质量。
+        position (numpy.ndarray): 原子的位置向量。
+        velocity (numpy.ndarray): 原子的速度向量。
     """
 
     def __init__(
@@ -31,13 +31,13 @@ class Particle:
         velocity: Optional[List[float]] = None,
     ):
         """
-        @brief 初始化一个 Particle 实例。
+        @brief 初始化一个 Atom 实例。
 
-        @param id 粒子的唯一标识符。
+        @param id 原子的唯一标识符。
         @param symbol 元素符号。
-        @param mass 粒子的质量。
-        @param position 粒子的位置向量。
-        @param velocity 粒子的速度向量（可选）。
+        @param mass 原子的质量。
+        @param position 原子的位置向量。
+        @param velocity 原子的速度向量（可选）。
         """
         self.id: int = id
         self.symbol: str = symbol
@@ -49,7 +49,7 @@ class Particle:
 
     def update_position(self, new_position: List[float]) -> None:
         """
-        @brief 更新粒子的位置。
+        @brief 更新原子的位置。
 
         @param new_position 新的位置向量。
         """
@@ -57,7 +57,7 @@ class Particle:
 
     def update_velocity(self, new_velocity: List[float]) -> None:
         """
-        @brief 更新粒子的速度。
+        @brief 更新原子的速度。
 
         @param new_velocity 新的速度向量。
         """
@@ -67,25 +67,25 @@ class Particle:
 class CrystalStructure:
     """
     @class CrystalStructure
-    @brief 管理晶体结构，包括晶胞参数和粒子列表。
+    @brief 管理晶体结构，包括晶胞参数和原子列表。
 
     属性:
         lattice_vectors (numpy.ndarray): 晶胞向量矩阵 (3x3)。
-        particles (List[Particle]): 粒子列表。
+        atoms (List[Atom]): 原子列表。
         volume (float): 晶胞体积。
     """
 
-    def __init__(self, lattice_vectors: List[List[float]], particles: List[Particle]):
+    def __init__(self, lattice_vectors: List[List[float]], atoms: List[Atom]):
         """
         @brief 初始化一个 CrystalStructure 实例。
 
         @param lattice_vectors 晶胞向量矩阵 (3x3)。
-        @param particles 粒子列表。
+        @param atoms 原子列表。
         """
         self.lattice_vectors: np.ndarray = np.array(
             lattice_vectors, dtype=float
         )  # 3x3 matrix
-        self.particles: List[Particle] = particles
+        self.atoms: List[Atom] = atoms
         self.volume: float = self.calculate_volume()
 
     def calculate_volume(self) -> float:
@@ -98,11 +98,11 @@ class CrystalStructure:
 
     def apply_deformation(self, F: np.ndarray) -> None:
         """
-        @brief 应用变形梯度矩阵 F，更新晶胞参数和粒子位置。
+        @brief 应用变形梯度矩阵 F，更新晶胞参数和原子位置。
 
         @param F 变形梯度矩阵 (3x3)。
         """
         self.lattice_vectors = np.dot(F, self.lattice_vectors)
-        for particle in self.particles:
-            particle.position = np.dot(F, particle.position)
+        for atom in self.atoms:
+            atom.position = np.dot(F, atom.position)
         self.volume = self.calculate_volume()

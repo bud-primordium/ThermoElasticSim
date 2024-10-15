@@ -7,7 +7,7 @@
 
 import unittest
 import numpy as np
-from src.python.structure import CrystalStructure, Particle
+from src.python.structure import CrystalStructure, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.optimizers import ConjugateGradientOptimizer, NewtonRaphsonOptimizer
 
@@ -22,17 +22,13 @@ class TestConjugateGradientOptimizer(unittest.TestCase):
         """
         @brief 测试前的初始化。
         """
-        particles = [
-            Particle(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Particle(
-                id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]
-            ),
-            # 添加更多粒子
+        atoms = [
+            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
+            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
+            # 添加更多原子
         ]
         lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(
-            lattice_vectors=lattice_vectors, particles=particles
-        )
+        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
         self.potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )
@@ -56,17 +52,13 @@ class TestNewtonRaphsonOptimizer(unittest.TestCase):
         """
         @brief 测试前的初始化。
         """
-        particles = [
-            Particle(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Particle(
-                id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]
-            ),
-            # 添加更多粒子
+        atoms = [
+            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
+            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
+            # 添加更多原子
         ]
         lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(
-            lattice_vectors=lattice_vectors, particles=particles
-        )
+        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
         self.potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )

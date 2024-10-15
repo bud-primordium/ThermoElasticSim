@@ -52,14 +52,14 @@ class ConjugateGradientOptimizer(StructureOptimizer):
         # 调用Fortran实现的共轭梯度优化函数
         # optimized_lattice, optimized_positions = optimize_structure_fortran(
         #     crystal_structure.lattice_vectors,
-        #     [particle.position for particle in crystal_structure.particles],
+        #     [atom.position for atom in crystal_structure.atoms],
         #     potential.parameters,
         #     potential.cutoff
         # )
         # 更新晶体结构
         # crystal_structure.lattice_vectors = optimized_lattice
-        # for i, particle in enumerate(crystal_structure.particles):
-        #     particle.position = optimized_positions[i]
+        # for i, atom in enumerate(crystal_structure.atoms):
+        #     atom.position = optimized_positions[i]
         # crystal_structure.volume = crystal_structure.calculate_volume()
         # return crystal_structure
 

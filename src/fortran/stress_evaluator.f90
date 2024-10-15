@@ -10,8 +10,8 @@ contains
 
     !> @brief 计算应力张量（Voigt表示）。
     !
-    !> @param positions (double precision, dimension(3, num_atoms), intent(in)) 粒子的位置矩阵。
-    !> @param num_atoms (integer, intent(in)) 粒子数量。
+    !> @param positions (double precision, dimension(3, num_atoms), intent(in)) 原子的位置矩阵。
+    !> @param num_atoms (integer, intent(in)) 原子数量。
     !> @param volume (double precision, intent(in)) 晶胞体积。
     !> @param params (double precision, dimension(*), intent(in)) 势能参数数组。
     !> @param cutoff (double precision, intent(in)) 截断半径。
@@ -34,7 +34,7 @@ contains
 
         ! 动能贡献（示例，实际应根据需要实现）
         do i = 1, num_atoms
-            ! 假设 params 包含速度分量，例如 params(1:num_atoms, 1:3) 表示粒子的速度
+            ! 假设 params 包含速度分量，例如 params(1:num_atoms, 1:3) 表示原子的速度
             sigma(1,1) = sigma(1,1) + params(3*i-2)**2
             sigma(2,2) = sigma(2,2) + params(3*i-1)**2
             sigma(3,3) = sigma(3,3) + params(3*i)**2
