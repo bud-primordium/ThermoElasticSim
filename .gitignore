@@ -30,3 +30,6 @@ docs/xml/
 # OS
 .DS_Store
 Thumbs.db
+
+# dirs
+.lectures/
