@@ -8,7 +8,7 @@
 import unittest
 import numpy as np
 from src.python.deformation import Deformer
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 
 
 class TestDeformer(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestDeformer(unittest.TestCase):
             # 添加更多原子
         ]
         lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
+        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
         self.deformer = Deformer()
 
     def test_generate_deformations(self) -> None:
@@ -48,15 +48,15 @@ class TestDeformer(unittest.TestCase):
         @brief 测试应变矩阵的应用是否正确更新晶体结构。
         """
         F = np.array([[1.01, 0.0, 0.0], [0.0, 1.02, 0.0], [0.0, 0.0, 1.03]])
-        deformed_crystal = self.deformer.apply_deformation(self.crystal, F)
+        deformed_cell = self.deformer.apply_deformation(self.cell, F)
 
-        expected_lattice_vectors = np.dot(F, np.array(self.crystal.lattice_vectors))
+        expected_lattice_vectors = np.dot(F, np.array(self.cell.lattice_vectors))
         np.testing.assert_array_almost_equal(
-            deformed_crystal.lattice_vectors, expected_lattice_vectors
+            deformed_cell.lattice_vectors, expected_lattice_vectors
         )
 
-        for i, atom in enumerate(deformed_crystal.atoms):
-            expected_position = np.dot(F, np.array(self.crystal.atoms[i].position))
+        for i, atom in enumerate(deformed_cell.atoms):
+            expected_position = np.dot(F, np.array(self.cell.atoms[i].position))
             np.testing.assert_array_almost_equal(atom.position, expected_position)
 
 

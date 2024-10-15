@@ -9,7 +9,7 @@ import unittest
 import numpy as np
 import os
 from src.python.utilities import IOHandler, TensorConverter
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 
 
 class TestIOHandler(unittest.TestCase):

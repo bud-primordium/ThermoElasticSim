@@ -7,7 +7,7 @@
 
 import unittest
 from src.python.visualization import Visualizer
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 import numpy as np
 import matplotlib
 
@@ -29,17 +29,17 @@ class TestVisualizer(unittest.TestCase):
             Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
         ]
         lattice_vectors = [[3.405, 0.0, 0.0], [0.0, 3.405, 0.0], [0.0, 0.0, 3.405]]
-        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
+        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
         self.visualizer = Visualizer()
 
-    def test_plot_crystal_structure(self) -> None:
+    def test_plot_cell_structure(self) -> None:
         """
         @brief 测试绘制晶体结构是否成功（不抛出异常）。
         """
         try:
-            self.visualizer.plot_crystal_structure(self.crystal)
+            self.visualizer.plot_cell_structure(self.cell)
         except Exception as e:
-            self.fail(f"plot_crystal_structure 抛出异常: {e}")
+            self.fail(f"plot_cell_structure 抛出异常: {e}")
 
     def test_plot_stress_strain(self) -> None:
         """

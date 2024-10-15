@@ -7,7 +7,7 @@
 
 import unittest
 import numpy as np
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.optimizers import ConjugateGradientOptimizer, NewtonRaphsonOptimizer
 
@@ -28,7 +28,7 @@ class TestConjugateGradientOptimizer(unittest.TestCase):
             # 添加更多原子
         ]
         lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
+        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
         self.potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )
@@ -39,7 +39,7 @@ class TestConjugateGradientOptimizer(unittest.TestCase):
         @brief 测试 ConjugateGradientOptimizer.optimize 方法是否抛出 NotImplementedError。
         """
         with self.assertRaises(NotImplementedError):
-            self.optimizer.optimize(self.crystal, self.potential)
+            self.optimizer.optimize(self.cell, self.potential)
 
 
 class TestNewtonRaphsonOptimizer(unittest.TestCase):
@@ -58,7 +58,7 @@ class TestNewtonRaphsonOptimizer(unittest.TestCase):
             # 添加更多原子
         ]
         lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
+        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
         self.potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )
@@ -69,7 +69,7 @@ class TestNewtonRaphsonOptimizer(unittest.TestCase):
         @brief 测试 NewtonRaphsonOptimizer.optimize 方法是否抛出 NotImplementedError。
         """
         with self.assertRaises(NotImplementedError):
-            self.optimizer.optimize(self.crystal, self.potential)
+            self.optimizer.optimize(self.cell, self.potential)
 
 
 if __name__ == "__main__":

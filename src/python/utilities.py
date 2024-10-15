@@ -22,12 +22,12 @@ class IOHandler:
         """
         pass
 
-    def read_structure(self, filepath: str) -> "CrystalStructure":
+    def read_structure(self, filepath: str) -> "Cell":
         """
         @brief 从文件读取晶体结构数据。
 
         @param filepath 结构文件路径。
-        @return CrystalStructure 实例。
+        @return Cell 实例。
         """
         # 实现读取结构文件的逻辑
         raise NotImplementedError("IOHandler.read_structure 尚未实现。")

@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from typing import List
 
-from src.python.structure import CrystalStructure
+from src.python.structure import Cell
 
 
 class Visualizer:
@@ -25,15 +25,15 @@ class Visualizer:
         """
         pass
 
-    def plot_crystal_structure(self, crystal_structure: CrystalStructure) -> None:
+    def plot_cell_structure(self, cell_structure: Cell) -> None:
         """
         @brief 绘制晶体结构的3D图形。
 
-        @param crystal_structure CrystalStructure 实例。
+        @param cell_structure Cell 实例。
         """
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
-        for atom in crystal_structure.atoms:
+        for atom in cell_structure.atoms:
             ax.scatter(*atom.position, label=atom.symbol)
         ax.set_xlabel("X")
         ax.set_ylabel("Y")

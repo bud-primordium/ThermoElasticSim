@@ -6,7 +6,7 @@
 """
 
 import numpy as np
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.optimizers import ConjugateGradientOptimizer
 from src.python.deformation import Deformer
@@ -16,11 +16,11 @@ from src.python.solver import ElasticConstantSolver
 from src.python.utilities import TensorConverter
 
 
-def initialize_crystal() -> CrystalStructure:
+def initialize_cell() -> Cell:
     """
     @brief 初始化晶体结构。
 
-    @return CrystalStructure 实例。
+    @return Cell 实例。
     """
     atoms = [
         Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
@@ -28,8 +28,8 @@ def initialize_crystal() -> CrystalStructure:
         # 添加更多原子
     ]
     lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-    crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
-    return crystal
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
+    return cell
 
 
 def main() -> None:
@@ -37,7 +37,7 @@ def main() -> None:
     @brief 主函数，执行零温下弹性常数计算流程。
     """
     # 初始化晶体结构
-    crystal = initialize_crystal()
+    cell = initialize_cell()
 
     # 定义相互作用势能
     potential_params = {"epsilon": 0.0103, "sigma": 3.405}  # 示例参数  # 示例参数
@@ -45,7 +45,7 @@ def main() -> None:
 
     # 结构优化
     optimizer = ConjugateGradientOptimizer()
-    optimized_crystal = optimizer.optimize(crystal, potential)
+    optimized_cell = optimizer.optimize(cell, potential)
 
     # 生成应变矩阵
     deformer = Deformer()
@@ -63,10 +63,10 @@ def main() -> None:
 
     for F in deformation_matrices:
         # 应用应变
-        deformed_crystal = deformer.apply_deformation(optimized_crystal, F)
+        deformed_cell = deformer.apply_deformation(optimized_cell, F)
 
         # 计算应力
-        stress_voigt = stress_evaluator.compute_stress(deformed_crystal, potential)
+        stress_voigt = stress_evaluator.compute_stress(deformed_cell, potential)
 
         # 计算应变
         strain_voigt = strain_calculator.calculate_strain(F)

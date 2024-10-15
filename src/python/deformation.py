@@ -7,7 +7,7 @@
 
 import numpy as np
 from typing import List
-from structure import CrystalStructure
+from structure import Cell
 
 
 class Deformer:
@@ -39,15 +39,13 @@ class Deformer:
         ]
         return strains
 
-    def apply_deformation(
-        self, crystal_structure: "CrystalStructure", F: np.ndarray
-    ) -> "CrystalStructure":
+    def apply_deformation(self, cell_structure: "Cell", F: np.ndarray) -> "Cell":
         """
         @brief 应用变形梯度矩阵 F 到晶体结构。
 
-        @param crystal_structure CrystalStructure 实例。
+        @param cell_structure Cell 实例。
         @param F 变形梯度矩阵，形状为 (3, 3)。
-        @return CrystalStructure 变形后的晶体结构实例。
+        @return Cell 变形后的晶体结构实例。
         """
-        crystal_structure.apply_deformation(F)
-        return crystal_structure
+        cell_structure.apply_deformation(F)
+        return cell_structure

@@ -20,15 +20,13 @@ class StructureOptimizer(ABC):
     """
 
     @abstractmethod
-    def optimize(
-        self, crystal_structure: "CrystalStructure", potential: "Potential"
-    ) -> "CrystalStructure":
+    def optimize(self, cell_structure: "Cell", potential: "Potential") -> "Cell":
         """
         @brief 优化晶体结构。
 
-        @param crystal_structure CrystalStructure 实例。
+        @param cell_structure Cell 实例。
         @param potential Potential 实例。
-        @return CrystalStructure 优化后的晶体结构实例。
+        @return Cell 优化后的晶体结构实例。
         """
         pass
 
@@ -39,29 +37,27 @@ class ConjugateGradientOptimizer(StructureOptimizer):
     @brief 共轭梯度优化算法实现类。
     """
 
-    def optimize(
-        self, crystal_structure: "CrystalStructure", potential: "Potential"
-    ) -> "CrystalStructure":
+    def optimize(self, cell_structure: "Cell", potential: "Potential") -> "Cell":
         """
         @brief 使用共轭梯度法优化晶体结构。
 
-        @param crystal_structure CrystalStructure 实例。
+        @param cell_structure Cell 实例。
         @param potential Potential 实例。
-        @return CrystalStructure 优化后的晶体结构实例。
+        @return Cell 优化后的晶体结构实例。
         """
         # 调用Fortran实现的共轭梯度优化函数
         # optimized_lattice, optimized_positions = optimize_structure_fortran(
-        #     crystal_structure.lattice_vectors,
-        #     [atom.position for atom in crystal_structure.atoms],
+        #     cell_structure.lattice_vectors,
+        #     [atom.position for atom in cell_structure.atoms],
         #     potential.parameters,
         #     potential.cutoff
         # )
         # 更新晶体结构
-        # crystal_structure.lattice_vectors = optimized_lattice
-        # for i, atom in enumerate(crystal_structure.atoms):
+        # cell_structure.lattice_vectors = optimized_lattice
+        # for i, atom in enumerate(cell_structure.atoms):
         #     atom.position = optimized_positions[i]
-        # crystal_structure.volume = crystal_structure.calculate_volume()
-        # return crystal_structure
+        # cell_structure.volume = cell_structure.calculate_volume()
+        # return cell_structure
 
         raise NotImplementedError("ConjugateGradientOptimizer.optimize 尚未实现。")
 
@@ -72,15 +68,13 @@ class NewtonRaphsonOptimizer(StructureOptimizer):
     @brief 牛顿-拉夫森优化算法实现类。
     """
 
-    def optimize(
-        self, crystal_structure: "CrystalStructure", potential: "Potential"
-    ) -> "CrystalStructure":
+    def optimize(self, cell_structure: "Cell", potential: "Potential") -> "Cell":
         """
         @brief 使用牛顿-拉夫森法优化晶体结构。
 
-        @param crystal_structure CrystalStructure 实例。
+        @param cell_structure Cell 实例。
         @param potential Potential 实例。
-        @return CrystalStructure 优化后的晶体结构实例。
+        @return Cell 优化后的晶体结构实例。
         """
         # 实现牛顿-拉夫森优化逻辑
         raise NotImplementedError("NewtonRaphsonOptimizer.optimize 尚未实现。")

@@ -20,7 +20,7 @@ class MDSimulator:
 
     def __init__(
         self,
-        crystal_structure: "CrystalStructure",
+        cell_structure: "Cell",
         potential: "Potential",
         temperature: float,
         pressure: float,
@@ -31,7 +31,7 @@ class MDSimulator:
         """
         @brief 初始化 MDSimulator 实例。
 
-        @param crystal_structure CrystalStructure 实例。
+        @param cell_structure Cell 实例。
         @param potential Potential 实例。
         @param temperature 模拟温度（K）。
         @param pressure 模拟压力（GPa）。
@@ -39,7 +39,7 @@ class MDSimulator:
         @param thermostat 恒温器类型（如 'Nosé-Hoover'）。
         @param barostat 恒压器类型（如 'NoBarostat'）。
         """
-        self.crystal_structure: "CrystalStructure" = crystal_structure
+        self.cell_structure: "Cell" = cell_structure
         self.potential: "Potential" = potential
         self.temperature: float = temperature
         self.pressure: float = pressure
@@ -56,14 +56,14 @@ class MDSimulator:
         """
         # 实现MD模拟逻辑
         # 调用Fortran实现的时间积分算法（如 Runge-Kutta）
-        # positions = np.array([p.position for p in self.crystal_structure.atoms])
-        # velocities = np.array([p.velocity for p in self.crystal_structure.atoms])
+        # positions = np.array([p.position for p in self.cell_structure.atoms])
+        # velocities = np.array([p.velocity for p in self.cell_structure.atoms])
         # updated_positions, updated_velocities = run_md_simulation_fortran(
-        #     positions, velocities, self.crystal_structure.lattice_vectors,
+        #     positions, velocities, self.cell_structure.lattice_vectors,
         #     self.temperature, self.pressure, self.timestep, self.thermostat, self.barostat, steps, self.potential.parameters, self.potential.cutoff
         # )
         # 更新晶体结构
-        # for i, atom in enumerate(self.crystal_structure.atoms):
+        # for i, atom in enumerate(self.cell_structure.atoms):
         #     atom.position = updated_positions[i]
         #     atom.velocity = updated_velocities[i]
         pass
@@ -76,6 +76,6 @@ class MDSimulator:
         """
         # 调用 StressEvaluator 计算应力张量
         # stress_evaluator = StressEvaluator()
-        # stress_voigt = stress_evaluator.compute_stress(self.crystal_structure, self.potential)
+        # stress_voigt = stress_evaluator.compute_stress(self.cell_structure, self.potential)
         # return stress_voigt
         raise NotImplementedError("MDSimulator.collect_stress 尚未实现。")

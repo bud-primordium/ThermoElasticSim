@@ -64,9 +64,9 @@ class Atom:
         self.velocity = np.array(new_velocity, dtype=float)
 
 
-class CrystalStructure:
+class Cell:
     """
-    @class CrystalStructure
+    @class Cell
     @brief 管理晶体结构，包括晶胞参数和原子列表。
 
     属性:
@@ -77,7 +77,7 @@ class CrystalStructure:
 
     def __init__(self, lattice_vectors: List[List[float]], atoms: List[Atom]):
         """
-        @brief 初始化一个 CrystalStructure 实例。
+        @brief 初始化一个 Cell 实例。
 
         @param lattice_vectors 晶胞向量矩阵 (3x3)。
         @param atoms 原子列表。

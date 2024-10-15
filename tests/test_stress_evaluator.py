@@ -7,7 +7,7 @@
 
 import unittest
 import numpy as np
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.stress_evaluator import LennardJonesStressEvaluator
 
@@ -27,7 +27,7 @@ class TestLennardJonesStressEvaluator(unittest.TestCase):
             Atom(id=2, symbol="Al", mass=26.9815, position=[3.405, 0.0, 0.0]),
         ]
         lattice_vectors = [[3.405, 0.0, 0.0], [0.0, 3.405, 0.0], [0.0, 0.0, 3.405]]
-        self.crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
+        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
         self.potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )
@@ -37,14 +37,12 @@ class TestLennardJonesStressEvaluator(unittest.TestCase):
         """
         @brief 测试应力计算函数是否返回正确的形状。
         """
-        stress_voigt = self.stress_evaluator.compute_stress(
-            self.crystal, self.potential
-        )
+        stress_voigt = self.stress_evaluator.compute_stress(self.cell, self.potential)
         self.assertEqual(stress_voigt.shape, (6,))
         # 由于calculate_stress尚未实现，预期抛出NotImplementedError
         # 这里仅测试接口是否工作
         with self.assertRaises(NotImplementedError):
-            _ = self.stress_evaluator.compute_stress(self.crystal, self.potential)
+            _ = self.stress_evaluator.compute_stress(self.cell, self.potential)
 
 
 if __name__ == "__main__":

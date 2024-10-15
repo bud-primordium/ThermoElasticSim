@@ -6,7 +6,7 @@
 """
 
 import unittest
-from src.python.structure import CrystalStructure, Atom
+from src.python.structure import Cell, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.md_simulation import MDSimulator
 
@@ -27,12 +27,12 @@ class TestMDSimulator(unittest.TestCase):
             # 添加更多原子
         ]
         lattice_vectors = [[3.405, 0.0, 0.0], [0.0, 3.405, 0.0], [0.0, 0.0, 3.405]]
-        crystal = CrystalStructure(lattice_vectors=lattice_vectors, atoms=atoms)
+        cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
         potential = LennardJonesPotential(
             parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
         )
         self.md_simulator = MDSimulator(
-            crystal_structure=crystal,
+            cell_structure=cell,
             potential=potential,
             temperature=300.0,  # K
             pressure=0.0,  # GPa

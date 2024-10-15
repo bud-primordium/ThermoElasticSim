@@ -2,12 +2,12 @@
 
 """
 @file test_structure.py
-@brief 测试 structure.py 模块中的 Atom 和 CrystalStructure 类。
+@brief 测试 structure.py 模块中的 Atom 和 Cell 类。
 """
 
 import unittest
 import numpy as np
-from src.python.structure import Atom, CrystalStructure
+from src.python.structure import Atom, Cell
 
 
 class TestAtom(unittest.TestCase):
@@ -44,10 +44,10 @@ class TestAtom(unittest.TestCase):
         np.testing.assert_array_equal(p.velocity, np.array([0.5, 0.5, 0.5]))
 
 
-class TestCrystalStructure(unittest.TestCase):
+class TestCell(unittest.TestCase):
     """
-    @class TestCrystalStructure
-    @brief 测试 CrystalStructure 类。
+    @class TestCell
+    @brief 测试 Cell 类。
     """
 
     def setUp(self) -> None:
@@ -59,28 +59,26 @@ class TestCrystalStructure(unittest.TestCase):
             Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
         ]
         self.lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.crystal = CrystalStructure(
-            lattice_vectors=self.lattice_vectors, atoms=self.atoms
-        )
+        self.cell = Cell(lattice_vectors=self.lattice_vectors, atoms=self.atoms)
 
     def test_volume_calculation(self) -> None:
         """
         @brief 测试晶胞体积计算。
         """
         expected_volume = 3.615**3
-        self.assertAlmostEqual(self.crystal.volume, expected_volume)
+        self.assertAlmostEqual(self.cell.volume, expected_volume)
 
     def test_apply_deformation(self) -> None:
         """
         @brief 测试施加应变后的晶体结构更新。
         """
         F = np.array([[1.01, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        self.crystal.apply_deformation(F)
+        self.cell.apply_deformation(F)
         expected_lattice_vectors = np.dot(F, np.array(self.lattice_vectors))
         np.testing.assert_array_almost_equal(
-            self.crystal.lattice_vectors, expected_lattice_vectors
+            self.cell.lattice_vectors, expected_lattice_vectors
         )
-        for i, atom in enumerate(self.crystal.atoms):
+        for i, atom in enumerate(self.cell.atoms):
             expected_position = np.dot(F, np.array(self.atoms[i].position))
             np.testing.assert_array_almost_equal(atom.position, expected_position)
 
