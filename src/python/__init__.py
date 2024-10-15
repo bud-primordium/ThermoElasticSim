@@ -2,7 +2,7 @@
 
 """
 @package ThermoElasticSim
-@brief 初始化ThermoElasticSim Python包。
+@brief 初始化ThermoElasticSim项目。
 
 该项目包含用于计算和模拟金属铝（Al）和金刚石（Diamond）在不同温度下弹性常数的模块。
 """

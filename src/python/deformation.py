@@ -7,6 +7,7 @@
 
 import numpy as np
 from typing import List
+from structure import CrystalStructure
 
 
 class Deformer:
