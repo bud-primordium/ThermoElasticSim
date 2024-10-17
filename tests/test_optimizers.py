@@ -1,75 +1,58 @@
 # tests/test_optimizers.py
 
-"""
-@file test_optimizers.py
-@brief 测试 optimizers.py 模块中的结构优化算法。
-"""
-
 import unittest
 import numpy as np
-from src.python.structure import Cell, Atom
-from src.python.potentials import LennardJonesPotential
-from src.python.optimizers import ConjugateGradientOptimizer, NewtonRaphsonOptimizer
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.optimizers import GradientDescentOptimizer
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
 
 
-class TestConjugateGradientOptimizer(unittest.TestCase):
-    """
-    @class TestConjugateGradientOptimizer
-    @brief 测试 ConjugateGradientOptimizer 类。
-    """
+class TestOptimizers(unittest.TestCase):
+    def setUp(self):
+        # 创建一个简单的系统（两个铝原子）
+        lattice_vectors = np.eye(3) * 4.05e-10  # 米
+        mass = 26.9815 / (6.02214076e23) * 1e-3  # kg，正确的质量单位
+        position1 = np.array([0.0, 0.0, 0.0])
+        position2 = np.array([2.55e-10, 0.0, 0.0])  # 初始距离为 sigma
+        atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
+        atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
+        self.cell = Cell(
+            lattice_vectors, [atom1, atom2], pbc_enabled=False
+        )  # 禁用周期性边界条件
 
-    def setUp(self) -> None:
-        """
-        @brief 测试前的初始化。
-        """
-        atoms = [
-            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
-            # 添加更多原子
-        ]
-        lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
+        # 定义 Lennard-Jones 势
+        epsilon = 6.774e-21  # J
+        sigma = 2.55e-10  # m
+        cutoff = 2.5 * sigma
         self.potential = LennardJonesPotential(
-            parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
+            epsilon=epsilon, sigma=sigma, cutoff=cutoff
         )
-        self.optimizer = ConjugateGradientOptimizer()
 
-    def test_optimize_not_implemented(self) -> None:
-        """
-        @brief 测试 ConjugateGradientOptimizer.optimize 方法是否抛出 NotImplementedError。
-        """
-        with self.assertRaises(NotImplementedError):
-            self.optimizer.optimize(self.cell, self.potential)
-
-
-class TestNewtonRaphsonOptimizer(unittest.TestCase):
-    """
-    @class TestNewtonRaphsonOptimizer
-    @brief 测试 NewtonRaphsonOptimizer 类。
-    """
-
-    def setUp(self) -> None:
-        """
-        @brief 测试前的初始化。
-        """
-        atoms = [
-            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
-            # 添加更多原子
-        ]
-        lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
-        self.potential = LennardJonesPotential(
-            parameters={"epsilon": 0.0103, "sigma": 3.405}, cutoff=5.0
+    def test_gradient_descent_optimizer(self):
+        optimizer = GradientDescentOptimizer(
+            max_steps=1000, tol=1e-8, step_size=1e-12  # 使用适当的步长
         )
-        self.optimizer = NewtonRaphsonOptimizer()
+        optimizer.optimize(self.cell, self.potential)
 
-    def test_optimize_not_implemented(self) -> None:
-        """
-        @brief 测试 NewtonRaphsonOptimizer.optimize 方法是否抛出 NotImplementedError。
-        """
-        with self.assertRaises(NotImplementedError):
-            self.optimizer.optimize(self.cell, self.potential)
+        # 获取优化后的原子位置
+        optimized_position1 = self.cell.atoms[0].position
+        optimized_position2 = self.cell.atoms[1].position
+
+        # 计算优化后的距离
+        optimized_distance = np.linalg.norm(optimized_position2 - optimized_position1)
+
+        # 预期优化后的距离应接近 2^(1/6) * sigma ≈ 2.86e-10 m
+        equilibrium_distance = 2 ** (1 / 6) * self.potential.sigma
+        self.assertAlmostEqual(optimized_distance, equilibrium_distance, delta=1e-10)
 
 
 if __name__ == "__main__":

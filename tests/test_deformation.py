@@ -1,63 +1,49 @@
 # tests/test_deformation.py
 
-"""
-@file test_deformation.py
-@brief 测试 deformation.py 模块中的 Deformer 类。
-"""
-
 import unittest
 import numpy as np
-from src.python.deformation import Deformer
-from src.python.structure import Cell, Atom
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.deformation import Deformer
 
 
-class TestDeformer(unittest.TestCase):
-    """
-    @class TestDeformer
-    @brief 测试 Deformer 类。
-    """
+class TestDeformation(unittest.TestCase):
+    def test_generate_deformation_matrices(self):
+        delta = 0.01  # 1% 变形
+        deformer = Deformer(delta)
+        deformation_matrices = deformer.generate_deformation_matrices()
 
-    def setUp(self) -> None:
-        """
-        @brief 测试前的初始化。
-        """
-        atoms = [
-            Atom(id=1, symbol="Al", mass=26.9815, position=[0.0, 0.0, 0.0]),
-            Atom(id=2, symbol="Al", mass=26.9815, position=[1.8075, 1.8075, 1.8075]),
-            # 添加更多原子
-        ]
-        lattice_vectors = [[3.615, 0.0, 0.0], [0.0, 3.615, 0.0], [0.0, 0.0, 3.615]]
-        self.cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms)
-        self.deformer = Deformer()
+        # 预期生成 6 个变形矩阵（正交基的变形）
+        self.assertEqual(len(deformation_matrices), 6)
 
-    def test_generate_deformations(self) -> None:
-        """
-        @brief 测试应变矩阵的生成是否正确。
-        """
-        delta = 0.01
-        strains = self.deformer.generate_deformations(delta=delta)
-        self.assertEqual(len(strains), 6)
-        for F in strains:
+        # 检查每个变形矩阵的正确性
+        for i, F in enumerate(deformation_matrices):
+            # 检查是否为 3x3 矩阵
             self.assertEqual(F.shape, (3, 3))
-            self.assertTrue(
-                np.allclose(F, np.identity(3) + F - np.identity(3), atol=1e-8)
-            )  # 检查是否接近应变
 
-    def test_apply_deformation(self) -> None:
-        """
-        @brief 测试应变矩阵的应用是否正确更新晶体结构。
-        """
-        F = np.array([[1.01, 0.0, 0.0], [0.0, 1.02, 0.0], [0.0, 0.0, 1.03]])
-        deformed_cell = self.deformer.apply_deformation(self.cell, F)
-
-        expected_lattice_vectors = np.dot(F, np.array(self.cell.lattice_vectors))
-        np.testing.assert_array_almost_equal(
-            deformed_cell.lattice_vectors, expected_lattice_vectors
-        )
-
-        for i, atom in enumerate(deformed_cell.atoms):
-            expected_position = np.dot(F, np.array(self.cell.atoms[i].position))
-            np.testing.assert_array_almost_equal(atom.position, expected_position)
+            # 根据变形类型，检查特定元素是否有变形
+            if i < 3:
+                # 轴向拉伸/压缩
+                self.assertAlmostEqual(F[i, i], 1 + delta)
+                for j in range(3):
+                    if j != i:
+                        self.assertAlmostEqual(F[i, j], 0.0)
+            else:
+                # 剪切变形
+                shear_index = i - 3
+                self.assertAlmostEqual(F[0, 1], delta if shear_index == 0 else 0.0)
+                self.assertAlmostEqual(F[0, 2], delta if shear_index == 1 else 0.0)
+                self.assertAlmostEqual(F[1, 2], delta if shear_index == 2 else 0.0)
+                # 对角线元素应为1
+                for j in range(3):
+                    self.assertAlmostEqual(F[j, j], 1.0)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 import numpy as np
 from .utils import TensorConverter
+from .interfaces.cpp_interface import CppInterface
 
 
 class StressCalculator:
@@ -10,31 +11,39 @@ class StressCalculator:
 
 
 class StressCalculatorLJ(StressCalculator):
+    def __init__(self):
+        self.cpp_interface = CppInterface("stress_calculator")
+
     def compute_stress(self, cell, potential):
         volume = cell.calculate_volume()
-        stress_tensor = np.zeros((3, 3))
         atoms = cell.atoms
-        # Kinetic contribution
-        for atom in atoms:
-            m = atom.mass
-            v = atom.velocity
-            stress_tensor += m * np.outer(v, v)
-        # Potential contribution
-        for i, atom_i in enumerate(atoms):
-            for atom_j in atoms[i + 1 :]:
-                rij = atom_j.position - atom_i.position
-                rij = cell.apply_periodic_boundary(rij)
-                r = np.linalg.norm(rij)
-                if r < potential.cutoff:
-                    sr6 = (potential.sigma / r) ** 6
-                    sr12 = sr6 * sr6
-                    force_scalar = 24 * potential.epsilon * (2 * sr12 - sr6) / r
-                    # Shifted force correction
-                    force_scalar -= potential.dUc / r
-                    fij = force_scalar * rij / r
-                    stress_tensor += np.outer(rij, fij)
-        stress_tensor /= volume
-        return -stress_tensor  # Negative sign as per definition
+        num_atoms = len(atoms)
+        positions = np.array(
+            [atom.position for atom in atoms], dtype=np.float64
+        ).flatten()
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        epsilon = potential.epsilon
+        sigma = potential.sigma
+        cutoff = potential.cutoff
+        lattice_vectors = cell.lattice_vectors.flatten()
+        # 调用 C++ 实现的应力计算函数
+        stress_tensor_flat = self.cpp_interface.compute_stress(
+            num_atoms,
+            positions,
+            velocities,
+            forces,
+            masses,
+            volume,
+            epsilon,
+            sigma,
+            cutoff,
+            lattice_vectors,
+        )
+        return stress_tensor_flat
 
 
 class StrainCalculator:

@@ -1,76 +1,44 @@
 # tests/test_potentials.py
 
-"""
-@file test_potentials.py
-@brief 测试 potentials.py 模块中的 Potential 类及其子类。
-"""
-
 import unittest
-from src.python.potentials import LennardJonesPotential, EAMPotential
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.potentials import LennardJonesPotential
+from python.structure import Atom, Cell
 
 
-class TestLennardJonesPotential(unittest.TestCase):
-    """
-    @class TestLennardJonesPotential
-    @brief 测试 LennardJonesPotential 类。
-    """
-
-    def setUp(self) -> None:
-        """
-        @brief 测试前的初始化。
-        """
-        self.parameters = {"epsilon": 0.0103, "sigma": 3.405}
-        self.cutoff = 5.0
+class TestPotentials(unittest.TestCase):
+    def setUp(self):
+        self.epsilon = 6.774e-21  # J
+        self.sigma = 2.55e-10  # m
+        self.cutoff = 2.5 * self.sigma
         self.potential = LennardJonesPotential(
-            parameters=self.parameters, cutoff=self.cutoff
+            epsilon=self.epsilon, sigma=self.sigma, cutoff=self.cutoff
         )
+        # 创建一个简单的系统
+        self.lattice_vectors = np.eye(3) * 4.05e-10
+        mass = 26.9815 / (6.02214076e23) * 1e-3
+        position1 = np.array([0.0, 0.0, 0.0])
+        position2 = np.array([2.025e-10, 0.0, 0.0])
+        atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
+        atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
+        self.cell = Cell(self.lattice_vectors, [atom1, atom2])
 
-    def test_calculate_potential(self) -> None:
-        """
-        @brief 测试 Lennard-Jones 势能的计算。
-        """
-        r = 3.405  # sigma
-        expected_potential = 4 * self.parameters["epsilon"] * ((1) ** 12 - (1) ** 6)
-        calculated_potential = self.potential.calculate_potential(r)
-        self.assertAlmostEqual(calculated_potential, expected_potential)
-
-    def test_derivative_potential(self) -> None:
-        """
-        @brief 测试 Lennard-Jones 势能导数的计算。
-        """
-        r = 3.405  # sigma
-        expected_derivative = 24 * self.parameters["epsilon"] * (2 * 1**12 - 1**6) / r
-        calculated_derivative = self.potential.derivative_potential(r)
-        self.assertAlmostEqual(calculated_derivative, expected_derivative)
-
-
-class TestEAMPotential(unittest.TestCase):
-    """
-    @class TestEAMPotential
-    @brief 测试 EAMPotential 类。
-    """
-
-    def setUp(self) -> None:
-        """
-        @brief 测试前的初始化。
-        """
-        self.parameters = {"some_eam_param": 1.0}  # 示例参数
-        self.cutoff = 5.0
-        self.potential = EAMPotential(parameters=self.parameters, cutoff=self.cutoff)
-
-    def test_calculate_potential_not_implemented(self) -> None:
-        """
-        @brief 测试 EAMPotential.calculate_potential 方法是否抛出 NotImplementedError。
-        """
-        with self.assertRaises(NotImplementedError):
-            self.potential.calculate_potential(3.405)
-
-    def test_derivative_potential_not_implemented(self) -> None:
-        """
-        @brief 测试 EAMPotential.derivative_potential 方法是否抛出 NotImplementedError。
-        """
-        with self.assertRaises(NotImplementedError):
-            self.potential.derivative_potential(3.405)
+    def test_force_calculation(self):
+        self.potential.calculate_forces(self.cell)
+        # 检查力是否非零且相反
+        force1 = self.cell.atoms[0].force
+        force2 = self.cell.atoms[1].force
+        np.testing.assert_array_almost_equal(force1, -force2, decimal=10)
+        self.assertFalse(np.allclose(force1, 0))
 
 
 if __name__ == "__main__":

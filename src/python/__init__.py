@@ -20,6 +20,6 @@ from .md import (
 from .mechanics import StressCalculator, StrainCalculator, ElasticConstantsSolver
 from .optimizers import Optimizer, QuickminOptimizer
 from .deformation import Deformer
-from .utils import IOHandler, TensorConverter, UnitConverter
+from .utils import IOHandler, TensorConverter
 from .config import ConfigManager
 from .config import ConfigManager

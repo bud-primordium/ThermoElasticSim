@@ -1,0 +1,1395 @@
+// src/cpp/lennard_jones.cpp
+
+#include <cmath>
+#include <vector>
+#include <iostream> // 添加此行
+
+extern "C"
+{
+    void calculate_forces(
+        int num_atoms,
+        const double *positions,
+        double *forces,
+        double epsilon,
+        double sigma,
+        double cutoff,
+        double Uc,
+        double dUc,
+        const double *lattice_vectors // 9 elements: H = [a1, a2, a3] as columns
+    )
+    {
+        // 清零力数组
+        for (int i = 0; i < 3 * num_atoms; ++i)
+        {
+            forces[i] = 0.0;
+        }
+
+        // 构建逆晶格矩阵 H_inv
+        double H[3][3];
+        for (int i = 0; i < 3; ++i)
+        {
+            H[0][i] = lattice_vectors[3 * i];
+            H[1][i] = lattice_vectors[3 * i + 1];
+            H[2][i] = lattice_vectors[3 * i + 2];
+        }
+        // 计算 H_inv
+        double det = H[0][0] * (H[1][1] * H[2][2] - H[1][2] * H[2][1]) - H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) + H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
+        if (det == 0)
+        {
+            std::cerr << "Error: Lattice matrix is singular." << std::endl;
+            return;
+        }
+        double H_inv[3][3];
+        H_inv[0][0] = (H[1][1] * H[2][2] - H[1][2] * H[2][1]) / det;
+        H_inv[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) / det;
+        H_inv[0][2] = (H[0][1] * H[1][2] - H[0][2] * H[1][1]) / det;
+        H_inv[1][0] = (H[1][2] * H[2][0] - H[1][0] * H[2][2]) / det;
+        H_inv[1][1] = (H[0][0] * H[2][2] - H[0][2] * H[2][0]) / det;
+        H_inv[1][2] = (H[0][2] * H[1][0] - H[0][0] * H[1][2]) / det;
+        H_inv[2][0] = (H[1][0] * H[2][1] - H[1][1] * H[2][0]) / det;
+        H_inv[2][1] = (H[0][1] * H[2][0] - H[0][0] * H[2][1]) / det;
+        H_inv[2][2] = (H[0][0] * H[1][1] - H[0][1] * H[1][0]) / det;
+
+        // 力的计算
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            const double *ri = &positions[3 * i];
+            for (int j = i + 1; j < num_atoms; ++j)
+            {
+                const double *rj = &positions[3 * j];
+                double rij[3];
+                // 计算 rij = rj - ri
+                for (int k = 0; k < 3; ++k)
+                {
+                    rij[k] = rj[k] - ri[k];
+                }
+
+                // 转换到分数坐标 s = H_inv * rij
+                double s[3];
+                for (int k = 0; k < 3; ++k)
+                {
+                    s[k] = H_inv[k][0] * rij[0] + H_inv[k][1] * rij[1] + H_inv[k][2] * rij[2];
+                    // 映射到 [-0.5, 0.5]
+                    s[k] -= round(s[k]);
+                }
+
+                // 转换回笛卡尔坐标 rij = H * s
+                for (int k = 0; k < 3; ++k)
+                {
+                    rij[k] = H[0][k] * s[0] + H[1][k] * s[1] + H[2][k] * s[2];
+                }
+
+                double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
+                double r = sqrt(r2);
+
+                // 添加极小距离保护
+                if (r < 1e-12)
+                {
+                    std::cerr << "Warning: Atoms " << i << " and " << j << " are too close (r=" << r << "). Skipping force calculation." << std::endl;
+                    continue;
+                }
+
+                if (r < cutoff)
+                {
+                    double sr6 = pow(sigma / r, 6);
+                    double sr12 = sr6 * sr6;
+                    double force_scalar = 24 * epsilon * (2 * sr12 - sr6) / r;
+                    // Shifted force correction
+                    force_scalar -= dUc / r;
+                    double fij[3];
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        fij[k] = force_scalar * rij[k] / r;
+                        forces[3 * i + k] += fij[k];
+                        forces[3 * j + k] -= fij[k];
+                    }
+                    // 打印计算的力
+                    std::cout << "Atom " << i << " - Atom " << j << " Force: ["
+                              << fij[0] << ", " << fij[1] << ", " << fij[2] << "]\n";
+                }
+            }
+        }
+    }
+}
+
+
+// src/cpp/nose_hoover.cpp
+
+#include <cmath>
+#include <vector>
+
+extern "C"
+{
+    void nose_hoover(
+        double dt,
+        int num_atoms,
+        const double *masses,
+        double *velocities,
+        const double *forces,
+        double *xi,
+        double Q,
+        double target_temperature)
+    {
+        double dt2 = dt / 2.0;
+        double kB = 1.380649e-23; // 玻尔兹曼常数
+        double kT = kB * target_temperature;
+
+        // 第一半步：更新速度
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] += dt2 * (forces[3 * i] / masses[i]);
+            velocities[3 * i + 1] += dt2 * (forces[3 * i + 1] / masses[i]);
+            velocities[3 * i + 2] += dt2 * (forces[3 * i + 2] / masses[i]);
+        }
+
+        // 计算动能
+        double kinetic_energy = 0.0;
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            double vx = velocities[3 * i];
+            double vy = velocities[3 * i + 1];
+            double vz = velocities[3 * i + 2];
+            kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
+        }
+
+        // 更新热浴变量 xi
+        double Gxi = (2.0 * kinetic_energy - 3.0 * num_atoms * kT) / Q;
+        *xi += dt * Gxi;
+
+        // 第二半步：更新速度，考虑热浴变量的影响
+        double exp_factor = exp(-dt * (*xi));
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] = velocities[3 * i] * exp_factor + dt2 * (forces[3 * i] / masses[i]);
+            velocities[3 * i + 1] = velocities[3 * i + 1] * exp_factor + dt2 * (forces[3 * i + 1] / masses[i]);
+            velocities[3 * i + 2] = velocities[3 * i + 2] * exp_factor + dt2 * (forces[3 * i + 2] / masses[i]);
+        }
+    }
+}
+
+
+// src/cpp/stress_calculator.cpp
+
+#include <cmath>
+#include <vector>
+
+extern "C"
+{
+    void compute_stress(
+        int num_atoms,
+        const double *positions,
+        const double *velocities,
+        const double *forces,
+        const double *masses,
+        double volume,
+        double epsilon,
+        double sigma,
+        double cutoff,
+        double dUc,
+        const double *lattice_vectors, // 9 elements: H = [a1, a2, a3] as columns
+        double *stress_tensor          // 输出，大小为9的数组，按行主序存储3x3矩阵
+    )
+    {
+        // 初始化应力张量
+        for (int i = 0; i < 9; ++i)
+        {
+            stress_tensor[i] = 0.0;
+        }
+
+        // 构建逆晶格矩阵 H_inv
+        double H[3][3];
+        for (int i = 0; i < 3; ++i)
+        {
+            H[0][i] = lattice_vectors[3 * i];
+            H[1][i] = lattice_vectors[3 * i + 1];
+            H[2][i] = lattice_vectors[3 * i + 2];
+        }
+        // 计算 H_inv
+        double det = H[0][0] * (H[1][1] * H[2][2] - H[1][2] * H[2][1]) - H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) + H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
+        double H_inv[3][3];
+        H_inv[0][0] = (H[1][1] * H[2][2] - H[1][2] * H[2][1]) / det;
+        H_inv[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) / det;
+        H_inv[0][2] = (H[0][1] * H[1][2] - H[0][2] * H[1][1]) / det;
+        H_inv[1][0] = (H[1][2] * H[2][0] - H[1][0] * H[2][2]) / det;
+        H_inv[1][1] = (H[0][0] * H[2][2] - H[0][2] * H[2][0]) / det;
+        H_inv[1][2] = (H[0][2] * H[1][0] - H[0][0] * H[1][2]) / det;
+        H_inv[2][0] = (H[1][0] * H[2][1] - H[1][1] * H[2][0]) / det;
+        H_inv[2][1] = (H[0][1] * H[2][0] - H[0][0] * H[2][1]) / det;
+        H_inv[2][2] = (H[0][0] * H[1][1] - H[0][1] * H[1][0]) / det;
+
+        // 动能项
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            double m = masses[i];
+            const double *v = &velocities[3 * i];
+            for (int alpha = 0; alpha < 3; ++alpha)
+            {
+                for (int beta = 0; beta < 3; ++beta)
+                {
+                    stress_tensor[3 * alpha + beta] += m * v[alpha] * v[beta];
+                }
+            }
+        }
+
+        // 势能项
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            const double *ri = &positions[3 * i];
+            for (int j = i + 1; j < num_atoms; ++j)
+            {
+                const double *rj = &positions[3 * j];
+                double rij[3];
+                // 计算 rij = rj - ri
+                for (int k = 0; k < 3; ++k)
+                {
+                    rij[k] = rj[k] - ri[k];
+                }
+
+                // 转换到分数坐标 s = H_inv * rij
+                double s[3];
+                for (int k = 0; k < 3; ++k)
+                {
+                    s[k] = H_inv[k][0] * rij[0] + H_inv[k][1] * rij[1] + H_inv[k][2] * rij[2];
+                    // 映射到 [-0.5, 0.5]
+                    s[k] -= round(s[k]);
+                }
+
+                // 转换回笛卡尔坐标 rij = H * s
+                for (int k = 0; k < 3; ++k)
+                {
+                    rij[k] = H[0][k] * s[0] + H[1][k] * s[1] + H[2][k] * s[2];
+                }
+
+                double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
+                double r = sqrt(r2);
+
+                if (r < cutoff)
+                {
+                    double sr6 = pow(sigma / r, 6);
+                    double sr12 = sr6 * sr6;
+                    double force_scalar = 24 * epsilon * (2 * sr12 - sr6) / r;
+                    // Shifted force correction
+                    force_scalar -= dUc / r;
+                    double fij[3];
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        fij[k] = force_scalar * rij[k] / r;
+                    }
+                    for (int alpha = 0; alpha < 3; ++alpha)
+                    {
+                        for (int beta = 0; beta < 3; ++beta)
+                        {
+                            stress_tensor[3 * alpha + beta] += rij[alpha] * fij[beta];
+                        }
+                    }
+                }
+            }
+        }
+
+        // 归一化
+        for (int i = 0; i < 9; ++i)
+        {
+            stress_tensor[i] /= volume;
+            stress_tensor[i] = -stress_tensor[i]; // 根据定义取负号
+        }
+    }
+}
+
+
+# src/python/config.py
+
+import yaml
+
+
+class ConfigManager:
+    def __init__(self, config_file):
+        self.config = self.load_config(config_file)
+
+    @staticmethod
+    def load_config(config_file):
+        with open(config_file, "r") as f:
+            config = yaml.safe_load(f)
+        return config
+
+    def get(self, key, default=None):
+        return self.config.get(key, default)
+
+
+# src/python/deformation.py
+
+import numpy as np
+
+
+class Deformer:
+    def __init__(self, delta):
+        self.delta = delta
+
+    def generate_deformation_matrices(self):
+        delta = self.delta
+        F_list = []
+
+        # F1
+        F1 = np.array([[1 + delta, 0, 0], [0, 1, 0], [0, 0, 1]])
+        F_list.append(F1)
+
+        # F2
+        F2 = np.array([[1, 0, 0], [0, 1 + delta, 0], [0, 0, 1]])
+        F_list.append(F2)
+
+        # F3
+        F3 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1 + delta]])
+        F_list.append(F3)
+
+        # F4
+        F4 = np.array([[1, delta, 0], [0, 1, 0], [0, 0, 1]])
+        F_list.append(F4)
+
+        # F5
+        F5 = np.array([[1, 0, delta], [0, 1, 0], [0, 0, 1]])
+        F_list.append(F5)
+
+        # F6
+        F6 = np.array([[1, 0, 0], [0, 1, delta], [0, 0, 1]])
+        F_list.append(F6)
+
+        return F_list
+
+    def apply_deformation(self, cell, deformation_matrix):
+        cell.apply_deformation(deformation_matrix)
+
+
+# src/python/md.py
+
+import numpy as np
+from .interfaces.cpp_interface import CppInterface
+
+
+class Integrator:
+    def integrate(self, cell, potential, thermostat, dt):
+        raise NotImplementedError
+
+
+class VelocityVerletIntegrator(Integrator):
+    def integrate(self, cell, potential, thermostat, dt):
+        atoms = cell.atoms
+        # First half-step: update positions
+        for atom in atoms:
+            atom.position += atom.velocity * dt + 0.5 * atom.force / atom.mass * dt**2
+            # Apply periodic boundary conditions
+            atom.position = cell.apply_periodic_boundary(atom.position)
+        # Save old forces
+        forces_old = [atom.force.copy() for atom in atoms]
+        # Calculate new forces
+        potential.calculate_forces(cell)
+        # Second half-step: update velocities
+        for atom, force_old in zip(atoms, forces_old):
+            atom.velocity += 0.5 * (atom.force + force_old) / atom.mass * dt
+        # Apply thermostat
+        if thermostat is not None:
+            thermostat.apply(atoms, dt)
+
+
+class Thermostat:
+    def apply(self, atoms, dt):
+        raise NotImplementedError
+
+
+class NoseHooverThermostat(Thermostat):
+    def __init__(self, target_temperature, time_constant):
+        self.target_temperature = target_temperature
+        self.Q = time_constant  # 热浴质量参数
+        self.xi = 0.0  # 热浴变量初始值
+        self.cpp_interface = CppInterface("nose_hoover")
+
+    def apply(self, atoms, dt):
+        num_atoms = len(atoms)
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
+        # 调用 C++ 函数
+        self.xi = self.cpp_interface.nose_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            self.xi,
+            self.Q,
+            self.target_temperature,
+        )
+        # 更新原子速度
+        for i, atom in enumerate(atoms):
+            atom.velocity = velocities[3 * i : 3 * i + 3]
+
+
+class MDSimulator:
+    def __init__(self, cell, potential, integrator, thermostat=None):
+        self.cell = cell
+        self.potential = potential
+        self.integrator = integrator
+        self.thermostat = thermostat
+
+    def run(self, steps, dt, data_collector=None):
+        # Initialize forces
+        self.potential.calculate_forces(self.cell)
+        for step in range(steps):
+            self.integrator.integrate(self.cell, self.potential, self.thermostat, dt)
+            if data_collector is not None:
+                data_collector.collect(self.cell)
+            print(f"MD Step {step} completed.")
+
+
+# src/python/mechanics.py
+
+import numpy as np
+from .utils import TensorConverter
+from .interfaces.cpp_interface import CppInterface
+
+
+class StressCalculator:
+    def compute_stress(self, cell, potential):
+        raise NotImplementedError
+
+
+class StressCalculatorLJ(StressCalculator):
+    def __init__(self):
+        self.cpp_interface = CppInterface("stress_calculator")
+
+    def compute_stress(self, cell, potential):
+        volume = cell.calculate_volume()
+        atoms = cell.atoms
+        num_atoms = len(atoms)
+        positions = np.array(
+            [atom.position for atom in atoms], dtype=np.float64
+        ).flatten()
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        epsilon = potential.epsilon
+        sigma = potential.sigma
+        cutoff = potential.cutoff
+        dUc = potential.dUc
+        lattice_vectors = cell.lattice_vectors.flatten()
+        # 调用 C++ 实现的应力计算函数
+        stress_tensor_flat = self.cpp_interface.compute_stress(
+            num_atoms,
+            positions,
+            velocities,
+            forces,
+            masses,
+            volume,
+            epsilon,
+            sigma,
+            cutoff,
+            dUc,
+            lattice_vectors,
+        )
+        return stress_tensor_flat
+
+
+class StrainCalculator:
+    def compute_strain(self, deformation_gradient):
+        C = np.dot(deformation_gradient.T, deformation_gradient)
+        strain_tensor = 0.5 * (C - np.identity(3))
+        return strain_tensor
+
+
+class ElasticConstantsSolver:
+    def solve(self, strains, stresses):
+        strains = np.array(strains)
+        stresses = np.array(stresses)
+        C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
+        return C
+
+
+# src/python/optimizers.py
+
+import numpy as np
+
+
+class Optimizer:
+    def optimize(self, cell, potential):
+        raise NotImplementedError
+
+
+class GradientDescentOptimizer(Optimizer):
+    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-12):
+        self.max_steps = max_steps
+        self.tol = tol
+        self.step_size = step_size
+
+    def optimize(self, cell, potential):
+        atoms = cell.atoms
+        potential.calculate_forces(cell)
+        for step in range(self.max_steps):
+            # 计算最大力
+            max_force = max(np.linalg.norm(atom.force) for atom in atoms)
+            print(f"Step {step}: Max force = {max_force}")
+            if max_force < self.tol:
+                print(f"Converged after {step} steps")
+                break
+            # 更新位置
+            for atom in atoms:
+                displacement = self.step_size * atom.force
+                atom.position -= displacement
+                # 应用周期性边界条件
+                atom.position = cell.apply_periodic_boundary(atom.position)
+                print(f"Atom {atom.id} Position: {atom.position}")
+            # 重新计算力
+            potential.calculate_forces(cell)
+            # 打印新力
+            for atom in atoms:
+                print(f"Atom {atom.id} Force: {atom.force}")
+        else:
+            print("Optimization did not converge within the maximum number of steps.")
+
+
+class QuickminOptimizer(Optimizer):
+    def __init__(self, max_steps=1000, tol=1e-6, dt=1e-4):
+        self.max_steps = max_steps
+        self.tol = tol
+        self.dt = dt
+
+    def optimize(self, cell, potential):
+        atoms = cell.atoms
+        velocities = [np.zeros(3) for _ in atoms]
+        potential.calculate_forces(cell)
+        for step in range(self.max_steps):
+            max_force = max(np.linalg.norm(atom.force) for atom in atoms)
+            if max_force < self.tol:
+                print(f"Converged after {step} steps")
+                break
+            # Update velocities and positions
+            for i, atom in enumerate(atoms):
+                velocities[i] = velocities[i] + self.dt * atom.force / atom.mass
+                atom.position += self.dt * velocities[i]
+                # Apply periodic boundary conditions
+                atom.position = cell.apply_periodic_boundary(atom.position)
+            # Calculate new forces
+            potential.calculate_forces(cell)
+        else:
+            print("Optimization did not converge within the maximum number of steps.")
+
+
+# src/python/potentials.py
+
+import numpy as np
+from .interfaces.cpp_interface import CppInterface
+
+
+class Potential:
+    def __init__(self, parameters, cutoff):
+        self.parameters = parameters
+        self.cutoff = cutoff
+
+    def calculate_potential(self, cell):
+        raise NotImplementedError
+
+    def calculate_forces(self, cell):
+        raise NotImplementedError
+
+
+class LennardJonesPotential(Potential):
+    def __init__(self, epsilon, sigma, cutoff):
+        parameters = {"epsilon": epsilon, "sigma": sigma}
+        super().__init__(parameters, cutoff)
+        self.epsilon = epsilon
+        self.sigma = sigma
+        self.cutoff = cutoff
+        # Pre-compute shifted potential and force at cutoff
+        self.Uc = 4 * epsilon * ((sigma / cutoff) ** 12 - (sigma / cutoff) ** 6)
+        self.dUc = (
+            -48 * epsilon * ((sigma**12 / cutoff**13) - 0.5 * (sigma**6 / cutoff**7))
+        )
+        self.cpp_interface = CppInterface("lennard_jones")
+
+    def calculate_forces(self, cell):
+        num_atoms = len(cell.atoms)
+        positions = np.array(
+            [atom.position for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        forces = np.zeros_like(positions)
+        lattice_vectors = cell.lattice_vectors.flatten()
+        self.cpp_interface.calculate_forces(
+            num_atoms,
+            positions,
+            forces,
+            self.epsilon,
+            self.sigma,
+            self.cutoff,
+            self.Uc,
+            self.dUc,
+            lattice_vectors,
+        )
+        # 更新原子力
+        # 检查 forces 数组是否更新
+        if np.allclose(forces, 0):
+            print("警告：计算得到的力全为零")
+        else:
+            print("计算得到的力非零")
+            print("计算得到的力数组：", forces)
+        # 更新原子力
+        for i, atom in enumerate(cell.atoms):
+            atom.force = forces[3 * i : 3 * i + 3]
+
+
+# src/python/structure.py
+
+import numpy as np
+
+
+class Atom:
+    def __init__(self, id, symbol, mass, position, velocity=None):
+        self.id = id
+        self.symbol = symbol
+        self.mass = mass
+        self.position = np.array(position)
+        self.velocity = np.zeros(3) if velocity is None else np.array(velocity)
+        self.force = np.zeros(3)
+
+    def update_position(self, delta_r):
+        self.position += delta_r
+
+    def update_velocity(self, delta_v):
+        self.velocity += delta_v
+
+
+class Cell:
+    def __init__(self, lattice_vectors, atoms, pbc_enabled=True):
+        self.lattice_vectors = np.array(lattice_vectors)
+        self.atoms = atoms  # List of Atom instances
+        self.volume = self.calculate_volume()
+        self.pbc_enabled = pbc_enabled
+
+    def calculate_volume(self):
+        return np.linalg.det(self.lattice_vectors)
+
+    def apply_deformation(self, deformation_matrix):
+        self.lattice_vectors = np.dot(deformation_matrix, self.lattice_vectors)
+        for atom in self.atoms:
+            atom.position = np.dot(deformation_matrix, atom.position)
+
+    def apply_periodic_boundary(self, position):
+        if self.pbc_enabled:
+            fractional = np.linalg.solve(self.lattice_vectors.T, position)
+            fractional -= np.floor(fractional)
+            return np.dot(self.lattice_vectors.T, fractional)
+        else:
+            return position
+
+    def copy(self):
+        atoms_copy = [
+            Atom(
+                atom.id,
+                atom.symbol,
+                atom.mass,
+                atom.position.copy(),
+                atom.velocity.copy(),
+            )
+            for atom in self.atoms
+        ]
+        return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
+
+
+# src/python/utils.py
+
+import numpy as np
+from .structure import Atom, Cell
+
+
+class IOHandler:
+    def read_structure(self, filename):
+        # Placeholder for reading structure from file
+        pass
+
+    def write_structure(self, filename, cell):
+        # Placeholder for writing structure to file
+        pass
+
+
+# src/python/utils.py
+
+import numpy as np
+
+
+class TensorConverter:
+    @staticmethod
+    def to_voigt(tensor):
+        if tensor.shape != (3, 3):
+            raise ValueError("Input tensor must be a 3x3 matrix.")
+        if not np.allclose(tensor, tensor.T):
+            raise ValueError("Input tensor must be symmetric.")
+
+        voigt = np.array(
+            [
+                tensor[0, 0],
+                tensor[1, 1],
+                tensor[2, 2],
+                tensor[0, 1],
+                tensor[1, 2],
+                tensor[2, 0],
+            ]
+        )
+        return voigt
+
+    @staticmethod
+    def from_voigt(voigt):
+        if voigt.shape != (6,):
+            raise ValueError("Voigt representation must be a 6-element array.")
+
+        tensor = np.array(
+            [
+                [voigt[0], voigt[3], voigt[5]],
+                [voigt[3], voigt[1], voigt[4]],
+                [voigt[5], voigt[4], voigt[2]],
+            ]
+        )
+        return tensor
+
+
+class DataCollector:
+    def __init__(self):
+        self.data = []
+
+    def collect(self, cell):
+        # Collect required data from the cell
+        positions = [atom.position.copy() for atom in cell.atoms]
+        velocities = [atom.velocity.copy() for atom in cell.atoms]
+        self.data.append({"positions": positions, "velocities": velocities})
+
+
+# src/python/visualization.py
+
+"""
+@file visualization.py
+@brief 可视化晶胞结构和模拟结果的模块。
+"""
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+from typing import List
+
+from .structure import Cell
+
+
+class Visualizer:
+    """
+    @class Visualizer
+    @brief 可视化晶胞结构和模拟结果的类。
+    """
+
+    def __init__(self) -> None:
+        """
+        @brief 初始化 Visualizer 实例。
+        """
+        pass
+
+    def plot_cell_structure(self, cell_structure: Cell) -> None:
+        """
+        @brief 绘制晶体结构的3D图形。
+
+        @param cell_structure Cell 实例。
+        """
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        for atom in cell_structure.atoms:
+            ax.scatter(*atom.position, label=atom.symbol)
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        plt.title("Crystal Structure")
+        plt.legend()
+        plt.show()
+
+    def plot_stress_strain(
+        self, strain_data: np.ndarray, stress_data: np.ndarray
+    ) -> None:
+        """
+        @brief 绘制应力-应变关系图。
+
+        @param strain_data numpy.ndarray: 应变数据，形状为 (N, 6)。
+        @param stress_data numpy.ndarray: 应力数据，形状为 (N, 6)。
+        """
+        plt.figure(figsize=(10, 6))
+        for i in range(6):
+            plt.plot(strain_data[:, i], stress_data[:, i], label=f"Stress {i+1}")
+        plt.xlabel("Strain")
+        plt.ylabel("Stress")
+        plt.title("Stress-Strain Relationship")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+
+# src/python/__init__.py
+
+"""
+@package ThermoElasticSim
+@brief 初始化ThermoElasticSim项目。
+
+该项目包含用于计算和模拟金属铝（Al）和金刚石（Diamond）在不同温度下弹性常数的模块。
+"""
+
+# 导入子模块（可选）
+from .structure import Atom, Cell
+from .potentials import Potential, LennardJonesPotential
+from .md import (
+    MDSimulator,
+    Integrator,
+    VelocityVerletIntegrator,
+    Thermostat,
+    NoseHooverThermostat,
+)
+from .mechanics import StressCalculator, StrainCalculator, ElasticConstantsSolver
+from .optimizers import Optimizer, QuickminOptimizer
+from .deformation import Deformer
+from .utils import IOHandler, TensorConverter
+from .config import ConfigManager
+from .config import ConfigManager
+
+
+# src/python/interfaces/cpp_interface.py
+
+import ctypes
+import numpy as np
+from numpy.ctypeslib import ndpointer
+import os
+
+
+class CppInterface:
+    def __init__(self, lib_name):
+        if os.name == "nt":  # Windows
+            lib_extension = ".dll"
+            lib_prefix = ""
+        else:  # Unix/Linux
+            lib_extension = ".so"
+            lib_prefix = "lib"
+        # 获取当前文件所在目录的绝对路径
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # 获取项目根目录的绝对路径
+        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+        # 构建库文件的绝对路径
+        lib_path = os.path.join(
+            project_root, "lib", lib_prefix + lib_name + lib_extension
+        )
+        # 检查库文件是否存在
+        if not os.path.exists(lib_path):
+            raise FileNotFoundError(f"Could not find library file: {lib_path}")
+        self.lib = ctypes.CDLL(lib_path)
+
+        if lib_name == "nose_hoover":
+            self.lib.nose_hoover.argtypes = [
+                ctypes.c_double,  # dt
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ctypes.POINTER(ctypes.c_double),  # xi
+                ctypes.c_double,  # Q
+                ctypes.c_double,  # target_temperature
+            ]
+            self.lib.nose_hoover.restype = None
+        elif lib_name == "lennard_jones":
+            self.lib.calculate_forces.argtypes = [
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ctypes.c_double,  # epsilon
+                ctypes.c_double,  # sigma
+                ctypes.c_double,  # cutoff
+                ctypes.c_double,  # Uc
+                ctypes.c_double,  # dUc
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
+            ]
+            self.lib.calculate_forces.restype = None
+        elif lib_name == "stress_calculator":
+            self.lib.compute_stress.argtypes = [
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ctypes.c_double,  # volume
+                ctypes.c_double,  # epsilon
+                ctypes.c_double,  # sigma
+                ctypes.c_double,  # cutoff
+                ctypes.c_double,  # dUc
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # stress_tensor (output)
+            ]
+            self.lib.compute_stress.restype = None
+
+    def nose_hoover(
+        self, dt, num_atoms, masses, velocities, forces, xi, Q, target_temperature
+    ):
+        xi_c = ctypes.c_double(xi)
+        self.lib.nose_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            ctypes.byref(xi_c),
+            Q,
+            target_temperature,
+        )
+        return xi_c.value
+
+    def calculate_forces(
+        self,
+        num_atoms,
+        positions,
+        forces,
+        epsilon,
+        sigma,
+        cutoff,
+        Uc,
+        dUc,
+        lattice_vectors,
+    ):
+        self.lib.calculate_forces(
+            num_atoms,
+            positions,
+            forces,
+            epsilon,
+            sigma,
+            cutoff,
+            Uc,
+            dUc,
+            lattice_vectors,
+        )
+
+    def compute_stress(
+        self,
+        num_atoms,
+        positions,
+        velocities,
+        forces,
+        masses,
+        volume,
+        epsilon,
+        sigma,
+        cutoff,
+        dUc,
+        lattice_vectors,
+    ):
+        stress_tensor = np.zeros(9, dtype=np.float64)
+        self.lib.compute_stress(
+            num_atoms,
+            positions,
+            velocities,
+            forces,
+            masses,
+            volume,
+            epsilon,
+            sigma,
+            cutoff,
+            dUc,
+            lattice_vectors,
+            stress_tensor,
+        )
+        return stress_tensor.reshape((3, 3))
+
+
+# src/python/interfaces/fortran_interface.py
+
+import ctypes
+import numpy as np
+from numpy.ctypeslib import ndpointer
+import os
+
+
+class FortranInterface:
+    def __init__(self, lib_name):
+        # Determine the correct library extension based on the operating system
+        if os.name == "nt":  # Windows
+            lib_extension = ".dll"
+        else:  # Unix/Linux
+            lib_extension = ".so"
+        lib_path = os.path.join("lib", lib_name + lib_extension)
+        self.lib = ctypes.CDLL(lib_path)
+        # Define argument and return types
+        self.lib.nose_hoover.argtypes = [
+            ctypes.c_double,  # dt
+            ctypes.c_int,  # num_atoms
+            ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+            ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+            ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+            ctypes.POINTER(ctypes.c_double),  # xi
+            ctypes.c_double,  # Q
+            ctypes.c_double,  # target_temperature
+        ]
+        self.lib.nose_hoover.restype = None
+
+    def nose_hoover(
+        self, dt, num_atoms, masses, velocities, forces, xi, Q, target_temperature
+    ):
+        xi_c = ctypes.c_double(xi)
+        self.lib.nose_hoover(
+            ctypes.c_double(dt),
+            ctypes.c_int(num_atoms),
+            masses,
+            velocities,
+            forces,
+            ctypes.byref(xi_c),
+            ctypes.c_double(Q),
+            ctypes.c_double(target_temperature),
+        )
+        return xi_c.value
+
+
+# src/python/interfaces/__init__.py
+
+
+# tests/test_deformation.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.deformation import Deformer
+
+
+class TestDeformation(unittest.TestCase):
+    def test_generate_deformation_matrices(self):
+        delta = 0.01  # 1% 变形
+        deformer = Deformer(delta)
+        deformation_matrices = deformer.generate_deformation_matrices()
+
+        # 预期生成 6 个变形矩阵（正交基的变形）
+        self.assertEqual(len(deformation_matrices), 6)
+
+        # 检查每个变形矩阵的正确性
+        for i, F in enumerate(deformation_matrices):
+            # 检查是否为 3x3 矩阵
+            self.assertEqual(F.shape, (3, 3))
+
+            # 根据变形类型，检查特定元素是否有变形
+            if i < 3:
+                # 轴向拉伸/压缩
+                self.assertAlmostEqual(F[i, i], 1 + delta)
+                for j in range(3):
+                    if j != i:
+                        self.assertAlmostEqual(F[i, j], 0.0)
+            else:
+                # 剪切变形
+                shear_index = i - 3
+                self.assertAlmostEqual(F[0, 1], delta if shear_index == 0 else 0.0)
+                self.assertAlmostEqual(F[0, 2], delta if shear_index == 1 else 0.0)
+                self.assertAlmostEqual(F[1, 2], delta if shear_index == 2 else 0.0)
+                # 对角线元素应为1
+                for j in range(3):
+                    self.assertAlmostEqual(F[j, j], 1.0)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_md.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+from python.md import MDSimulator, VelocityVerletIntegrator, NoseHooverThermostat
+
+
+class TestMD(unittest.TestCase):
+    def setUp(self):
+        # 创建一个简单的系统
+        self.lattice_vectors = np.eye(3) * 4.05e-10
+        mass = 26.9815 / (6.02214076e23) * 1e-3
+        position = np.array([0.0, 0.0, 0.0])
+        atom = Atom(id=0, symbol="Al", mass=mass, position=position)
+        self.cell = Cell(self.lattice_vectors, [atom])
+        # 定义势能
+        epsilon = 6.774e-21  # J
+        sigma = 2.55e-10  # m
+        cutoff = 2.5 * sigma
+        self.potential = LennardJonesPotential(
+            epsilon=epsilon, sigma=sigma, cutoff=cutoff
+        )
+        # 定义积分器和恒温器
+        self.integrator = VelocityVerletIntegrator()
+        self.thermostat = NoseHooverThermostat(
+            target_temperature=300, time_constant=100
+        )
+
+    def test_md_simulation(self):
+        md_simulator = MDSimulator(
+            self.cell, self.potential, self.integrator, self.thermostat
+        )
+        md_simulator.run(steps=10, dt=1e-15)
+        # 检查原子的位置和速度是否发生变化
+        atom = self.cell.atoms[0]
+        self.assertFalse(np.allclose(atom.position, [0.0, 0.0, 0.0]))
+        self.assertFalse(np.allclose(atom.velocity, [0.0, 0.0, 0.0]))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_mechanics.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.mechanics import (
+    StressCalculatorLJ,
+    StrainCalculator,
+    ElasticConstantsSolver,
+)
+from python.utils import TensorConverter
+
+
+class TestMechanics(unittest.TestCase):
+    def test_tensor_converter(self):
+        tensor = np.array([[1, 2, 3], [2, 4, 5], [3, 5, 6]])
+        voigt = TensorConverter.to_voigt(tensor)
+        expected_voigt = np.array([1, 4, 6, 2, 5, 3])  # Sxx, Syy, Szz, Sxy, Syz, Szx
+        np.testing.assert_array_almost_equal(voigt, expected_voigt)
+
+    def test_elastic_constants_solver(self):
+        strains = [np.array([0.01, 0.0, 0.0, 0.0, 0.0, 0.0])]
+        stresses = [np.array([100, 0, 0, 0, 0, 0])]
+        solver = ElasticConstantsSolver()
+        C = solver.solve(strains, stresses)
+        expected_C = np.zeros((6, 6))
+        expected_C[0, 0] = 100 / 0.01  # 10000
+        np.testing.assert_array_almost_equal(C, expected_C)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_optimizers.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.optimizers import GradientDescentOptimizer  # 使用新的优化器
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+
+
+class TestOptimizers(unittest.TestCase):
+    def setUp(self):
+        # 创建一个简单的系统（两个铝原子）
+        lattice_vectors = np.eye(3) * 4.05e-10  # 米
+        mass = 26.9815 / (6.02214076e23) * 1e-3  # kg，正确的质量单位
+        position1 = np.array([0.0, 0.0, 0.0])
+        position2 = np.array([2.55e-10, 0.0, 0.0])  # 初始距离为 sigma
+        atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
+        atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
+        self.cell = Cell(lattice_vectors, [atom1, atom2])
+
+        # 定义 Lennard-Jones 势
+        epsilon = 6.774e-21  # J
+        sigma = 2.55e-10  # m
+        cutoff = 2.5 * sigma
+        self.potential = LennardJonesPotential(
+            epsilon=epsilon, sigma=sigma, cutoff=cutoff
+        )
+
+    def test_gradient_descent_optimizer(self):
+        optimizer = GradientDescentOptimizer(
+            max_steps=1000, tol=1e-8, step_size=1e-12  # 使用适当的步长
+        )
+        optimizer.optimize(self.cell, self.potential)
+
+        # 获取优化后的原子位置
+        optimized_position1 = self.cell.atoms[0].position
+        optimized_position2 = self.cell.atoms[1].position
+
+        # 计算优化后的距离
+        optimized_distance = np.linalg.norm(optimized_position2 - optimized_position1)
+
+        # 预期优化后的距离应接近 sigma
+        sigma = self.potential.sigma
+        self.assertAlmostEqual(optimized_distance, sigma, delta=1e-12)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_potentials.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.potentials import LennardJonesPotential
+from python.structure import Atom, Cell
+
+
+class TestPotentials(unittest.TestCase):
+    def setUp(self):
+        self.epsilon = 6.774e-21  # J
+        self.sigma = 2.55e-10  # m
+        self.cutoff = 2.5 * self.sigma
+        self.potential = LennardJonesPotential(
+            epsilon=self.epsilon, sigma=self.sigma, cutoff=self.cutoff
+        )
+        # 创建一个简单的系统
+        self.lattice_vectors = np.eye(3) * 4.05e-10
+        mass = 26.9815 / (6.02214076e23) * 1e-3
+        position1 = np.array([0.0, 0.0, 0.0])
+        position2 = np.array([2.025e-10, 0.0, 0.0])
+        atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
+        atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
+        self.cell = Cell(self.lattice_vectors, [atom1, atom2])
+
+    def test_force_calculation(self):
+        self.potential.calculate_forces(self.cell)
+        # 检查力是否非零且相反
+        force1 = self.cell.atoms[0].force
+        force2 = self.cell.atoms[1].force
+        np.testing.assert_array_almost_equal(force1, -force2, decimal=10)
+        self.assertFalse(np.allclose(force1, 0))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_structure.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.structure import Atom, Cell
+
+
+class TestStructure(unittest.TestCase):
+    def test_atom_creation(self):
+        position = np.array([0.0, 0.0, 0.0])
+        mass = 26.9815 / (6.02214076e23) * 1e-3  # kg
+        atom = Atom(id=0, symbol="Al", mass=mass, position=position)
+        self.assertEqual(atom.id, 0)
+        self.assertEqual(atom.symbol, "Al")
+        np.testing.assert_array_equal(atom.position, position)
+        self.assertEqual(atom.mass, mass)
+
+    def test_cell_creation(self):
+        lattice_vectors = np.eye(3) * 4.05e-10  # 米
+        mass = 26.9815 / (6.02214076e23) * 1e-3
+        atom = Atom(id=0, symbol="Al", mass=mass, position=np.zeros(3))
+        cell = Cell(lattice_vectors, [atom])
+        np.testing.assert_array_equal(cell.lattice_vectors, lattice_vectors)
+        self.assertEqual(len(cell.atoms), 1)
+        self.assertEqual(cell.atoms[0], atom)
+
+    def test_volume_calculation(self):
+        lattice_vectors = np.eye(3) * 4.05e-10  # 米
+        cell = Cell(lattice_vectors, [])
+        expected_volume = (4.05e-10) ** 3
+        calculated_volume = cell.calculate_volume()
+        self.assertAlmostEqual(calculated_volume, expected_volume, places=20)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_utils.py
+
+import unittest
+import numpy as np
+import sys
+import os
+
+# 设置路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+src_dir = os.path.join(project_root, "src")
+sys.path.insert(0, src_dir)
+
+from python.utils import TensorConverter
+
+
+class TestUtils(unittest.TestCase):
+    def test_tensor_to_voigt(self):
+        # 对称张量
+        tensor = np.array([[1, 2, 3], [2, 4, 5], [3, 5, 6]])
+        voigt = TensorConverter.to_voigt(tensor)
+        expected_voigt = np.array([1, 4, 6, 2, 5, 3])  # Sxx, Syy, Szz, Sxy, Syz, Szx
+        np.testing.assert_array_almost_equal(voigt, expected_voigt)
+
+    def test_voigt_to_tensor(self):
+        # Voigt 表示
+        voigt = np.array([1, 4, 6, 2, 5, 3])
+        tensor = TensorConverter.from_voigt(voigt)
+        expected_tensor = np.array([[1, 2, 3], [2, 4, 5], [3, 5, 6]])
+        np.testing.assert_array_almost_equal(tensor, expected_tensor)
+
+    def test_round_trip_conversion(self):
+        # 随机对称张量
+        tensor = np.array([[3, 1, 2], [1, 4, 5], [2, 5, 6]])
+        voigt = TensorConverter.to_voigt(tensor)
+        tensor_reconstructed = TensorConverter.from_voigt(voigt)
+        np.testing.assert_array_almost_equal(tensor, tensor_reconstructed)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+

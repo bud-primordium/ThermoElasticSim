@@ -1,7 +1,7 @@
 # src/python/md.py
 
 import numpy as np
-from .interfaces.fortran_interface import FortranInterface
+from .interfaces.cpp_interface import CppInterface
 
 
 class Integrator:
@@ -35,41 +35,33 @@ class Thermostat:
 
 
 class NoseHooverThermostat(Thermostat):
-    def __init__(self, target_temperature, time_constant, num_chains=3):
+    def __init__(self, target_temperature, time_constant):
         self.target_temperature = target_temperature
-        self.time_constant = time_constant  # Q parameter
-        self.num_chains = num_chains
-        self.xi = np.zeros(num_chains)
-        self.eta = np.zeros(num_chains)
-        self.fortran_interface = FortranInterface("path/to/fortran/library")
+        self.Q = time_constant  # 热浴质量参数
+        self.xi = 0.0  # 热浴变量初始值
+        self.cpp_interface = CppInterface("nose_hoover")
 
     def apply(self, atoms, dt):
         num_atoms = len(atoms)
         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
-        positions = np.array(
-            [atom.position for atom in atoms], dtype=np.float64
-        ).T  # Transposed for Fortran
-        velocities = np.array([atom.velocity for atom in atoms], dtype=np.float64).T
-        forces = np.array([atom.force for atom in atoms], dtype=np.float64).T
-        temperature = self.target_temperature
-        Q = self.time_constant
-
-        # Call Fortran subroutine
-        self.fortran_interface.nose_hoover_chain(
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
+        # 调用 C++ 函数
+        self.xi = self.cpp_interface.nose_hoover(
             dt,
             num_atoms,
             masses,
-            positions,
             velocities,
             forces,
-            Q,
             self.xi,
-            temperature,
+            self.Q,
+            self.target_temperature,
         )
-
-        # Update atom velocities
+        # 更新原子速度
         for i, atom in enumerate(atoms):
-            atom.velocity = velocities[:, i]
+            atom.velocity = velocities[3 * i : 3 * i + 3]
 
 
 class MDSimulator:
@@ -86,3 +78,4 @@ class MDSimulator:
             self.integrator.integrate(self.cell, self.potential, self.thermostat, dt)
             if data_collector is not None:
                 data_collector.collect(self.cell)
+            print(f"MD Step {step} completed.")

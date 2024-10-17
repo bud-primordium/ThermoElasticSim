@@ -14,30 +14,43 @@ class IOHandler:
         pass
 
 
+# src/python/utils.py
+
+import numpy as np
+
+
 class TensorConverter:
     @staticmethod
     def to_voigt(tensor):
+        if tensor.shape != (3, 3):
+            raise ValueError("Input tensor must be a 3x3 matrix.")
+        if not np.allclose(tensor, tensor.T):
+            raise ValueError("Input tensor must be symmetric.")
+
         voigt = np.array(
             [
                 tensor[0, 0],
                 tensor[1, 1],
                 tensor[2, 2],
-                2 * tensor[1, 2],
-                2 * tensor[0, 2],
-                2 * tensor[0, 1],
+                tensor[0, 1],
+                tensor[1, 2],
+                tensor[2, 0],
             ]
         )
         return voigt
 
     @staticmethod
     def from_voigt(voigt):
-        tensor = np.zeros((3, 3))
-        tensor[0, 0] = voigt[0]
-        tensor[1, 1] = voigt[1]
-        tensor[2, 2] = voigt[2]
-        tensor[1, 2] = tensor[2, 1] = voigt[3] / 2
-        tensor[0, 2] = tensor[2, 0] = voigt[4] / 2
-        tensor[0, 1] = tensor[1, 0] = voigt[5] / 2
+        if voigt.shape != (6,):
+            raise ValueError("Voigt representation must be a 6-element array.")
+
+        tensor = np.array(
+            [
+                [voigt[0], voigt[3], voigt[5]],
+                [voigt[3], voigt[1], voigt[4]],
+                [voigt[5], voigt[4], voigt[2]],
+            ]
+        )
         return tensor
 
 
