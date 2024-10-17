@@ -8,6 +8,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # 使用无头后端，防止弹出图形窗口
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # 导入 Axes3D
 
 
 def test_plot_cell_structure():
@@ -31,7 +32,7 @@ def test_plot_cell_structure():
     try:
         fig, ax = visualizer.plot_cell_structure(cell, show=False)
         assert isinstance(fig, plt.Figure), "返回的对象不是 Matplotlib Figure"
-        assert isinstance(ax, plt.Axes), "返回的对象不是 Matplotlib Axes"
+        assert isinstance(ax, Axes3D), "返回的对象不是 Matplotlib Axes3D"
     except Exception as e:
         pytest.fail(f"绘图函数抛出异常: {e}")
 
@@ -49,7 +50,8 @@ def test_plot_stress_strain():
 
     # 调用绘图函数，确保不抛出异常
     try:
-        fig = visualizer.plot_stress_strain(strain_data, stress_data, show=False)
+        fig, ax = visualizer.plot_stress_strain(strain_data, stress_data, show=False)
         assert isinstance(fig, plt.Figure), "返回的对象不是 Matplotlib Figure"
+        assert isinstance(ax, plt.Axes), "返回的对象不是 Matplotlib Axes"
     except Exception as e:
         pytest.fail(f"绘图函数抛出异常: {e}")

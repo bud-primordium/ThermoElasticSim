@@ -21,11 +21,13 @@ class Visualizer:
     def __init__(self):
         pass
 
-    def plot_cell_structure(self, cell_structure: Cell) -> None:
+    def plot_cell_structure(self, cell_structure: Cell, show=True):
         """
         @brief 绘制晶体结构的 3D 图形。
 
         @param cell_structure Cell 实例。
+        @param show 是否显示图形，默认为 True。
+        @return 返回绘图对象 fig 和 ax。
         """
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
@@ -42,24 +44,30 @@ class Visualizer:
         ax.set_zlabel("Z (Å)")
         plt.title("Crystal Structure")
         plt.legend()
-        plt.show()
+        if show:
+            plt.show()
+        return fig, ax
 
     def plot_stress_strain(
-        self, strain_data: np.ndarray, stress_data: np.ndarray
-    ) -> None:
+        self, strain_data: np.ndarray, stress_data: np.ndarray, show=True
+    ):
         """
         @brief 绘制应力-应变关系图。
 
         @param strain_data numpy.ndarray: 应变数据，形状为 (N, 6)。
         @param stress_data numpy.ndarray: 应力数据，形状为 (N, 6)。
+        @param show 是否显示图形，默认为 True。
+        @return 返回绘图对象 fig 和 ax。
         """
-        plt.figure(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         for i in range(6):
-            plt.plot(strain_data[:, i], stress_data[:, i], label=f"Stress {i+1}")
-        plt.xlabel("Strain")
-        plt.ylabel("Stress (eV/Å³)")
-        plt.title("Stress-Strain Relationship")
-        plt.legend()
-        plt.grid(True)
+            ax.plot(strain_data[:, i], stress_data[:, i], label=f"Stress {i+1}")
+        ax.set_xlabel("Strain")
+        ax.set_ylabel("Stress (eV/Å³)")
+        ax.set_title("Stress-Strain Relationship")
+        ax.legend()
+        ax.grid(True)
         plt.tight_layout()
-        plt.show()
+        if show:
+            plt.show()
+        return fig, ax

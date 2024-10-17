@@ -35,6 +35,9 @@ def test_elastic_constants_calculator():
     # 计算弹性常数
     C = elastic_calculator.calculate_elastic_constants()
 
+    # 将弹性常数矩阵转换为 GPa
+    C_in_GPa = C * 160.21766208
+
     # 预期弹性常数矩阵（根据文献或已知值）
     # 请根据实际材料（例如铝）的弹性常数进行调整，以下为示例值
     expected_C = np.array(
@@ -50,5 +53,5 @@ def test_elastic_constants_calculator():
 
     # 检查弹性常数矩阵是否接近预期值
     assert np.allclose(
-        C, expected_C, atol=1.0
-    ), f"弹性常数矩阵不接近预期值。\n计算结果:\n{C}\n预期值:\n{expected_C}"
+        C_in_GPa, expected_C, atol=1.0
+    ), f"弹性常数矩阵不接近预期值。\n计算结果:\n{C_in_GPa}\n预期值:\n{expected_C}"
