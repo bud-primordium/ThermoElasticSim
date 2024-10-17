@@ -14,7 +14,7 @@ def simple_cell(pbc_enabled=True):
     @fixture 创建一个简单的晶胞，包含两个原子
     """
     lattice_vectors = np.eye(3) * 6.0 if pbc_enabled else np.eye(3) * 1e8  # Å
-    mass = 2.797909e-7  # eV·fs²/Å²
+    mass = 2816.78346  # eV·fs²/Å²
     position1 = np.array([0.0, 0.0, 0.0])
     position2 = np.array([2.55, 0.0, 0.0])  # 与原子 1 相距 σ = 2.55 Å
     atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
