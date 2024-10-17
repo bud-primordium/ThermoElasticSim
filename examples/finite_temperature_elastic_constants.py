@@ -5,7 +5,6 @@
 @brief 有限温度下弹性常数计算示例。
 """
 
-import numpy as np
 from src.python.structure import Cell, Atom
 from src.python.potentials import LennardJonesPotential
 from src.python.optimizers import ConjugateGradientOptimizer
@@ -14,7 +13,7 @@ from src.python.stress_evaluator import LennardJonesStressEvaluator
 from src.python.strain import StrainCalculator
 from src.python.solver import ElasticConstantSolver
 from src.python.md_simulation import MDSimulator
-from src.python.utilities import TensorConverter
+from python.utils import TensorConverter
 
 
 def initialize_cell() -> Cell:

@@ -8,7 +8,7 @@
 import unittest
 import numpy as np
 import os
-from src.python.utilities import IOHandler, TensorConverter
+from python.utils import IOHandler, TensorConverter
 from src.python.structure import Cell, Atom
 
 

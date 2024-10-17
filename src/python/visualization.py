@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from typing import List
 
-from src.python.structure import Cell
+from .structure import Cell
 
 
 class Visualizer:

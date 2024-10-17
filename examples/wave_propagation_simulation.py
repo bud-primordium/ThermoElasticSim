@@ -15,7 +15,7 @@ from src.python.strain import StrainCalculator
 from src.python.solver import ElasticConstantSolver
 from src.python.md_simulation import MDSimulator
 from src.python.visualization import Visualizer
-from src.python.utilities import TensorConverter
+from python.utils import TensorConverter
 
 
 def initialize_cell() -> Cell:
