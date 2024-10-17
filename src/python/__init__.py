@@ -23,7 +23,7 @@ from .mechanics import (
     StrainCalculator,
     ElasticConstantsSolver,
 )
-from .optimizers import Optimizer, GradientDescentOptimizer, QuickminOptimizer
+from .optimizers import Optimizer, GradientDescentOptimizer
 from .deformation import Deformer
 from .utils import TensorConverter, DataCollector
 from .visualization import Visualizer

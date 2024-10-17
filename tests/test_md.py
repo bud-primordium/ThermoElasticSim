@@ -17,9 +17,9 @@ class TestMD(unittest.TestCase):
     def setUp(self):
         # 创建一个简单的晶胞，包含两个原子
         lattice_vectors = np.eye(3) * 4.05  # Å
-        mass = 26.9815  # 原子量，amu
+        mass = 2.797909e-7  # eV·fs²/Å²
         position1 = np.array([0.0, 0.0, 0.0])
-        position2 = np.array([2.025, 0.0, 0.0])  # 与原子 1 相距一半的晶格常数
+        position2 = np.array([2.025, 0.0, 0.0])  # 与原子 1 相距 2.025 Å
         atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
         atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
         self.cell = Cell(lattice_vectors, [atom1, atom2], pbc_enabled=True)
@@ -43,9 +43,12 @@ class TestMD(unittest.TestCase):
         @brief 测试分子动力学模拟器的运行
         """
         md_simulator = MDSimulator(
-            self.cell, self.potential, self.integrator, self.thermostat
+            self.cell,
+            self.potential,
+            self.integrator,
+            thermostat=None,  # 先不加恒温器！！！
         )
-        md_simulator.run(steps=10, dt=0.001)
+        md_simulator.run(steps=10, dt=1.0)  # dt 单位为 fs
 
         # 检查原子的位置和速度是否发生变化
         atom1 = self.cell.atoms[0]

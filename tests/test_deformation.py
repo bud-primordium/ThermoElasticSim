@@ -35,8 +35,9 @@ class TestDeformation(unittest.TestCase):
                 shear_indices = [(0, 1), (0, 2), (1, 2)]
                 idx = i - 3
                 i_shear, j_shear = shear_indices[idx]
-                expected_F[i_shear, j_shear] += delta
-            np.testing.assert_array_almost_equal(F, expected_F)
+                expected_F[i_shear, j_shear] += delta / 2
+                expected_F[j_shear, i_shear] += delta / 2
+            np.testing.assert_array_almost_equal(F, expected_F, decimal=6)
 
 
 if __name__ == "__main__":

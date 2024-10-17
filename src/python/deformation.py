@@ -24,17 +24,18 @@ class Deformer:
         delta = self.delta
         F_list = []
 
-        # 轴向拉伸/压缩
-        for i in range(3):
-            F = np.identity(3)
-            F[i, i] += delta
-            F_list.append(F)
+        # 六个独立的应变分量
+        strain_components = [
+            np.array([[delta, 0, 0], [0, 0, 0], [0, 0, 0]]),  # ε_xx
+            np.array([[0, 0, 0], [0, delta, 0], [0, 0, 0]]),  # ε_yy
+            np.array([[0, 0, 0], [0, 0, 0], [0, 0, delta]]),  # ε_zz
+            np.array([[0, delta / 2, 0], [delta / 2, 0, 0], [0, 0, 0]]),  # ε_xy
+            np.array([[0, 0, delta / 2], [0, 0, 0], [delta / 2, 0, 0]]),  # ε_xz
+            np.array([[0, 0, 0], [0, 0, delta / 2], [0, delta / 2, 0]]),  # ε_yz
+        ]
 
-        # 剪切变形
-        shear_indices = [(0, 1), (0, 2), (1, 2)]
-        for i, j in shear_indices:
-            F = np.identity(3)
-            F[i, j] += delta
+        for epsilon in strain_components:
+            F = np.identity(3) + epsilon
             F_list.append(F)
 
         return F_list

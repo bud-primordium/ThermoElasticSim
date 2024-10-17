@@ -48,35 +48,3 @@ class GradientDescentOptimizer(Optimizer):
             #     print(f"Atom {atom.id} Force: {atom.force}")
         else:
             print("Optimization did not converge within the maximum number of steps.")
-
-
-class QuickminOptimizer(Optimizer):
-    """
-    @class QuickminOptimizer
-    @brief 快速最小化优化器
-    """
-
-    def __init__(self, max_steps=1000, tol=1e-6, dt=1e-4):
-        self.max_steps = max_steps
-        self.tol = tol
-        self.dt = dt
-
-    def optimize(self, cell, potential):
-        atoms = cell.atoms
-        velocities = [np.zeros(3) for _ in atoms]
-        potential.calculate_forces(cell)
-        for step in range(self.max_steps):
-            max_force = max(np.linalg.norm(atom.force) for atom in atoms)
-            if max_force < self.tol:
-                print(f"Converged after {step} steps")
-                break
-            # 更新速度和位置
-            for i, atom in enumerate(atoms):
-                velocities[i] = velocities[i] + self.dt * atom.force / atom.mass
-                atom.position += self.dt * velocities[i]
-                # 应用周期性边界条件
-                atom.position = cell.apply_periodic_boundary(atom.position)
-            # 计算新的力
-            potential.calculate_forces(cell)
-        else:
-            print("Optimization did not converge within the maximum number of steps.")

@@ -40,7 +40,14 @@ class Cell:
         return np.linalg.det(self.lattice_vectors)
 
     def apply_deformation(self, deformation_matrix):
-        self.lattice_vectors = np.dot(deformation_matrix, self.lattice_vectors)
+        """
+        @brief 对晶胞和原子坐标施加变形矩阵。
+
+        @param deformation_matrix 3x3 变形矩阵
+        """
+        # 更新晶格矢量
+        self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
+        # 更新原子坐标
         for atom in self.atoms:
             atom.position = np.dot(deformation_matrix, atom.position)
 

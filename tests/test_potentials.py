@@ -9,17 +9,17 @@ from python.structure import Atom, Cell
 
 class TestPotentials(unittest.TestCase):
     def setUp(self):
-        self.epsilon = 6.774e-21  # J
-        self.sigma = 2.55e-10  # m
+        self.epsilon = 0.0103  # eV
+        self.sigma = 2.55  # Å
         self.cutoff = 2.5 * self.sigma
         self.potential = LennardJonesPotential(
             epsilon=self.epsilon, sigma=self.sigma, cutoff=self.cutoff
         )
         # 创建一个简单的系统
-        self.lattice_vectors = np.eye(3) * 4.05e-10
-        mass = 26.9815 / (6.02214076e23) * 1e-3
+        self.lattice_vectors = np.eye(3) * 4.05  # Å
+        mass = 26.9815  # amu
         position1 = np.array([0.0, 0.0, 0.0])
-        position2 = np.array([2.025e-10, 0.0, 0.0])
+        position2 = np.array([2.025, 0.0, 0.0])  # 2.025 Å
         atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
         atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
         self.cell = Cell(self.lattice_vectors, [atom1, atom2])

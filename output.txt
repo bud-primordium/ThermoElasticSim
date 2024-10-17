@@ -393,17 +393,18 @@ class Deformer:
         delta = self.delta
         F_list = []
 
-        # 轴向拉伸/压缩
-        for i in range(3):
-            F = np.identity(3)
-            F[i, i] += delta
-            F_list.append(F)
+        # 六个独立的应变分量
+        strain_components = [
+            np.array([[delta, 0, 0], [0, 0, 0], [0, 0, 0]]),  # ε_xx
+            np.array([[0, 0, 0], [0, delta, 0], [0, 0, 0]]),  # ε_yy
+            np.array([[0, 0, 0], [0, 0, 0], [0, 0, delta]]),  # ε_zz
+            np.array([[0, delta / 2, 0], [delta / 2, 0, 0], [0, 0, 0]]),  # ε_xy
+            np.array([[0, 0, delta / 2], [0, 0, 0], [delta / 2, 0, 0]]),  # ε_xz
+            np.array([[0, 0, 0], [0, 0, delta / 2], [0, delta / 2, 0]]),  # ε_yz
+        ]
 
-        # 剪切变形
-        shear_indices = [(0, 1), (0, 2), (1, 2)]
-        for i, j in shear_indices:
-            F = np.identity(3)
-            F[i, j] += delta
+        for epsilon in strain_components:
+            F = np.identity(3) + epsilon
             F_list.append(F)
 
         return F_list
@@ -416,6 +417,69 @@ class Deformer:
         @param deformation_matrix 变形矩阵
         """
         cell.apply_deformation(deformation_matrix)
+
+
+# src/python/elasticity.py
+
+import numpy as np
+from .mechanics import StressCalculatorLJ, ElasticConstantsSolver
+from .deformation import Deformer
+from .optimizers import GradientDescentOptimizer
+from .utils import TensorConverter
+
+
+class ElasticConstantsCalculator:
+    """
+    @class ElasticConstantsCalculator
+    @brief 用于计算弹性常数的类
+    """
+
+    def __init__(self, cell, potential, delta=1e-3):
+        self.cell = cell
+        self.potential = potential
+        self.delta = delta
+        self.deformer = Deformer(delta)
+        self.stress_calculator = StressCalculatorLJ()
+        self.optimizer = GradientDescentOptimizer(
+            max_steps=1000, tol=1e-6, step_size=1e-4
+        )
+
+    def calculate_elastic_constants(self):
+        """
+        @brief 计算弹性常数矩阵
+
+        @return 弹性常数矩阵，形状为 (6, 6)
+        """
+        F_list = self.deformer.generate_deformation_matrices()
+        strains = []
+        stresses = []
+
+        for F in F_list:
+            # 复制初始晶胞
+            deformed_cell = self.cell.copy()
+            # 施加变形
+            deformed_cell.apply_deformation(F)
+            # 优化结构
+            self.optimizer.optimize(deformed_cell, self.potential)
+            # 计算应力
+            self.potential.calculate_forces(deformed_cell)
+            stress_tensor = self.stress_calculator.compute_stress(
+                deformed_cell, self.potential
+            )
+            # 计算应变
+            strain_tensor = 0.5 * (np.dot(F.T, F) - np.identity(3))
+            # 转换为 Voigt 表示
+            strain_voigt = TensorConverter.to_voigt(strain_tensor)
+            stress_voigt = TensorConverter.to_voigt(stress_tensor)
+            strains.append(strain_voigt)
+            stresses.append(stress_voigt)
+
+        # 拟合弹性常数矩阵
+        strains = np.array(strains)
+        stresses = np.array(stresses)
+        elastic_solver = ElasticConstantsSolver()
+        C = elastic_solver.solve(strains, stresses)
+        return C
 
 
 # src/python/md.py
@@ -807,7 +871,14 @@ class Cell:
         return np.linalg.det(self.lattice_vectors)
 
     def apply_deformation(self, deformation_matrix):
-        self.lattice_vectors = np.dot(deformation_matrix, self.lattice_vectors)
+        """
+        @brief 对晶胞和原子坐标施加变形矩阵。
+
+        @param deformation_matrix 3x3 变形矩阵
+        """
+        # 更新晶格矢量
+        self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
+        # 更新原子坐标
         for atom in self.atoms:
             atom.position = np.dot(deformation_matrix, atom.position)
 
@@ -842,43 +913,24 @@ import numpy as np
 
 
 class TensorConverter:
-    """
-    @class TensorConverter
-    @brief 用于在张量和 Voigt 表示之间转换的工具类。
-    """
-
     @staticmethod
     def to_voigt(tensor):
-        if tensor.shape != (3, 3):
-            raise ValueError("输入张量必须是 3x3 矩阵。")
-        if not np.allclose(tensor, tensor.T):
-            raise ValueError("输入张量必须是对称的。")
+        """
+        将 3x3 张量转换为 Voigt 表示的长度为6的向量。
 
+        顺序为 [σ_xx, σ_yy, σ_zz, σ_xy, σ_xz, σ_yz]
+        """
         voigt = np.array(
             [
                 tensor[0, 0],
                 tensor[1, 1],
                 tensor[2, 2],
-                tensor[1, 2] * 2,
-                tensor[0, 2] * 2,
-                tensor[0, 1] * 2,
+                tensor[0, 1],
+                tensor[0, 2],
+                tensor[1, 2],
             ]
         )
         return voigt
-
-    @staticmethod
-    def from_voigt(voigt):
-        if voigt.shape != (6,):
-            raise ValueError("Voigt 表示必须是长度为 6 的数组。")
-
-        tensor = np.array(
-            [
-                [voigt[0], voigt[5] / 2, voigt[4] / 2],
-                [voigt[5] / 2, voigt[1], voigt[3] / 2],
-                [voigt[4] / 2, voigt[3] / 2, voigt[2]],
-            ]
-        )
-        return tensor
 
 
 class DataCollector:
@@ -1180,8 +1232,9 @@ class TestDeformation(unittest.TestCase):
                 shear_indices = [(0, 1), (0, 2), (1, 2)]
                 idx = i - 3
                 i_shear, j_shear = shear_indices[idx]
-                expected_F[i_shear, j_shear] += delta
-            np.testing.assert_array_almost_equal(F, expected_F)
+                expected_F[i_shear, j_shear] += delta / 2
+                expected_F[j_shear, i_shear] += delta / 2
+            np.testing.assert_array_almost_equal(F, expected_F, decimal=6)
 
 
 if __name__ == "__main__":
@@ -1207,9 +1260,9 @@ class TestMD(unittest.TestCase):
     def setUp(self):
         # 创建一个简单的晶胞，包含两个原子
         lattice_vectors = np.eye(3) * 4.05  # Å
-        mass = 26.9815  # 原子量，amu
+        mass = 26.9815  # amu
         position1 = np.array([0.0, 0.0, 0.0])
-        position2 = np.array([2.025, 0.0, 0.0])  # 与原子 1 相距一半的晶格常数
+        position2 = np.array([2.025, 0.0, 0.0])  # 与原子 1 相距 2.025 Å
         atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
         atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
         self.cell = Cell(lattice_vectors, [atom1, atom2], pbc_enabled=True)
@@ -1341,9 +1394,9 @@ class TestOptimizers(unittest.TestCase):
     def setUp(self):
         # 创建一个简单的晶胞，包含两个原子
         lattice_vectors = np.eye(3) * 4.05  # Å
-        mass = 26.9815  # 原子量，amu
+        mass = 26.9815  # amu
         position1 = np.array([0.0, 0.0, 0.0])
-        position2 = np.array([2.55, 0.0, 0.0])  # 初始距离为 σ
+        position2 = np.array([2.55, 0.0, 0.0])  # 初始距离为 σ = 2.55 Å
         atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
         atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
         self.cell = Cell(lattice_vectors, [atom1, atom2], pbc_enabled=False)
@@ -1408,17 +1461,17 @@ from python.structure import Atom, Cell
 
 class TestPotentials(unittest.TestCase):
     def setUp(self):
-        self.epsilon = 6.774e-21  # J
-        self.sigma = 2.55e-10  # m
+        self.epsilon = 0.0103  # eV
+        self.sigma = 2.55  # Å
         self.cutoff = 2.5 * self.sigma
         self.potential = LennardJonesPotential(
             epsilon=self.epsilon, sigma=self.sigma, cutoff=self.cutoff
         )
         # 创建一个简单的系统
-        self.lattice_vectors = np.eye(3) * 4.05e-10
-        mass = 26.9815 / (6.02214076e23) * 1e-3
+        self.lattice_vectors = np.eye(3) * 4.05  # Å
+        mass = 26.9815  # amu
         position1 = np.array([0.0, 0.0, 0.0])
-        position2 = np.array([2.025e-10, 0.0, 0.0])
+        position2 = np.array([2.025, 0.0, 0.0])  # 2.025 Å
         atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
         atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
         self.cell = Cell(self.lattice_vectors, [atom1, atom2])
