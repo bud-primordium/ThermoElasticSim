@@ -7,7 +7,15 @@ import os
 
 
 class CppInterface:
+    """
+    @class CppInterface
+    @brief 用于调用 C++ 实现的函数的接口类。
+    """
+
     def __init__(self, lib_name):
+        """
+        @param lib_name 库的名称
+        """
         if os.name == "nt":  # Windows
             lib_extension = ".dll"
             lib_prefix = ""
@@ -24,7 +32,7 @@ class CppInterface:
         )
         # 检查库文件是否存在
         if not os.path.exists(lib_path):
-            raise FileNotFoundError(f"Could not find library file: {lib_path}")
+            raise FileNotFoundError(f"无法找到库文件: {lib_path}")
         self.lib = ctypes.CDLL(lib_path)
 
         if lib_name == "nose_hoover":

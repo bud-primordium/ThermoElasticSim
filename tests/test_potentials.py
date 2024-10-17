@@ -2,14 +2,6 @@
 
 import unittest
 import numpy as np
-import sys
-import os
-
-# 设置路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, ".."))
-src_dir = os.path.join(project_root, "src")
-sys.path.insert(0, src_dir)
 
 from python.potentials import LennardJonesPotential
 from python.structure import Atom, Cell

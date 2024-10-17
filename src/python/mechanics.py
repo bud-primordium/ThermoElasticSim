@@ -6,11 +6,21 @@ from .interfaces.cpp_interface import CppInterface
 
 
 class StressCalculator:
+    """
+    @class StressCalculator
+    @brief 应力计算器基类
+    """
+
     def compute_stress(self, cell, potential):
         raise NotImplementedError
 
 
 class StressCalculatorLJ(StressCalculator):
+    """
+    @class StressCalculatorLJ
+    @brief 基于 Lennard-Jones 势的应力计算器
+    """
+
     def __init__(self):
         self.cpp_interface = CppInterface("stress_calculator")
 
@@ -31,7 +41,7 @@ class StressCalculatorLJ(StressCalculator):
         cutoff = potential.cutoff
         lattice_vectors = cell.lattice_vectors.flatten()
         # 调用 C++ 实现的应力计算函数
-        stress_tensor_flat = self.cpp_interface.compute_stress(
+        stress_tensor = self.cpp_interface.compute_stress(
             num_atoms,
             positions,
             velocities,
@@ -43,10 +53,15 @@ class StressCalculatorLJ(StressCalculator):
             cutoff,
             lattice_vectors,
         )
-        return stress_tensor_flat
+        return stress_tensor
 
 
 class StrainCalculator:
+    """
+    @class StrainCalculator
+    @brief 应变计算器
+    """
+
     def compute_strain(self, deformation_gradient):
         C = np.dot(deformation_gradient.T, deformation_gradient)
         strain_tensor = 0.5 * (C - np.identity(3))
@@ -54,7 +69,20 @@ class StrainCalculator:
 
 
 class ElasticConstantsSolver:
+    """
+    @class ElasticConstantsSolver
+    @brief 弹性常数求解器
+    """
+
     def solve(self, strains, stresses):
+        """
+        @brief 求解弹性常数矩阵
+
+        @param strains 应变列表，形状为 (N, 6)
+        @param stresses 应力列表，形状为 (N, 6)
+
+        @return 弹性常数矩阵，形状为 (6, 6)
+        """
         strains = np.array(strains)
         stresses = np.array(stresses)
         C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)

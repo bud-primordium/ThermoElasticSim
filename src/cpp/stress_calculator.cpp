@@ -5,6 +5,21 @@
 
 extern "C"
 {
+    /**
+     * @brief 计算应力张量
+     *
+     * @param num_atoms 原子数量
+     * @param positions 原子位置数组（长度为 3*num_atoms）
+     * @param velocities 原子速度数组（长度为 3*num_atoms）
+     * @param forces 原子力数组（长度为 3*num_atoms）
+     * @param masses 原子质量数组（长度为 num_atoms）
+     * @param volume 系统体积
+     * @param epsilon Lennard-Jones 势参数 ε，单位为 eV
+     * @param sigma Lennard-Jones 势参数 σ，单位为 Å
+     * @param cutoff 截断半径，单位为 Å
+     * @param lattice_vectors 晶格矢量（长度为 9，按列存储 3x3 矩阵）
+     * @param stress_tensor 输出的应力张量（长度为 9，按行主序存储 3x3 矩阵）
+     */
     void compute_stress(
         int num_atoms,
         const double *positions,
@@ -15,9 +30,8 @@ extern "C"
         double epsilon,
         double sigma,
         double cutoff,
-        double dUc,
-        const double *lattice_vectors, // 9 elements: H = [a1, a2, a3] as columns
-        double *stress_tensor          // 输出，大小为9的数组，按行主序存储3x3矩阵
+        const double *lattice_vectors,
+        double *stress_tensor // 输出
     )
     {
         // 初始化应力张量
@@ -26,7 +40,7 @@ extern "C"
             stress_tensor[i] = 0.0;
         }
 
-        // 构建逆晶格矩阵 H_inv
+        // 构建晶格矩阵 H 和逆矩阵 H_inv
         double H[3][3];
         for (int i = 0; i < 3; ++i)
         {
@@ -35,7 +49,9 @@ extern "C"
             H[2][i] = lattice_vectors[3 * i + 2];
         }
         // 计算 H_inv
-        double det = H[0][0] * (H[1][1] * H[2][2] - H[1][2] * H[2][1]) - H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) + H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
+        double det = H[0][0] * (H[1][1] * H[2][2] - H[1][2] * H[2][1]) -
+                     H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) +
+                     H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
         double H_inv[3][3];
         H_inv[0][0] = (H[1][1] * H[2][2] - H[1][2] * H[2][1]) / det;
         H_inv[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) / det;
@@ -95,11 +111,10 @@ extern "C"
 
                 if (r < cutoff)
                 {
-                    double sr6 = pow(sigma / r, 6);
+                    double sr = sigma / r;
+                    double sr6 = pow(sr, 6);
                     double sr12 = sr6 * sr6;
-                    double force_scalar = 24 * epsilon * (2 * sr12 - sr6) / r;
-                    // Shifted force correction
-                    force_scalar -= dUc / r;
+                    double force_scalar = 24.0 * epsilon * (2.0 * sr12 - sr6) / r;
                     double fij[3];
                     for (int k = 0; k < 3; ++k)
                     {
@@ -116,11 +131,10 @@ extern "C"
             }
         }
 
-        // 归一化
+        // 归一化并取负号
         for (int i = 0; i < 9; ++i)
         {
-            stress_tensor[i] /= volume;
-            stress_tensor[i] = -stress_tensor[i]; // 根据定义取负号
+            stress_tensor[i] = -stress_tensor[i] / volume;
         }
     }
 }

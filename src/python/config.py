@@ -4,6 +4,11 @@ import yaml
 
 
 class ConfigManager:
+    """
+    @class ConfigManager
+    @brief 配置管理器，用于加载和获取配置参数。
+    """
+
     def __init__(self, config_file):
         self.config = self.load_config(config_file)
 

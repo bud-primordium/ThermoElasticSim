@@ -1,40 +1,61 @@
-# tests/test_utils.py
+# tests/test_structure.py
 
 import unittest
 import numpy as np
-import sys
-import os
 
-# 设置路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, ".."))
-src_dir = os.path.join(project_root, "src")
-sys.path.insert(0, src_dir)
-
-from python.utils import TensorConverter
+from python.structure import Atom, Cell
 
 
-class TestUtils(unittest.TestCase):
-    def test_tensor_to_voigt(self):
-        # 对称张量
-        tensor = np.array([[1, 2, 3], [2, 4, 5], [3, 5, 6]])
-        voigt = TensorConverter.to_voigt(tensor)
-        expected_voigt = np.array([1, 4, 6, 2, 5, 3])  # Sxx, Syy, Szz, Sxy, Syz, Szx
-        np.testing.assert_array_almost_equal(voigt, expected_voigt)
+class TestStructure(unittest.TestCase):
+    """
+    @class TestStructure
+    @brief 测试原子和晶胞结构的功能
+    """
 
-    def test_voigt_to_tensor(self):
-        # Voigt 表示
-        voigt = np.array([1, 4, 6, 2, 5, 3])
-        tensor = TensorConverter.from_voigt(voigt)
-        expected_tensor = np.array([[1, 2, 3], [2, 4, 5], [3, 5, 6]])
-        np.testing.assert_array_almost_equal(tensor, expected_tensor)
+    def test_atom_creation(self):
+        """
+        @brief 测试原子的创建
+        """
+        position = np.array([0.0, 0.0, 0.0])
+        mass = 26.9815  # 原子量，amu
+        atom = Atom(id=0, symbol="Al", mass=mass, position=position)
+        self.assertEqual(atom.id, 0)
+        self.assertEqual(atom.symbol, "Al")
+        np.testing.assert_array_equal(atom.position, position)
+        self.assertEqual(atom.mass, mass)
 
-    def test_round_trip_conversion(self):
-        # 随机对称张量
-        tensor = np.array([[3, 1, 2], [1, 4, 5], [2, 5, 6]])
-        voigt = TensorConverter.to_voigt(tensor)
-        tensor_reconstructed = TensorConverter.from_voigt(voigt)
-        np.testing.assert_array_almost_equal(tensor, tensor_reconstructed)
+    def test_cell_creation(self):
+        """
+        @brief 测试晶胞的创建
+        """
+        lattice_vectors = np.eye(3) * 4.05  # Å
+        atom = Atom(id=0, symbol="Al", mass=26.9815, position=np.zeros(3))
+        cell = Cell(lattice_vectors, [atom])
+        np.testing.assert_array_equal(cell.lattice_vectors, lattice_vectors)
+        self.assertEqual(len(cell.atoms), 1)
+        self.assertEqual(cell.atoms[0], atom)
+
+    def test_volume_calculation(self):
+        """
+        @brief 测试晶胞体积的计算
+        """
+        lattice_vectors = np.eye(3) * 4.05  # Å
+        cell = Cell(lattice_vectors, [])
+        expected_volume = 4.05**3
+        calculated_volume = cell.calculate_volume()
+        self.assertAlmostEqual(calculated_volume, expected_volume)
+
+    def test_apply_periodic_boundary(self):
+        """
+        @brief 测试周期性边界条件的应用
+        """
+        lattice_vectors = np.eye(3) * 4.05  # Å
+        cell = Cell(lattice_vectors, [], pbc_enabled=True)
+        position = np.array([5.0, -1.0, 4.0])  # 超出晶胞范围的坐标
+        new_position = cell.apply_periodic_boundary(position)
+        # 检查新位置是否在 [0, lattice_constant) 范围内
+        self.assertTrue(np.all(new_position >= 0))
+        self.assertTrue(np.all(new_position < 4.05))
 
 
 if __name__ == "__main__":

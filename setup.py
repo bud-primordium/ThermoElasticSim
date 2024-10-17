@@ -9,6 +9,6 @@ setup(
     package_dir={"": "src"},
     install_requires=[
         "numpy",
-        # 其他依赖包
+        "matplotlib",
     ],
 )

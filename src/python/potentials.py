@@ -5,6 +5,11 @@ from .interfaces.cpp_interface import CppInterface
 
 
 class Potential:
+    """
+    @class Potential
+    @brief 势能基类
+    """
+
     def __init__(self, parameters, cutoff):
         self.parameters = parameters
         self.cutoff = cutoff
@@ -17,12 +22,17 @@ class Potential:
 
 
 class LennardJonesPotential(Potential):
+    """
+    @class LennardJonesPotential
+    @brief Lennard-Jones 势的实现
+    """
+
     def __init__(self, epsilon, sigma, cutoff):
         parameters = {"epsilon": epsilon, "sigma": sigma}
         super().__init__(parameters, cutoff)
-        self.epsilon = epsilon
-        self.sigma = sigma
-        self.cutoff = cutoff
+        self.epsilon = epsilon  # 单位 eV
+        self.sigma = sigma  # 单位 Å
+        self.cutoff = cutoff  # 单位 Å
         self.cpp_interface = CppInterface("lennard_jones")
 
     def calculate_forces(self, cell):
@@ -41,13 +51,12 @@ class LennardJonesPotential(Potential):
             self.cutoff,
             lattice_vectors,
         )
-        # 更新原子力
         # 检查 forces 数组是否更新
         if np.allclose(forces, 0):
             print("警告：计算得到的力全为零")
         else:
             print("计算得到的力非零")
-            print("计算得到的力数组：", forces)
+            # print("计算得到的力数组：", forces)
         # 更新原子力
         for i, atom in enumerate(cell.atoms):
             atom.force = forces[3 * i : 3 * i + 3]

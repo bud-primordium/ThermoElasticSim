@@ -5,6 +5,18 @@
 
 extern "C"
 {
+    /**
+     * @brief 应用 Nose-Hoover 恒温器
+     *
+     * @param dt 时间步长
+     * @param num_atoms 原子数量
+     * @param masses 原子质量数组（长度为 num_atoms）
+     * @param velocities 原子速度数组（长度为 3*num_atoms）
+     * @param forces 原子力数组（长度为 3*num_atoms）
+     * @param xi 热浴变量
+     * @param Q 热浴质量参数
+     * @param target_temperature 目标温度
+     */
     void nose_hoover(
         double dt,
         int num_atoms,
@@ -16,7 +28,7 @@ extern "C"
         double target_temperature)
     {
         double dt2 = dt / 2.0;
-        double kB = 1.380649e-23; // 玻尔兹曼常数
+        double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
         double kT = kB * target_temperature;
 
         // 第一半步：更新速度

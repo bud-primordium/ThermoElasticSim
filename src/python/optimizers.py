@@ -4,12 +4,22 @@ import numpy as np
 
 
 class Optimizer:
+    """
+    @class Optimizer
+    @brief 优化器基类
+    """
+
     def optimize(self, cell, potential):
         raise NotImplementedError
 
 
 class GradientDescentOptimizer(Optimizer):
-    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-12):
+    """
+    @class GradientDescentOptimizer
+    @brief 梯度下降优化器
+    """
+
+    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-4):
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
@@ -30,17 +40,22 @@ class GradientDescentOptimizer(Optimizer):
                 atom.position -= displacement
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
-                print(f"Atom {atom.id} Position: {atom.position}")
+                # print(f"Atom {atom.id} Position: {atom.position}")
             # 重新计算力
             potential.calculate_forces(cell)
             # 打印新力
-            for atom in atoms:
-                print(f"Atom {atom.id} Force: {atom.force}")
+            # for atom in atoms:
+            #     print(f"Atom {atom.id} Force: {atom.force}")
         else:
             print("Optimization did not converge within the maximum number of steps.")
 
 
 class QuickminOptimizer(Optimizer):
+    """
+    @class QuickminOptimizer
+    @brief 快速最小化优化器
+    """
+
     def __init__(self, max_steps=1000, tol=1e-6, dt=1e-4):
         self.max_steps = max_steps
         self.tol = tol
@@ -55,13 +70,13 @@ class QuickminOptimizer(Optimizer):
             if max_force < self.tol:
                 print(f"Converged after {step} steps")
                 break
-            # Update velocities and positions
+            # 更新速度和位置
             for i, atom in enumerate(atoms):
                 velocities[i] = velocities[i] + self.dt * atom.force / atom.mass
                 atom.position += self.dt * velocities[i]
-                # Apply periodic boundary conditions
+                # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
-            # Calculate new forces
+            # 计算新的力
             potential.calculate_forces(cell)
         else:
             print("Optimization did not converge within the maximum number of steps.")

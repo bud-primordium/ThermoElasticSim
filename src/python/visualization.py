@@ -8,7 +8,6 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-from typing import List
 
 from .structure import Cell
 
@@ -19,15 +18,12 @@ class Visualizer:
     @brief 可视化晶胞结构和模拟结果的类。
     """
 
-    def __init__(self) -> None:
-        """
-        @brief 初始化 Visualizer 实例。
-        """
+    def __init__(self):
         pass
 
     def plot_cell_structure(self, cell_structure: Cell) -> None:
         """
-        @brief 绘制晶体结构的3D图形。
+        @brief 绘制晶体结构的 3D 图形。
 
         @param cell_structure Cell 实例。
         """
@@ -35,9 +31,15 @@ class Visualizer:
         ax = fig.add_subplot(111, projection="3d")
         for atom in cell_structure.atoms:
             ax.scatter(*atom.position, label=atom.symbol)
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
+        # 绘制晶格矢量
+        origin = [0, 0, 0]
+        lattice_vectors = cell_structure.lattice_vectors
+        for i in range(3):
+            vec = lattice_vectors[:, i]
+            ax.quiver(*origin, *vec, color="r", arrow_length_ratio=0.1)
+        ax.set_xlabel("X (Å)")
+        ax.set_ylabel("Y (Å)")
+        ax.set_zlabel("Z (Å)")
         plt.title("Crystal Structure")
         plt.legend()
         plt.show()
@@ -55,7 +57,7 @@ class Visualizer:
         for i in range(6):
             plt.plot(strain_data[:, i], stress_data[:, i], label=f"Stress {i+1}")
         plt.xlabel("Strain")
-        plt.ylabel("Stress")
+        plt.ylabel("Stress (eV/Å³)")
         plt.title("Stress-Strain Relationship")
         plt.legend()
         plt.grid(True)

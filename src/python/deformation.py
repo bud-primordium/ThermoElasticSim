@@ -4,38 +4,46 @@ import numpy as np
 
 
 class Deformer:
+    """
+    @class Deformer
+    @brief 施加微小应变以生成变形矩阵的类。
+    """
+
     def __init__(self, delta):
+        """
+        @param delta 微小应变量
+        """
         self.delta = delta
 
     def generate_deformation_matrices(self):
+        """
+        @brief 生成用于施加应变的变形矩阵列表。
+
+        @return 变形矩阵列表
+        """
         delta = self.delta
         F_list = []
 
-        # F1
-        F1 = np.array([[1 + delta, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_list.append(F1)
+        # 轴向拉伸/压缩
+        for i in range(3):
+            F = np.identity(3)
+            F[i, i] += delta
+            F_list.append(F)
 
-        # F2
-        F2 = np.array([[1, 0, 0], [0, 1 + delta, 0], [0, 0, 1]])
-        F_list.append(F2)
-
-        # F3
-        F3 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1 + delta]])
-        F_list.append(F3)
-
-        # F4
-        F4 = np.array([[1, delta, 0], [0, 1, 0], [0, 0, 1]])
-        F_list.append(F4)
-
-        # F5
-        F5 = np.array([[1, 0, delta], [0, 1, 0], [0, 0, 1]])
-        F_list.append(F5)
-
-        # F6
-        F6 = np.array([[1, 0, 0], [0, 1, delta], [0, 0, 1]])
-        F_list.append(F6)
+        # 剪切变形
+        shear_indices = [(0, 1), (0, 2), (1, 2)]
+        for i, j in shear_indices:
+            F = np.identity(3)
+            F[i, j] += delta
+            F_list.append(F)
 
         return F_list
 
     def apply_deformation(self, cell, deformation_matrix):
+        """
+        @brief 对晶胞施加变形矩阵。
+
+        @param cell Cell 实例
+        @param deformation_matrix 变形矩阵
+        """
         cell.apply_deformation(deformation_matrix)

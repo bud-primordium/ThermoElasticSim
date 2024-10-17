@@ -5,36 +5,56 @@ from .interfaces.cpp_interface import CppInterface
 
 
 class Integrator:
+    """
+    @class Integrator
+    @brief 积分器基类
+    """
+
     def integrate(self, cell, potential, thermostat, dt):
         raise NotImplementedError
 
 
 class VelocityVerletIntegrator(Integrator):
+    """
+    @class VelocityVerletIntegrator
+    @brief 速度 Verlet 积分器的实现
+    """
+
     def integrate(self, cell, potential, thermostat, dt):
         atoms = cell.atoms
-        # First half-step: update positions
+        # 第一半步：更新位置
         for atom in atoms:
             atom.position += atom.velocity * dt + 0.5 * atom.force / atom.mass * dt**2
-            # Apply periodic boundary conditions
+            # 应用周期性边界条件
             atom.position = cell.apply_periodic_boundary(atom.position)
-        # Save old forces
+        # 保存旧的力
         forces_old = [atom.force.copy() for atom in atoms]
-        # Calculate new forces
+        # 计算新的力
         potential.calculate_forces(cell)
-        # Second half-step: update velocities
+        # 第二半步：更新速度
         for atom, force_old in zip(atoms, forces_old):
             atom.velocity += 0.5 * (atom.force + force_old) / atom.mass * dt
-        # Apply thermostat
+        # 应用恒温器
         if thermostat is not None:
             thermostat.apply(atoms, dt)
 
 
 class Thermostat:
+    """
+    @class Thermostat
+    @brief 恒温器基类
+    """
+
     def apply(self, atoms, dt):
         raise NotImplementedError
 
 
 class NoseHooverThermostat(Thermostat):
+    """
+    @class NoseHooverThermostat
+    @brief Nose-Hoover 恒温器的实现
+    """
+
     def __init__(self, target_temperature, time_constant):
         self.target_temperature = target_temperature
         self.Q = time_constant  # 热浴质量参数
@@ -65,6 +85,11 @@ class NoseHooverThermostat(Thermostat):
 
 
 class MDSimulator:
+    """
+    @class MDSimulator
+    @brief 分子动力学模拟器
+    """
+
     def __init__(self, cell, potential, integrator, thermostat=None):
         self.cell = cell
         self.potential = potential
@@ -72,7 +97,7 @@ class MDSimulator:
         self.thermostat = thermostat
 
     def run(self, steps, dt, data_collector=None):
-        # Initialize forces
+        # 初始化力
         self.potential.calculate_forces(self.cell)
         for step in range(steps):
             self.integrator.integrate(self.cell, self.potential, self.thermostat, dt)

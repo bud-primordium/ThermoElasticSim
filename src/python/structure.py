@@ -4,6 +4,11 @@ import numpy as np
 
 
 class Atom:
+    """
+    @class Atom
+    @brief 原子类，包含原子的信息和属性。
+    """
+
     def __init__(self, id, symbol, mass, position, velocity=None):
         self.id = id
         self.symbol = symbol
@@ -20,9 +25,14 @@ class Atom:
 
 
 class Cell:
+    """
+    @class Cell
+    @brief 晶胞类，包含晶格矢量和原子列表。
+    """
+
     def __init__(self, lattice_vectors, atoms, pbc_enabled=True):
         self.lattice_vectors = np.array(lattice_vectors)
-        self.atoms = atoms  # List of Atom instances
+        self.atoms = atoms  # 原子列表
         self.volume = self.calculate_volume()
         self.pbc_enabled = pbc_enabled
 
@@ -36,8 +46,11 @@ class Cell:
 
     def apply_periodic_boundary(self, position):
         if self.pbc_enabled:
+            # 转换到分数坐标
             fractional = np.linalg.solve(self.lattice_vectors.T, position)
-            fractional -= np.floor(fractional)
+            # 确保在 [0, 1) 范围内
+            fractional = fractional % 1.0
+            # 转换回笛卡尔坐标
             return np.dot(self.lattice_vectors.T, fractional)
         else:
             return position
