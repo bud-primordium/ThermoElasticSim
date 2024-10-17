@@ -120,7 +120,7 @@ extern "C"
                     double fij[3];
                     for (int k = 0; k < 3; ++k)
                     {
-                        fij[k] = force_scalar * rij[k] / r;
+                        fij[k] = -force_scalar * rij[k] / r;
                         forces[3 * i + k] += fij[k];
                         forces[3 * j + k] -= fij[k];
                     }

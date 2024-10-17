@@ -37,7 +37,7 @@ class GradientDescentOptimizer(Optimizer):
             # 更新位置
             for atom in atoms:
                 displacement = self.step_size * atom.force
-                atom.position -= displacement
+                atom.position += displacement
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
                 # print(f"Atom {atom.id} Position: {atom.position}")
