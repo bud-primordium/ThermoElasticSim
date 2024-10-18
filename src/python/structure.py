@@ -3,6 +3,7 @@
 import numpy as np
 from .utils import AMU_TO_EVFSA2
 import logging
+from copy import deepcopy
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class Cell:
         self.atoms = atoms  # 原子列表
         self.volume = self.calculate_volume()
         self.pbc_enabled = pbc_enabled
+        self.lattice_locked = False  # 添加晶格锁定标志
 
     def calculate_volume(self):
         return np.linalg.det(self.lattice_vectors)
@@ -69,25 +71,59 @@ class Cell:
         box_lengths = np.linalg.norm(self.lattice_vectors, axis=1)
         return box_lengths
 
+    def lock_lattice_vectors(self):
+        """
+        @brief 锁定晶格向量，防止在优化过程中被修改。
+        """
+        self.lattice_locked = True
+        logger.debug("Lattice vectors have been locked.")
+
+    def unlock_lattice_vectors(self):
+        """
+        @brief 解锁晶格向量，允许在需要时修改。
+        """
+        self.lattice_locked = False
+        logger.debug("Lattice vectors have been unlocked.")
+
     def apply_deformation(self, deformation_matrix):
         """
         @brief 对晶胞和原子坐标施加变形矩阵。
 
         @param deformation_matrix 3x3 变形矩阵
         """
-        # 更新晶格矢量
-        self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
-        logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
-
-        # 更新原子坐标并应用 PBC（如果启用）
-        for atom in self.atoms:
-            original_position = atom.position.copy()
-            atom.position = np.dot(deformation_matrix, atom.position)
-            if self.pbc_enabled:
-                atom.position = self.apply_periodic_boundary(atom.position)
+        if self.lattice_locked:
             logger.debug(
-                f"Atom {atom.id} position changed from {original_position} to {atom.position}"
+                "Lattice vectors are locked. Only applying deformation to atomic positions."
             )
+            # 仅更新原子坐标
+            for atom in self.atoms:
+                original_position = atom.position.copy()
+                atom.position = np.dot(deformation_matrix, atom.position)
+                if self.pbc_enabled:
+                    atom.position = self.apply_periodic_boundary(atom.position)
+                logger.debug(
+                    f"Atom {atom.id} position changed from {original_position} to {atom.position}"
+                )
+        else:
+            logger.debug(
+                "Applying deformation to lattice vectors and atomic positions."
+            )
+            # 更新晶格矢量
+            self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
+            logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
+
+            # 更新原子坐标并应用 PBC（如果启用）
+            for atom in self.atoms:
+                original_position = atom.position.copy()
+                atom.position = np.dot(deformation_matrix, atom.position)
+                if self.pbc_enabled:
+                    atom.position = self.apply_periodic_boundary(atom.position)
+                logger.debug(
+                    f"Atom {atom.id} position changed from {original_position} to {atom.position}"
+                )
+
+        # 更新体积
+        self.volume = self.calculate_volume()
 
     def apply_periodic_boundary(self, position):
         """
@@ -114,7 +150,9 @@ class Cell:
         @return Cell 对象的拷贝。
         """
         atoms_copy = [atom.copy() for atom in self.atoms]
-        return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
+        cell_copy = Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
+        cell_copy.lattice_locked = self.lattice_locked  # 复制锁定状态
+        return cell_copy
 
     @property
     def num_atoms(self):

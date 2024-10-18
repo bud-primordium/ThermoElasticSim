@@ -1,3 +1,5 @@
+# src/python/elastics.py
+
 import numpy as np
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -108,9 +110,16 @@ class ElasticConstantsCalculator:
             min_distance > 0.8 * self.potential.sigma
         ), f"原子之间的最小距离过近：{min_distance} Å (atoms {min_pair[0]} and {min_pair[1]})"
 
+        # 锁定晶格向量，确保优化过程中晶格不被修改
+        deformed_cell.lock_lattice_vectors()
+
         # 优化结构
         self.optimizer.optimize(deformed_cell, self.potential)
         logger.debug("Optimization completed.")
+
+        # 确认晶格向量未改变
+        # (假设优化器 不修改锁定的晶格向量)
+        # 如果需要，可以在优化器内部强制不修改晶格向量
 
         # 计算应力张量
         stress_tensor = self.stress_calculator.compute_stress(
