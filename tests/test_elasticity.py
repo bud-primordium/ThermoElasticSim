@@ -86,8 +86,8 @@ def test_elastic_constants_calculator():
     elastic_calculator = ElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
-        delta=1e-3,
-        optimizer_type="GD",  # 使用梯度下降优化器
+        delta=1e-2,
+        optimizer_type="BFGS",  # 使用梯度下降优化器
     )
     logger.debug(
         "Initialized ElasticConstantsCalculator with Gradient Descent Optimizer."

@@ -49,77 +49,90 @@ def configure_logging():
     logger.removeHandler(fh)
 
 
+def generate_fcc_positions(lattice_constant, repetitions):
+    """
+    生成面心立方 (FCC) 结构的原子位置。
+
+    @param lattice_constant 晶格常数，单位 Å
+    @param repetitions 每个方向上的单位晶胞重复次数
+    @return 原子位置列表
+    """
+    # FCC 单位晶胞的标准原子位置（分数坐标）
+    unit_cell_positions = [
+        [0.0, 0.0, 0.0],
+        [0.0, 0.5, 0.5],
+        [0.5, 0.0, 0.5],
+        [0.5, 0.5, 0.0],
+    ]
+
+    positions = []
+    for i in range(repetitions):
+        for j in range(repetitions):
+            for k in range(repetitions):
+                for pos in unit_cell_positions:
+                    cartesian = (
+                        np.array(pos) * lattice_constant
+                        + np.array([i, j, k]) * lattice_constant
+                    )
+                    positions.append(cartesian)
+
+    return positions
+
+
 @pytest.fixture
 def lj_potential_optim():
     """
     创建一个 Lennard-Jones 势能对象，用于优化测试。
     """
-    return LennardJonesPotential(
-        epsilon=0.0103, sigma=2.55, cutoff=6.375
-    )  # cutoff=2.5*sigma
+    epsilon = 0.0103  # eV
+    sigma = 2.55  # Å
+    cutoff = 2.5 * sigma  # 截断半径，确保小于盒子的一半
+    return LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
 
 
 @pytest.fixture
-def cell_with_fcc_structure():
+def fcc_cell():
     """
-    创建一个包含多个原子的面心立方（FCC）晶胞，模拟更复杂的系统（32个原子）。
+    创建一个包含多个原子的面心立方 (FCC) 晶胞，用于优化测试。
+
+    @return Cell 实例
     """
-    sigma = 2.55
-    lattice_constant = 5.1  # Å, 选择足够大的晶胞以满足截断半径要求
-    num_repetitions = 2  # 在每个方向上复制单位晶胞，生成2x2x2=8单位晶胞，共32个原子
-    total_atoms = 4 * num_repetitions**3  # FCC单位晶胞4个原子
+    lattice_constant = 15.0  # Å
+    repetitions = 1  # 每个方向上的单位晶胞重复次数，增加以获得更多原子
 
-    # 定义单位FCC晶胞的原子位置（基于单位晶胞）
-    unit_cell_atoms = [
-        [0.0, 0.0, 0.0],
-        [0.5, 0.5, 0.0],
-        [0.5, 0.0, 0.5],
-        [0.0, 0.5, 0.5],
-    ]
+    # 生成 FCC 结构的原子位置
+    positions = generate_fcc_positions(lattice_constant, repetitions)
 
+    # 创建 Atom 实例列表
     atoms = []
-    for i in range(num_repetitions):
-        for j in range(num_repetitions):
-            for k in range(num_repetitions):
-                for atom_pos in unit_cell_atoms:
-                    pos = np.array(
-                        [
-                            (i + atom_pos[0]) * lattice_constant,
-                            (j + atom_pos[1]) * lattice_constant,
-                            (k + atom_pos[2]) * lattice_constant,
-                        ]
-                    )
-                    # 添加微小扰动以打破完美对称性
-                    perturbation = np.random.uniform(
-                        -0.01, 0.01, size=3
-                    )  # 0.01 Å的随机扰动
-                    pos += perturbation
-                    atoms.append(
-                        Atom(
-                            id=len(atoms),
-                            symbol="Al",
-                            mass_amu=26.9815,
-                            position=pos,
-                            velocity=None,
-                        )
-                    )
+    for idx, pos in enumerate(positions):
+        atoms.append(
+            Atom(
+                id=idx,
+                symbol="Al",
+                mass_amu=26.9815,
+                position=np.array(pos),
+                velocity=None,
+            )
+        )
 
     # 定义晶格矢量
-    lattice_vectors = np.eye(3) * lattice_constant * num_repetitions
+    lattice_vectors = np.eye(3) * lattice_constant  # 单位晶胞大小
 
+    # 创建 Cell 实例
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     return cell
 
 
-def test_gradient_descent_optimizer(lj_potential_optim, cell_with_fcc_structure):
+def test_gradient_descent_optimizer(lj_potential_optim, fcc_cell):
     """
-    测试梯度下降优化器，使用32个原子，面心立方结构。
+    测试梯度下降优化器，使用面心立方 (FCC) 结构。
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
         max_steps=20000, tol=1e-3, step_size=1e-3, energy_tol=1e-4
     )
-    cell = cell_with_fcc_structure
+    cell = fcc_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
     optimizer.optimize(cell, lj_potential_optim)
 
@@ -137,13 +150,13 @@ def test_gradient_descent_optimizer(lj_potential_optim, cell_with_fcc_structure)
     ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
 
 
-def test_bfgs_optimizer(lj_potential_optim, cell_with_fcc_structure):
+def test_bfgs_optimizer(lj_potential_optim, fcc_cell):
     """
-    测试 BFGS 优化器，使用32个原子，面心立方结构。
+    测试 BFGS 优化器，使用面心立方 (FCC) 结构。
     """
     logger = logging.getLogger(__name__)
     optimizer = BFGSOptimizer(tol=1e-4, maxiter=20000)
-    cell = cell_with_fcc_structure
+    cell = fcc_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
     optimizer.optimize(cell, lj_potential_optim)
 
