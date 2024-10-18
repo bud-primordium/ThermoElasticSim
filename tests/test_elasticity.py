@@ -1,10 +1,9 @@
 # tests/test_elasticity.py
 
-import pytest
 import numpy as np
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
-from python.elasticity import ElasticConstantsSolver, ElasticConstantsCalculator
+from python.elasticity import ElasticConstantsCalculator
 
 
 def test_elastic_constants_calculator():
@@ -22,7 +21,7 @@ def test_elastic_constants_calculator():
     # 定义 Lennard-Jones 势
     epsilon = 0.0103  # eV
     sigma = 2.55  # Å
-    cutoff = 8.0  # Å, 示例截断半径
+    cutoff = 2.5 * sigma  # Å
     lj_potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
 
     # 创建 ElasticConstantsCalculator 实例
@@ -35,7 +34,7 @@ def test_elastic_constants_calculator():
 
     # 将弹性常数矩阵转换为 GPa
     # 假设单位转换正确，此处示例可能需要根据实际单位调整
-    C_in_GPa = C * 160.21766208
+    C_in_GPa = C * 160.21766208  # eV/Å^3 转 GPa
 
     # 预期弹性常数矩阵（根据你的测试数据调整）
     expected_C = np.array(

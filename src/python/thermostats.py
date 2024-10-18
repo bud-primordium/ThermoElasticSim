@@ -24,7 +24,7 @@ class NoseHooverThermostat(Thermostat):
         self.target_temperature = target_temperature
         self.time_constant = time_constant
         self.cpp_interface = CppInterface("nose_hoover")
-        self.xi = 0.0  # 初始热浴变量
+        self.xi = np.array([0.0], dtype=np.float64)  # 初始热浴变量，改为 NumPy 数组
         self.Q = 10.0  # 热浴质量参数，可根据需要调整
 
     def apply(self, atoms, dt):
@@ -43,11 +43,11 @@ class NoseHooverThermostat(Thermostat):
                 masses,
                 velocities,
                 forces,
-                self.xi,
+                self.xi,  # 传递 NumPy 数组
                 self.Q,
                 self.target_temperature,
             )
-            self.xi = updated_xi
+            self.xi[0] = updated_xi  # 更新 xi 的值
         except OSError as e:
             print(f"C++ Nose-Hoover 调用失败: {e}")
             raise
@@ -88,6 +88,7 @@ class NoseHooverChainThermostat(Thermostat):
             forces,
             xi_chain,
             Q,
+            self.chain_length,
             self.target_temperature,
         )
 

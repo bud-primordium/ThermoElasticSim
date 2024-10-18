@@ -117,7 +117,7 @@ def test_nose_hoover(nose_hoover_interface):
     # C++ 函数 expects a pointer to xi, so create a mutable array
     xi_array = np.array([xi], dtype=np.float64)
 
-    nose_hoover_interface.nose_hoover(
+    updated_xi = nose_hoover_interface.nose_hoover(
         dt,
         num_atoms,
         masses,
@@ -129,7 +129,6 @@ def test_nose_hoover(nose_hoover_interface):
     )
 
     # Check that xi has been updated
-    updated_xi = xi_array[0]
     assert isinstance(updated_xi, float), "xi is not a float."
     # 根据实现，xi 应该有变化
     assert (

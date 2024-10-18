@@ -70,10 +70,10 @@ def test_md_simulation(simple_cell, lj_potential, integrator):
     # 检查原子的位置和速度是否发生变化
     atom1 = simple_cell.atoms[0]
     atom2 = simple_cell.atoms[1]
-    assert not np.allclose(atom1.position, [0.0, 0.0, 0.0])
-    assert not np.allclose(atom2.position, [2.55, 0.0, 0.0])
-    assert not np.allclose(atom1.velocity, [0.0, 0.0, 0.0])
-    assert not np.allclose(atom2.velocity, [0.0, 0.0, 0.0])
+    assert not np.allclose(atom1.position, [0.0, 0.0, 0.0]), "原子1的位置未发生变化。"
+    assert not np.allclose(atom2.position, [2.55, 0.0, 0.0]), "原子2的位置未发生变化。"
+    assert not np.allclose(atom1.velocity, [0.0, 0.0, 0.0]), "原子1的速度未发生变化。"
+    assert not np.allclose(atom2.velocity, [0.0, 0.0, 0.0]), "原子2的速度未发生变化。"
 
 
 def test_md_simulation_with_thermostat(
@@ -93,7 +93,10 @@ def test_md_simulation_with_thermostat(
     # 检查原子的位置和速度是否发生变化
     atom1 = simple_cell.atoms[0]
     atom2 = simple_cell.atoms[1]
-    assert not np.allclose(atom1.position, [0.0, 0.0, 0.0])
-    assert not np.allclose(atom2.position, [2.55, 0.0, 0.0])
-    assert not np.allclose(atom1.velocity, [0.0, 0.0, 0.0])
-    assert not np.allclose(atom2.velocity, [0.0, 0.0, 0.0])
+    assert not np.allclose(atom1.position, [0.0, 0.0, 0.0]), "原子1的位置未发生变化。"
+    assert not np.allclose(atom2.position, [2.55, 0.0, 0.0]), "原子2的位置未发生变化。"
+    assert not np.allclose(atom1.velocity, [0.0, 0.0, 0.0]), "原子1的速度未发生变化。"
+    assert not np.allclose(atom2.velocity, [0.0, 0.0, 0.0]), "原子2的速度未发生变化。"
+
+    # 检查 xi 是否被更新
+    assert thermostat.xi[0] != 0.0, "xi 未被更新。"

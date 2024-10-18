@@ -62,7 +62,7 @@ extern "C"
                     double r = sqrt(r2);
                     double r2_inv = 1.0 / r2;
                     double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
-                    double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5) * r2_inv;
+                    double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5);
 
                     // 力的截断修正
                     force_scalar -= force_shift;

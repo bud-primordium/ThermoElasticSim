@@ -4,7 +4,8 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
-from ..utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
+
+# from ..utils import AMU_TO_EVFSA2  # 如果需要，确保导入单位转换常量
 
 
 class CppInterface:
@@ -83,7 +84,7 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi (input/output)
+                ctypes.POINTER(ctypes.c_double),  # xi (input/output)
                 ctypes.c_double,  # Q
                 ctypes.c_double,  # target_temperature
             ]
@@ -202,6 +203,7 @@ class CppInterface:
             Q,
             target_temperature,
         )
+        return xi_array[0]  # 返回更新后的 xi 值
 
     def nose_hoover_chain(
         self,
