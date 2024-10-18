@@ -20,7 +20,7 @@ class GradientDescentOptimizer(Optimizer):
     @brief 梯度下降优化器
     """
 
-    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-4):
+    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-3):
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size

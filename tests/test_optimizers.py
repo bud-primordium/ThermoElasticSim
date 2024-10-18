@@ -2,9 +2,10 @@
 
 import pytest
 import numpy as np
-from src.python.structure import Atom, Cell
-from src.python.potentials import LennardJonesPotential
-from src.python.optimizers import GradientDescentOptimizer, BFGSOptimizer
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+from python.optimizers import GradientDescentOptimizer, BFGSOptimizer
+from python.elasticity import ElasticConstantsSolver  # 确保导入
 
 
 @pytest.fixture
@@ -25,15 +26,7 @@ def test_gradient_descent_optimizer(lj_potential_optim):
     lattice_vectors = np.eye(3) * 5.1
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     optimizer.optimize(cell, lj_potential_optim)
-    # 检查优化后晶胞的能量是否降低
-    initial_energy = lj_potential_optim.calculate_energy(
-        cell.num_atoms,
-        cell.get_positions(),
-        lj_potential_optim.epsilon,
-        lj_potential_optim.sigma,
-        lj_potential_optim.cutoff,
-        cell.get_box_lengths(),
-    )
+    # 检查优化是否收敛
     assert optimizer.converged, "梯度下降优化器未收敛"
 
 
@@ -50,15 +43,7 @@ def test_bfgs_optimizer(lj_potential_optim):
     lattice_vectors = np.eye(3) * 5.1
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     optimizer.optimize(cell, lj_potential_optim)
-    # 检查优化后晶胞的能量是否降低
-    initial_energy = lj_potential_optim.calculate_energy(
-        cell.num_atoms,
-        cell.get_positions(),
-        lj_potential_optim.epsilon,
-        lj_potential_optim.sigma,
-        lj_potential_optim.cutoff,
-        cell.get_box_lengths(),
-    )
+    # 检查优化是否收敛
     assert optimizer.converged, "BFGS 优化器未收敛"
 
 
@@ -76,5 +61,5 @@ def test_optimizer_convergence():
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     lj_potential = LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
     optimizer.optimize(cell, lj_potential)
-    # 检查优化是否收敛（假设优化器设置了合适的收敛标准）
+    # 检查优化是否收敛
     assert optimizer.converged, "优化器未能收敛"

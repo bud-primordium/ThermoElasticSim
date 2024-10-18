@@ -2,9 +2,10 @@
 
 import pytest
 import numpy as np
-from src.python.structure import Atom, Cell
-from src.python.potentials import LennardJonesPotential
-from src.python.mechanics import StressCalculatorLJ
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+from python.elasticity import ElasticConstantsSolver  # 确保导入
+from python.mechanics import StressCalculatorLJ
 
 
 @pytest.fixture
@@ -60,7 +61,7 @@ def test_elastic_constants_solver():
     solver = ElasticConstantsSolver()
     C = solver.solve(strains, stresses)
     # 检查 C 是否为 6x6 矩阵
-    assert C.shape == (6, 6)
+    assert C.shape == (6, 6), "Elastic constants matrix shape mismatch."
     # 预期弹性常数矩阵（示例值）
     expected_C = np.array(
         [
@@ -97,11 +98,6 @@ def test_force_direction():
     # 计算初始能量和力
     initial_energy = lj_potential.calculate_energy(cell)
     initial_force = cell.get_forces()
-
-    # 假设能量随位置变化，计算期望的力方向
-    # 例如，力应为负梯度方向
-    # 这里只是一个简单示例
-    # 需要根据具体情况调整
 
     # 计算能量的数值梯度近似
     delta = 1e-5

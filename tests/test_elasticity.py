@@ -2,9 +2,9 @@
 
 import pytest
 import numpy as np
-from src.python.structure import Atom, Cell
-from src.python.potentials import LennardJonesPotential
-from src.python.elasticity import ElasticConstantsSolver, ElasticConstantsCalculator
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+from python.elasticity import ElasticConstantsSolver, ElasticConstantsCalculator
 
 
 def test_elastic_constants_calculator():
