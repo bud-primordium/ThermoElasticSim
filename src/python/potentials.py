@@ -1,7 +1,7 @@
 # src/python/potentials.py
 
 import numpy as np
-from .interfaces.cpp_interface import CppInterface
+from python.interfaces.cpp_interface import CppInterface
 
 
 class Potential:

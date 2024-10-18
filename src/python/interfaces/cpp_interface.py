@@ -4,6 +4,7 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
+from python.utils import AMU_TO_EVFSA2  # 导入单位转换常量
 
 
 class CppInterface:
@@ -35,11 +36,12 @@ class CppInterface:
             raise FileNotFoundError(f"无法找到库文件: {lib_path}")
         self.lib = ctypes.CDLL(lib_path)
 
+        # 配置不同库的函数签名
         if lib_name == "nose_hoover":
             self.lib.nose_hoover.argtypes = [
                 ctypes.c_double,  # dt
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (amu)
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
                 ctypes.POINTER(ctypes.c_double),  # xi
@@ -51,7 +53,7 @@ class CppInterface:
             self.lib.nose_hoover_chain.argtypes = [
                 ctypes.c_double,  # dt
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (amu)
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
@@ -64,7 +66,7 @@ class CppInterface:
             self.lib.parrinello_rahman_hoover.argtypes = [
                 ctypes.c_double,  # dt
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (amu)
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
@@ -100,7 +102,7 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (amu)
                 ctypes.c_double,  # volume
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
                 ndpointer(
@@ -115,13 +117,15 @@ class CppInterface:
         """
         调用 C++ 实现的 Nose-Hoover 恒温器。
 
-        返回更新后的 xi。
+        masses: array in amu
         """
+        # 转换质量单位
+        masses_converted = masses * AMU_TO_EVFSA2
         xi_c = ctypes.c_double(xi)
         self.lib.nose_hoover(
             dt,
             num_atoms,
-            masses,
+            masses_converted,
             velocities,
             forces,
             ctypes.byref(xi_c),
@@ -129,36 +133,6 @@ class CppInterface:
             target_temperature,
         )
         return xi_c.value
-
-    def nose_hoover_chain(
-        self,
-        dt,
-        num_atoms,
-        masses,
-        velocities,
-        forces,
-        xi,
-        Q,
-        chain_length,
-        target_temperature,
-    ):
-        """
-        调用 C++ 实现的 Nose-Hoover 链恒温器。
-
-        返回更新后的 xi。
-        """
-        self.lib.nose_hoover_chain(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            xi,
-            Q,
-            chain_length,
-            target_temperature,
-        )
-        return xi  # xi 已在 C++ 中更新
 
     def parrinello_rahman_hoover(
         self,
@@ -173,12 +147,16 @@ class CppInterface:
         target_pressure,
     ):
         """
-        调用 C++ 实现的 Parrinello-Rahman-Hoover 恒温器。
+        调用 C++ 实现的 Parrinello-Rahman-Hoover 恒压器。
+
+        masses: array in amu
         """
+        # 转换质量单位
+        masses_converted = masses * AMU_TO_EVFSA2
         self.lib.parrinello_rahman_hoover(
             dt,
             num_atoms,
-            masses,
+            masses_converted,
             velocities,
             forces,
             lattice_vectors,
@@ -186,46 +164,7 @@ class CppInterface:
             Q,
             target_pressure,
         )
-        # xi 已在 C++ 中更新
-
-    def calculate_forces(
-        self,
-        num_atoms,
-        positions,
-        forces,
-        epsilon,
-        sigma,
-        cutoff,
-        box_lengths,
-    ):
-        self.lib.calculate_forces(
-            num_atoms,
-            positions,
-            forces,
-            epsilon,
-            sigma,
-            cutoff,
-            box_lengths,
-        )
-
-    def calculate_energy(
-        self,
-        num_atoms,
-        positions,
-        epsilon,
-        sigma,
-        cutoff,
-        box_lengths,
-    ):
-        energy = self.lib.calculate_energy(
-            num_atoms,
-            positions,
-            epsilon,
-            sigma,
-            cutoff,
-            box_lengths,
-        )
-        return energy
+        # xi 和 lattice_vectors 已在 C++ 中更新
 
     def compute_stress(
         self,
@@ -237,15 +176,44 @@ class CppInterface:
         volume,
         box_lengths,
     ):
+        """
+        计算应力张量。
+
+        masses: array in amu
+        """
+        # 转换质量单位
+        masses_converted = masses * AMU_TO_EVFSA2
         stress_tensor = np.zeros(9, dtype=np.float64)
         self.lib.compute_stress(
             num_atoms,
             positions,
             velocities,
             forces,
-            masses,
+            masses_converted,
             volume,
             box_lengths,
             stress_tensor,
         )
         return stress_tensor.reshape((3, 3))
+
+    def calculate_energy(
+        self,
+        num_atoms,
+        positions,
+        epsilon,
+        sigma,
+        cutoff,
+        box_lengths,
+    ):
+        """
+        计算系统的总 Lennard-Jones 势能。
+        """
+        energy = self.lib.calculate_energy(
+            num_atoms,
+            positions,
+            epsilon,
+            sigma,
+            cutoff,
+            box_lengths,
+        )
+        return energy

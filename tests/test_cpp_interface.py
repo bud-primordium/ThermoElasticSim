@@ -74,9 +74,9 @@ def test_compute_stress(stress_interface):
     positions = np.array([0.0, 0.0, 0.0], dtype=np.float64)
     velocities = np.array([0.0, 0.0, 0.0], dtype=np.float64)
     forces = np.array([0.0, 0.0, 0.0], dtype=np.float64)
-    masses = np.array([26.9815], dtype=np.float64)
+    masses = np.array([26.9815], dtype=np.float64)  # amu
     volume = 4.05**3
-    lattice_vectors = np.eye(3, dtype=np.float64).flatten()
+    box_lengths = np.eye(3, dtype=np.float64).flatten()
 
     stress_tensor = np.zeros(9, dtype=np.float64)
     stress_interface.compute_stress(
@@ -86,7 +86,7 @@ def test_compute_stress(stress_interface):
         forces,
         masses,
         volume,
-        lattice_vectors,
+        box_lengths,
         stress_tensor,
     )
 
@@ -103,7 +103,7 @@ def test_nose_hoover(nose_hoover_interface):
     """
     dt = 1.0
     num_atoms = 2
-    masses = np.array([1.0, 1.0], dtype=np.float64)
+    masses = np.array([26.9815, 26.9815], dtype=np.float64)  # amu
     velocities = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64)
     forces = np.array([0.0, 0.0, 0.0, -1.0, 0.0, 0.0], dtype=np.float64)
     xi = 0.0
@@ -129,11 +129,11 @@ def test_nose_hoover(nose_hoover_interface):
 
 def test_parrinello_rahman_hoover(parrinello_rahman_hoover_interface):
     """
-    @brief 测试 C++ 实现的 Parrinello-Rahman-Hoover 恒温器函数
+    @brief 测试 C++ 实现的 Parrinello-Rahman-Hoover 恒压器函数
     """
     dt = 1.0
     num_atoms = 2
-    masses = np.array([1.0, 1.0], dtype=np.float64)
+    masses = np.array([26.9815, 26.9815], dtype=np.float64)  # amu
     velocities = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64)
     forces = np.array([0.0, 0.0, 0.0, -1.0, 0.0, 0.0], dtype=np.float64)
     lattice_vectors = np.eye(3, dtype=np.float64).flatten()
@@ -164,6 +164,6 @@ def test_parrinello_rahman_hoover(parrinello_rahman_hoover_interface):
     for i in range(3):
         for j in range(3):
             if i == j:
-                assert lattice_vectors[i * 3 + j] != 5.1  # 原始值
+                assert lattice_vectors[i * 3 + j] != 1.0  # 原始值为1.0
             else:
                 assert lattice_vectors[i * 3 + j] == 0.0  # 应保持为0

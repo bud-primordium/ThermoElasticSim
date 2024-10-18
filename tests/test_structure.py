@@ -11,7 +11,7 @@ def atom():
     @fixture 创建一个原子实例
     """
     position = np.array([0.0, 0.0, 0.0])
-    mass = 26.9815  # 原子量，amu
+    mass = 26.9815  # amu
     return Atom(id=0, symbol="Al", mass=mass, position=position)
 
 
