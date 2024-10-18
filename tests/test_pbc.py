@@ -6,13 +6,8 @@ from python.structure import Atom, Cell
 import logging
 from datetime import datetime
 
+
 # 配置日志
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
 @pytest.fixture(scope="session", autouse=True)
 def configure_logging():
     """
@@ -51,6 +46,8 @@ def test_apply_periodic_boundary():
     """
     @brief 测试 Cell.apply_periodic_boundary 方法是否正确应用周期性边界条件。
     """
+    logger = logging.getLogger(__name__)
+
     atoms = [
         Atom(
             id=0, symbol="Al", mass_amu=26.9815, position=[6.0, 6.0, 6.0], velocity=None
@@ -76,4 +73,61 @@ def test_apply_periodic_boundary():
     ), f"Expected {expected_position_no_pbc}, got {new_position_no_pbc}"
     logger.debug(
         f"PBC not applied correctly: {new_position_no_pbc} == {expected_position_no_pbc}"
+    )
+
+
+def test_apply_deformation_with_pbc():
+    """
+    @brief 测试 Cell.apply_deformation 方法在启用 PBC 时是否正确应用变形和 PBC。
+    """
+    logger = logging.getLogger(__name__)
+
+    # 创建两个原子，确保变形后 PBC 能正确处理
+    atoms = [
+        Atom(
+            id=0, symbol="Al", mass_amu=26.9815, position=[0.0, 0.0, 0.0], velocity=None
+        ),
+        Atom(
+            id=1,
+            symbol="Al",
+            mass_amu=26.9815,
+            position=[2.55, 2.55, 2.55],
+            velocity=None,
+        ),  # a/sqrt(2) for FCC
+    ]
+    lattice_vectors = np.eye(3) * 5.1  # 盒子长度为 5.1 Å
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+
+    # 定义一个简单的变形矩阵（缩放）
+    deformation_matrix = np.array(
+        [
+            [1.001, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+    # 施加变形
+    cell.apply_deformation(deformation_matrix)
+
+    # 变形后的晶格向量应被正确更新
+    expected_lattice_vectors = np.eye(3) * 5.1
+    expected_lattice_vectors[0, 0] *= 1.001  # x方向拉伸
+    assert np.allclose(
+        cell.lattice_vectors, expected_lattice_vectors, atol=1e-5
+    ), f"Expected lattice vectors {expected_lattice_vectors}, got {cell.lattice_vectors}"
+    logger.debug(f"Deformed lattice vectors correctly:\n{cell.lattice_vectors}")
+
+    # 变形后的原子位置应被正确更新并应用 PBC
+    # 原子0: [0,0,0] 应保持不变
+    assert np.allclose(
+        cell.atoms[0].position, [0.0, 0.0, 0.0], atol=1e-5
+    ), f"Expected atom0 position [0.0, 0.0, 0.0], got {cell.atoms[0].position}"
+    # 原子1: [2.55,2.55,2.55] -> [2.55*1.001,2.55,2.55] = [2.55255, 2.55, 2.55]
+    expected_atom1_position = np.array([2.55255, 2.55, 2.55])
+    assert np.allclose(
+        cell.atoms[1].position, expected_atom1_position, atol=1e-3
+    ), f"Expected atom1 position {expected_atom1_position}, got {cell.atoms[1].position}"
+    logger.debug(
+        f"Deformed atom positions correctly: {cell.atoms[1].position} == {expected_atom1_position}"
     )

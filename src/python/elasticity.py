@@ -8,9 +8,6 @@ from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
 
 # 配置日志记录
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
@@ -83,6 +80,18 @@ class ElasticConstantsCalculator:
         @return 弹性常数矩阵，形状为 (6, 6)，单位为 GPa。
         """
         logger.debug("Starting elastic constants calculation.")
+
+        # **初始结构的平衡优化**
+        logger.debug("Relaxing initial structure to equilibrium.")
+        initial_optimizer = GradientDescentOptimizer(
+            max_steps=10000, tol=1e-4, step_size=1e-3, energy_tol=1e-4
+        )
+        initial_optimizer.optimize(self.cell, self.potential)
+        if initial_optimizer.converged:
+            logger.debug("Initial structure relaxed successfully.")
+        else:
+            logger.warning("Initial structure did not fully relax.")
+
         F_list = self.deformer.generate_deformation_matrices()
         strains = []
         stresses = []
@@ -91,7 +100,7 @@ class ElasticConstantsCalculator:
             logger.debug(f"Applying deformation {idx+1}/{len(F_list)}:")
             logger.debug(F)
 
-            # 复制初始晶胞
+            # 复制初始晶胞（已经优化）
             deformed_cell = self.cell.copy()
 
             # 施加变形
@@ -101,6 +110,7 @@ class ElasticConstantsCalculator:
             # 检查原子之间的最小距离
             min_distance = np.inf
             num_atoms = len(deformed_cell.atoms)
+            min_pair = (-1, -1)  # 初始化最小距离原子对
             for i in range(num_atoms):
                 for j in range(i + 1, num_atoms):
                     rij = (
@@ -116,12 +126,16 @@ class ElasticConstantsCalculator:
                     r = np.linalg.norm(rij)
                     if r < min_distance:
                         min_distance = r
+                        min_pair = (
+                            deformed_cell.atoms[i].id,
+                            deformed_cell.atoms[j].id,
+                        )
             logger.debug(
-                f"Minimum inter-atomic distance after deformation: {min_distance:.3f} Å"
+                f"Minimum inter-atomic distance after deformation: {min_distance:.3f} Å between atoms {min_pair[0]} and {min_pair[1]}"
             )
             assert (
                 min_distance > 0.8 * self.potential.sigma
-            ), f"原子之间的最小距离过近：{min_distance} Å"
+            ), f"原子之间的最小距离过近：{min_distance} Å (atoms {min_pair[0]} and {min_pair[1]})"
 
             # 计算优化前的能量
             energy_before = self.potential.calculate_energy(deformed_cell)

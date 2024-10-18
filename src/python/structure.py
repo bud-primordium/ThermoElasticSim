@@ -1,8 +1,11 @@
 # src/python/structure.py
 
 import numpy as np
-import logging
 from .utils import AMU_TO_EVFSA2
+import logging
+
+# 配置日志记录
+logger = logging.getLogger(__name__)
 
 
 class Atom:
@@ -74,7 +77,6 @@ class Cell:
         """
         # 更新晶格矢量
         self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
-        logger = logging.getLogger(__name__)
         logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
         # 更新原子坐标并应用 PBC（如果启用）

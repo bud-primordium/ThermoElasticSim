@@ -8,13 +8,8 @@ from python.potentials import LennardJonesPotential
 from python.elasticity import ElasticConstantsCalculator
 import logging
 
+
 # 配置日志
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
 @pytest.fixture(scope="session", autouse=True)
 def configure_logging():
     """
@@ -66,9 +61,12 @@ def test_elastic_constants_calculator():
                 base = np.array([i, j, k]) * lattice_constant
                 positions = [
                     base + np.array([0.0, 0.0, 0.0]),
-                    base + np.array([0.0, 0.5, 0.5]),
-                    base + np.array([0.5, 0.0, 0.5]),
-                    base + np.array([0.5, 0.5, 0.0]),
+                    base
+                    + np.array([0.0, 0.5 * lattice_constant, 0.5 * lattice_constant]),
+                    base
+                    + np.array([0.5 * lattice_constant, 0.0, 0.5 * lattice_constant]),
+                    base
+                    + np.array([0.5 * lattice_constant, 0.5 * lattice_constant, 0.0]),
                 ]
                 for pos in positions:
                     atoms.append(

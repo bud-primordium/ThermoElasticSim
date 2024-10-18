@@ -535,6 +535,7 @@ extern "C"
 import numpy as np
 from .interfaces.cpp_interface import CppInterface
 from .mechanics import StressCalculatorLJ
+from .structure import Cell
 
 
 class Barostat:
@@ -675,10 +676,12 @@ import logging
 from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer
-from .utils import TensorConverter
+from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
 
 # 配置日志记录
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -719,7 +722,7 @@ class ElasticConstantsCalculator:
     @brief 用于计算弹性常数的类。
     """
 
-    def __init__(self, cell, potential, delta=1e-3, optimizer_type="BFGS"):
+    def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
         """
         @param cell 晶胞对象
         @param potential 势能对象
@@ -734,10 +737,13 @@ class ElasticConstantsCalculator:
         self.strain_calculator = StrainCalculator()
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
-                max_steps=1000, tol=1e-6, step_size=1e-3
+                max_steps=10000,
+                tol=1e-3,
+                step_size=1e-3,
+                energy_tol=1e-3,  # 根据用户要求调整步长
             )
         elif optimizer_type == "BFGS":
-            self.optimizer = BFGSOptimizer(tol=1e-6)
+            self.optimizer = BFGSOptimizer(tol=1e-6, maxiter=10000)  # 增加 maxiter
         else:
             raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
 
@@ -745,7 +751,7 @@ class ElasticConstantsCalculator:
         """
         @brief 计算弹性常数矩阵。
 
-        @return 弹性常数矩阵，形状为 (6, 6)。
+        @return 弹性常数矩阵，形状为 (6, 6)，单位为 GPa。
         """
         logger.debug("Starting elastic constants calculation.")
         F_list = self.deformer.generate_deformation_matrices()
@@ -756,61 +762,85 @@ class ElasticConstantsCalculator:
             logger.debug(f"Applying deformation {idx+1}/{len(F_list)}:")
             logger.debug(F)
 
-            # Copy the initial cell
+            # 复制初始晶胞
             deformed_cell = self.cell.copy()
 
-            # Apply deformation
+            # 施加变形
             deformed_cell.apply_deformation(F)
             logger.debug("Applied deformation to cell.")
 
-            # Compute energy before optimization
-            energy_before = self.potential.calculate_energy(deformed_cell)
-            logger.debug(f"Energy before optimization: {energy_before} eV")
+            # 检查原子之间的最小距离
+            min_distance = np.inf
+            num_atoms = len(deformed_cell.atoms)
+            for i in range(num_atoms):
+                for j in range(i + 1, num_atoms):
+                    rij = (
+                        deformed_cell.atoms[j].position
+                        - deformed_cell.atoms[i].position
+                    )
+                    # 应用最小镜像规则
+                    for dim in range(3):
+                        rij[dim] -= (
+                            round(rij[dim] / deformed_cell.lattice_vectors[dim, dim])
+                            * deformed_cell.lattice_vectors[dim, dim]
+                        )
+                    r = np.linalg.norm(rij)
+                    if r < min_distance:
+                        min_distance = r
+            logger.debug(
+                f"Minimum inter-atomic distance after deformation: {min_distance:.3f} Å"
+            )
+            assert (
+                min_distance > 0.8 * self.potential.sigma
+            ), f"原子之间的最小距离过近：{min_distance} Å"
 
-            # Optimize the structure
+            # 计算优化前的能量
+            energy_before = self.potential.calculate_energy(deformed_cell)
+            logger.debug(f"Energy before optimization: {energy_before:.6f} eV")
+
+            # 优化结构
             self.optimizer.optimize(deformed_cell, self.potential)
             logger.debug("Optimization completed.")
 
-            # Compute energy after optimization
+            # 计算优化后的能量
             energy_after = self.potential.calculate_energy(deformed_cell)
-            logger.debug(f"Energy after optimization: {energy_after} eV")
+            logger.debug(f"Energy after optimization: {energy_after:.6f} eV")
 
-            # Check if optimization actually reduced the energy
+            # 检查能量是否降低
             if energy_after >= energy_before:
                 logger.warning(
-                    f"Energy after optimization ({energy_after}) >= before ({energy_before})"
+                    f"Energy after optimization ({energy_after:.6f} eV) >= before ({energy_before:.6f} eV)"
                 )
 
-            # Calculate forces (redundant if optimized)
+            # 计算优化后的力
             self.potential.calculate_forces(deformed_cell)
             logger.debug("Calculated forces after optimization.")
 
-            # Compute stress tensor
+            # 计算应力张量（Voigt 表示法）
             stress_tensor = self.stress_calculator.compute_stress(
                 deformed_cell, self.potential
             )
-            logger.debug(f"Computed stress tensor:")
-            logger.debug(stress_tensor)
+            logger.debug(f"Computed stress tensor:\n{stress_tensor}")
 
-            # Compute strain tensor in Voigt notation
+            # 计算应变张量（Voigt 表示法）
             strain_voigt = self.strain_calculator.compute_strain(F)
             logger.debug(f"Computed strain (Voigt): {strain_voigt}")
 
-            # Convert stress tensor to Voigt notation
+            # 将应力张量转换为 Voigt 表示法
             stress_voigt = TensorConverter.to_voigt(stress_tensor)
             logger.debug(f"Converted stress to Voigt notation: {stress_voigt}")
 
             strains.append(strain_voigt)
             stresses.append(stress_voigt)
 
-        # Solve for elastic constants using the solver
+        # 使用求解器求解弹性常数
         logger.debug("Solving for elastic constants.")
         elastic_solver = ElasticConstantsSolver()
         C = elastic_solver.solve(strains, stresses)
         logger.debug(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
 
-        # Convert to GPa
-        C_in_GPa = C * 160.21766208  # eV/Å^3 转 GPa
+        # 单位转换为 GPa
+        C_in_GPa = C * EV_TO_GPA  # 使用 utils 中的单位转换因子
         logger.debug(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
 
         return C_in_GPa
@@ -1038,37 +1068,57 @@ class GradientDescentOptimizer(Optimizer):
     @brief 梯度下降优化器
     """
 
-    def __init__(self, max_steps=10000, tol=1e-6, step_size=1e-43):
+    def __init__(self, max_steps=10000, tol=1e-4, step_size=1e-2, energy_tol=1e-4):
+        """
+        初始化梯度下降优化器。
+
+        @param max_steps 最大迭代步数。
+        @param tol 力的收敛阈值。
+        @param step_size 更新步长。
+        @param energy_tol 能量变化的收敛阈值。
+        """
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
-        self.converged = False  # 添加收敛标志
+        self.energy_tol = energy_tol
+        self.converged = False  # 收敛标志
 
     def optimize(self, cell, potential):
         logger = logging.getLogger(__name__)
         atoms = cell.atoms
         potential.calculate_forces(cell)
-        for step in range(self.max_steps):
+        previous_energy = potential.calculate_energy(cell)
+
+        for step in range(1, self.max_steps + 1):
+            # 记录原子位置和力
+            positions = cell.get_positions()
+            forces = cell.get_forces()
+            logger.debug(f"Step {step} - Atom positions: {positions}")
+            logger.debug(f"Step {step} - Atom forces: {forces}")
+
             # 计算最大力
             max_force = max(np.linalg.norm(atom.force) for atom in atoms)
-            kinetic_energy = sum(
-                0.5 * atom.mass * np.linalg.norm(atom.velocity) ** 2 for atom in atoms
-            )
             potential_energy = potential.calculate_energy(cell)
-            total_energy = kinetic_energy + potential_energy
+            total_energy = potential_energy  # 仅考虑势能
 
+            # 日志记录
             logger.debug(
-                f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV"
+                f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV, Energy Change = {abs(total_energy - previous_energy):.6e} eV"
             )
 
-            if max_force < self.tol:
+            # 检查收敛条件
+            energy_change = abs(total_energy - previous_energy)
+            if max_force < self.tol and energy_change < self.energy_tol:
                 logger.info(f"Gradient Descent converged after {step} steps.")
                 self.converged = True
                 break
-            # 更新 position
+
+            previous_energy = total_energy
+
+            # 更新位置，沿着负梯度方向移动
             for atom in atoms:
-                displacement = self.step_size * atom.force
-                atom.position -= displacement
+                displacement = self.step_size * atom.force  # F = -dV/dx
+                atom.position += displacement  # position += step_size * F = position - step_size * dV/dx
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
             # 重新计算力
@@ -1086,9 +1136,16 @@ class BFGSOptimizer(Optimizer):
     @brief BFGS 优化器，使用 scipy.optimize.minimize 实现
     """
 
-    def __init__(self, tol=1e-6):
+    def __init__(self, tol=1e-4, maxiter=10000):
+        """
+        初始化 BFGS 优化器。
+
+        @param tol 梯度的收敛阈值。
+        @param maxiter 最大迭代次数。
+        """
         self.tol = tol
-        self.converged = False  # 添加收敛标志
+        self.maxiter = maxiter
+        self.converged = False  # 收敛标志
 
     def optimize(self, cell, potential):
         logger = logging.getLogger(__name__)
@@ -1098,20 +1155,20 @@ class BFGSOptimizer(Optimizer):
         ).flatten()
 
         def objective(x):
-            # Set positions
+            # 设置原子位置
             for i, atom in enumerate(cell.atoms):
                 atom.position = x[3 * i : 3 * i + 3]
-            # Calculate potential energy
+            # 计算势能
             energy = potential.calculate_energy(cell)
             return energy
 
         def gradient(x):
-            # Set positions
+            # 设置原子位置
             for i, atom in enumerate(cell.atoms):
                 atom.position = x[3 * i : 3 * i + 3]
-            # Calculate forces
+            # 计算力
             potential.calculate_forces(cell)
-            # Gradient is -force
+            # 梯度是 -力
             grad = -np.array([atom.force for atom in cell.atoms]).flatten()
             return grad
 
@@ -1123,7 +1180,7 @@ class BFGSOptimizer(Optimizer):
             grad = gradient(xk)
             grad_norm = np.linalg.norm(grad)
             logger.debug(
-                f"BFGS Iteration {iteration[0]}: Energy = {energy:.6f} eV, Gradient Norm = {grad_norm:.6f} eV/Å"
+                f"BFGS Iteration {iteration[0]}: Energy = {energy:.6f} eV, Gradient Norm = {grad_norm:.6e} eV/Å"
             )
 
         result = minimize(
@@ -1132,20 +1189,99 @@ class BFGSOptimizer(Optimizer):
             method="BFGS",
             jac=gradient,
             callback=callback,
-            options={"gtol": self.tol, "disp": False},  # 关闭内部显示
+            options={"gtol": self.tol, "disp": False, "maxiter": self.maxiter},
         )
 
-        # Update positions after optimization
+        # 更新位置
         optimized_positions = result.x
         for i, atom in enumerate(cell.atoms):
             atom.position = optimized_positions[3 * i : 3 * i + 3]
-        # Recalculate forces
+        # 重新计算力
         potential.calculate_forces(cell)
 
         if result.success:
             logger.info(f"BFGS Optimization converged after {iteration[0]} iterations.")
         else:
             logger.warning(f"BFGS Optimization did not converge: {result.message}")
+
+        self.converged = result.success
+
+
+class LBFGSOptimizer(Optimizer):
+    """
+    @class LBFGSOptimizer
+    @brief L-BFGS 优化器，使用 scipy.optimize.minimize 的 L-BFGS-B 方法实现
+    """
+
+    def __init__(self, tol=1e-4, maxiter=10000):
+        """
+        初始化 L-BFGS 优化器。
+
+        @param tol 梯度的收敛阈值。
+        @param maxiter 最大迭代次数。
+        """
+        self.tol = tol
+        self.maxiter = maxiter
+        self.converged = False  # 收敛标志
+
+    def optimize(self, cell, potential):
+        logger = logging.getLogger(__name__)
+        num_atoms = cell.num_atoms
+        initial_positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
+
+        def objective(x):
+            # 设置原子位置
+            for i, atom in enumerate(cell.atoms):
+                atom.position = x[3 * i : 3 * i + 3]
+            # 计算势能
+            energy = potential.calculate_energy(cell)
+            return energy
+
+        def gradient(x):
+            # 设置原子位置
+            for i, atom in enumerate(cell.atoms):
+                atom.position = x[3 * i : 3 * i + 3]
+            # 计算力
+            potential.calculate_forces(cell)
+            # 梯度是 -力
+            grad = -np.array([atom.force for atom in cell.atoms]).flatten()
+            return grad
+
+        iteration = [0]  # 使用列表以便在回调中修改
+
+        def callback(xk):
+            iteration[0] += 1
+            energy = objective(xk)
+            grad = gradient(xk)
+            grad_norm = np.linalg.norm(grad)
+            logger.debug(
+                f"L-BFGS Iteration {iteration[0]}: Energy = {energy:.6f} eV, Gradient Norm = {grad_norm:.6e} eV/Å"
+            )
+
+        result = minimize(
+            objective,
+            initial_positions,
+            method="L-BFGS-B",
+            jac=gradient,
+            callback=callback,
+            options={"gtol": self.tol, "disp": False, "maxiter": self.maxiter},
+        )
+
+        # 更新位置
+        optimized_positions = result.x
+        for i, atom in enumerate(cell.atoms):
+            atom.position = optimized_positions[3 * i : 3 * i + 3]
+        # 重新计算力
+        potential.calculate_forces(cell)
+
+        if result.success:
+            logger.info(
+                f"L-BFGS Optimization converged after {iteration[0]} iterations."
+            )
+        else:
+            logger.warning(f"L-BFGS Optimization did not converge: {result.message}")
 
         self.converged = result.success
 
@@ -1171,7 +1307,7 @@ box_lengths = np.array([30.0, 30.0, 30.0])  # 立方体盒子
 cell = Cell(atoms=atoms, lattice_vectors=np.eye(3) * 20.0, pbc_enabled=True)
 
 # 准备测试距离
-distances = np.linspace(2.4, 6.0, 1000)
+distances = np.linspace(2.0, 6.0, 1000)
 forces = []
 energies = []
 
@@ -1286,6 +1422,7 @@ class LennardJonesPotential(Potential):
 # src/python/structure.py
 
 import numpy as np
+import logging
 from .utils import AMU_TO_EVFSA2
 
 
@@ -1298,6 +1435,7 @@ class Atom:
     def __init__(self, id, symbol, mass_amu, position, velocity=None):
         self.id = id
         self.symbol = symbol
+        self.mass_amu = mass_amu  # 保留原始质量
         self.mass = mass_amu * AMU_TO_EVFSA2  # 质量转换为 eV/fs^2
         self.position = np.array(position, dtype=np.float64)
         self.velocity = (
@@ -1312,6 +1450,19 @@ class Atom:
 
     def update_velocity(self, delta_v):
         self.velocity += delta_v
+
+    def copy(self):
+        """
+        @brief 创建 Atom 的深拷贝。
+        @return Atom 对象的拷贝。
+        """
+        return Atom(
+            id=self.id,
+            symbol=self.symbol,
+            mass_amu=self.mass_amu,
+            position=self.position.copy(),
+            velocity=self.velocity.copy(),
+        )
 
 
 class Cell:
@@ -1344,32 +1495,44 @@ class Cell:
         """
         # 更新晶格矢量
         self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
-        # 更新原子坐标
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
+
+        # 更新原子坐标并应用 PBC（如果启用）
         for atom in self.atoms:
+            original_position = atom.position.copy()
             atom.position = np.dot(deformation_matrix, atom.position)
+            if self.pbc_enabled:
+                atom.position = self.apply_periodic_boundary(atom.position)
+            logger.debug(
+                f"Atom {atom.id} position changed from {original_position} to {atom.position}"
+            )
 
     def apply_periodic_boundary(self, position):
+        """
+        @brief 应用周期性边界条件，将原子位置限制在晶胞内。
+
+        @param position 原子的笛卡尔坐标位置
+        @return 应用 PBC 后的笛卡尔坐标位置
+        """
         if self.pbc_enabled:
             # 转换到分数坐标
             fractional = np.linalg.solve(self.lattice_vectors.T, position)
             # 确保在 [0, 1) 范围内
             fractional = fractional % 1.0
             # 转换回笛卡尔坐标
-            return np.dot(self.lattice_vectors.T, fractional)
+            new_position = np.dot(self.lattice_vectors.T, fractional)
+            return new_position
         else:
             return position
 
     def copy(self):
-        atoms_copy = [
-            Atom(
-                atom.id,
-                atom.symbol,
-                atom.mass_amu,
-                atom.position.copy(),
-                atom.velocity.copy(),
-            )
-            for atom in self.atoms
-        ]
+        """
+        @brief 创建 Cell 的深拷贝。
+
+        @return Cell 对象的拷贝。
+        """
+        atoms_copy = [atom.copy() for atom in self.atoms]
         return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
 
     @property
@@ -1427,12 +1590,12 @@ class NoseHooverThermostat(Thermostat):
     @brief Nose-Hoover 恒温器的实现
     """
 
-    def __init__(self, target_temperature, time_constant):
+    def __init__(self, target_temperature, time_constant, Q=10.0):
         self.target_temperature = target_temperature
         self.time_constant = time_constant
         self.cpp_interface = CppInterface("nose_hoover")
         self.xi = np.array([0.0], dtype=np.float64)  # 初始热浴变量，改为 NumPy 数组
-        self.Q = 10.0  # 热浴质量参数，可根据需要调整
+        self.Q = Q
 
     def apply(self, atoms, dt):
         num_atoms = len(atoms)
@@ -1572,10 +1735,14 @@ class DataCollector:
         self.data.append({"positions": positions, "velocities": velocities})
 
 
-# 添加单位转换常量
 # 单位转换常量
+# src/python/utils.py
+
 # 1 amu = 104.3968445 eV·fs²/Å²
 AMU_TO_EVFSA2 = 104.3968445
+
+# 1 eV/Å^3 = 160.21766208 GPa
+EV_TO_GPA = 160.2176565
 
 
 # src/python/visualization.py
