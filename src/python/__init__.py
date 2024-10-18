@@ -11,21 +11,14 @@
 from .structure import Atom, Cell
 from .potentials import Potential, LennardJonesPotential
 from .integrators import Integrator, VelocityVerletIntegrator, RK4Integrator
-from .thermostats import (
-    Thermostat,
-    NoseHooverThermostat,
-    NoseHooverChainThermostat,
-)
-from .barostats import Barostat, MTKBarostat, ParrinelloRahmanHooverBarostat
-from .mechanics import (
-    StressCalculator,
-    StressCalculatorLJ,
-    ElasticConstantsSolver,
-)
+from .thermostats import Thermostat, NoseHooverThermostat, NoseHooverChainThermostat
+from .barostats import Barostat, ParrinelloRahmanHooverBarostat
+from .mechanics import StressCalculator, StressCalculatorLJ, StrainCalculator
+from .elasticity import ElasticConstantsSolver, ElasticConstantsCalculator
 from .optimizers import Optimizer, GradientDescentOptimizer, BFGSOptimizer
 from .deformation import Deformer
 from .utils import TensorConverter, DataCollector
 from .visualization import Visualizer
-from .elasticity import ElasticConstantsCalculator
 from .md_simulator import MDSimulator
 from .config import ConfigManager
+from .interfaces.cpp_interface import CppInterface
