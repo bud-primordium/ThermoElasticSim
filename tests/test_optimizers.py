@@ -1,3 +1,5 @@
+# tests/test_optimizers.py
+
 import pytest
 import numpy as np
 import logging
@@ -6,8 +8,8 @@ from python.potentials import LennardJonesPotential
 from python.optimizers import (
     GradientDescentOptimizer,
     BFGSOptimizer,
-    LBFGSOptimizer,
 )
+from datetime import datetime
 
 
 # 配置日志
@@ -28,13 +30,23 @@ def configure_logging():
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
+    # 获取当前时间并格式化为字符串
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = (
+        f"./logs/test_optimizers_{current_time}.log"  # 生成带时间戳的日志文件名
+    )
+
     # 创建文件处理器
-    fh = logging.FileHandler("test_optimizers.log", encoding="utf-8")
+    fh = logging.FileHandler(log_filename, encoding="utf-8")
     fh.setLevel(logging.DEBUG)  # 文件日志级别
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
     yield
+
+    # 测试结束后移除处理器
+    logger.removeHandler(ch)
+    logger.removeHandler(fh)
 
 
 @pytest.fixture
@@ -48,33 +60,49 @@ def lj_potential_optim():
 @pytest.fixture
 def cell_with_multiple_atoms():
     """
-    创建一个包含多个原子的晶胞，模拟更复杂的系统。
+    创建一个包含多个原子的晶胞，模拟更复杂的系统（8个原子）。
     """
     sigma = 2.55
-    r_m = 2 ** (1 / 6) * sigma
+    r_m = 2 ** (1 / 6) * sigma  # 约为2.04 Å
     delta = 0.1  # Å
 
-    atoms = [
-        Atom(
-            id=i,
-            mass_amu=26.9815,
-            position=np.array([i * (r_m + delta), 0.0, 0.0]),
-            symbol="Al",
+    num_repetitions = 1  # 1x1x1 单位晶胞，共8个原子（假设每个单位晶胞8个原子）
+    lattice_constant = 5.1  # Å
+    atoms = []
+    positions = [
+        [0.0, 0.0, 0.0],
+        [0.5, 0.5, 0.0],
+        [0.5, 0.0, 0.5],
+        [0.0, 0.5, 0.5],
+        [0.5, 0.0, 0.0],
+        [0.0, 0.5, 0.0],
+        [0.0, 0.0, 0.5],
+        [0.5, 0.5, 0.5],
+    ]  # 简单立方晶胞的8个原子位置
+
+    for pos in positions:
+        atoms.append(
+            Atom(
+                id=len(atoms),
+                symbol="Al",
+                mass_amu=26.9815,
+                position=np.array(pos) * lattice_constant,
+                velocity=None,
+            )
         )
-        for i in range(4)  # 增加多个原子
-    ]
-    lattice_vectors = np.eye(3) * (sigma * 6)  # 增加晶胞大小
+
+    lattice_vectors = np.eye(3) * lattice_constant  # 单位晶胞大小
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=False)
     return cell
 
 
 def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms):
     """
-    测试梯度下降优化器，使用多个原子，无周期性边界条件。
+    测试梯度下降优化器，使用4个原子，无周期性边界条件。
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
-        max_steps=10000, tol=1e-3, step_size=1e-2, energy_tol=1e-4
+        max_steps=20000, tol=1e-3, step_size=1e-3, energy_tol=1e-4
     )
     cell = cell_with_multiple_atoms
 
@@ -87,50 +115,32 @@ def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms
     logger.debug(f"Gradient Descent - Post-optimization Energy: {energy:.6f} eV")
     logger.debug(f"Gradient Descent - Post-optimization Forces: {forces}")
 
-
-# def test_bfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
-#     """
-#     @brief 测试 BFGS 优化器。
-#     """
-#     logger = logging.getLogger(__name__)
-#     optimizer = BFGSOptimizer(tol=1e-3, maxiter=10000)
-#     cell = cell_with_multiple_atoms
-
-#     logger.debug("开始 BFGS 优化测试...")
-
-#     optimizer.optimize(cell, lj_potential_optim)
-
-#     # 检查优化是否收敛
-#     assert optimizer.converged, "BFGS Optimizer did not converge"
-
-#     # 输出优化后的能量和力
-#     energy = lj_potential_optim.calculate_energy(cell)
-#     forces = cell.get_forces()
-#     logger.debug(f"BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
-#     logger.debug(f"BFGS Optimizer - Post-optimization Forces: {forces}")
-
-#     logger.debug("BFGS 优化测试结束。")
+    # 检查最大力是否小于容差
+    max_force = max(np.linalg.norm(f) for f in forces)
+    assert (
+        max_force < optimizer.tol
+    ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
 
 
-# def test_lbfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
-#     """
-#     @brief 测试 L-BFGS 优化器。
-#     """
-#     logger = logging.getLogger(__name__)
-#     optimizer = LBFGSOptimizer(tol=1e-3, maxiter=10000)
-#     cell = cell_with_multiple_atoms
+def test_bfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
+    """
+    测试 BFGS 优化器，使用4个原子，无周期性边界条件。
+    """
+    logger = logging.getLogger(__name__)
+    optimizer = BFGSOptimizer(tol=1e-4, maxiter=20000)
+    cell = cell_with_multiple_atoms
 
-#     logger.debug("开始 L-BFGS 优化测试...")
+    optimizer.optimize(cell, lj_potential_optim)
 
-#     optimizer.optimize(cell, lj_potential_optim)
+    assert optimizer.converged, "BFGS Optimizer did not converge"
 
-#     # 检查优化是否收敛
-#     assert optimizer.converged, "L-BFGS Optimizer did not converge"
+    energy = lj_potential_optim.calculate_energy(cell)
+    forces = cell.get_forces()
+    logger.debug(f"BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
+    logger.debug(f"BFGS Optimizer - Post-optimization Forces: {forces}")
 
-#     # 输出优化后的能量和力
-#     energy = lj_potential_optim.calculate_energy(cell)
-#     forces = cell.get_forces()
-#     logger.debug(f"L-BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
-#     logger.debug(f"L-BFGS Optimizer - Post-optimization Forces: {forces}")
-
-#     logger.debug("L-BFGS 优化测试结束。")
+    # 检查最大力是否小于容差
+    max_force = max(np.linalg.norm(f) for f in forces)
+    assert (
+        max_force < 2 * optimizer.tol
+    ), f"Max force {max_force} exceeds tolerance {2 * optimizer.tol}"
