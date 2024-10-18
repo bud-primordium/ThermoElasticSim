@@ -2,21 +2,47 @@
 
 #include <cmath>
 #include <vector>
-#include <iostream>
 
 extern "C"
 {
     /**
-     * @brief 计算 Lennard-Jones 力，使用最小镜像法处理周期性边界条件
+     * @brief 使用三次多项式计算截断区域的系数 a, b, c, d
      *
-     * @param num_atoms 原子数量
-     * @param positions 原子位置数组（长度为 3*num_atoms）
-     * @param forces 输出的力数组（长度为 3*num_atoms）
-     * @param epsilon Lennard-Jones 势参数 ε，单位为 eV
-     * @param sigma Lennard-Jones 势参数 σ，单位为 Å
-     * @param cutoff 截断半径，单位为 Å
-     * @param box_lengths 模拟盒子在每个维度的长度（长度为 3）
+     * 满足以下条件：
+     * 1. V(r0) = V0
+     * 2. V'(r0) = F0
+     * 3. V(cutoff) = 0
+     * 4. V'(cutoff) = 0
+     *
+     * @param cutoff 截断半径
+     * @param r0 过渡起点
+     * @param sigma LJ势参数 σ
+     * @param epsilon LJ势参数 ε
+     * @param a 三次项系数
+     * @param b 二次项系数
+     * @param c 一次项系数
+     * @param d 常数项
      */
+    void solve_cutoff_cubic(
+        double cutoff, double r0, double sigma, double epsilon,
+        double &a, double &b, double &c, double &d)
+    {
+        // 计算 r0 处的势能 V0 和力 F0
+        double r0_inv = 1.0 / r0;
+        double sigma_r0_inv = sigma * r0_inv;
+        double sigma_r0_inv_6 = pow(sigma_r0_inv, 6);
+        double sigma_r0_inv_12 = pow(sigma_r0_inv, 12);
+        double V0 = 4.0 * epsilon * (sigma_r0_inv_12 - sigma_r0_inv_6);
+        double F0 = 24.0 * epsilon * (2.0 * sigma_r0_inv_12 - sigma_r0_inv_6) * r0_inv;
+
+        // 按照 Mathematica 的解更新三次多项式系数 a, b, c, d
+        double denom = pow(r0 - cutoff, 3);
+        a = -(F0 * r0 - F0 * cutoff + 2.0 * V0) / denom;
+        b = -((-F0 * pow(r0, 2)) - F0 * r0 * cutoff + 2.0 * F0 * pow(cutoff, 2) - 3.0 * r0 * V0 - 3.0 * cutoff * V0) / denom;
+        c = -(cutoff * (2.0 * F0 * pow(r0, 2) - F0 * r0 * cutoff - F0 * pow(cutoff, 2) + 6.0 * r0 * V0)) / denom;
+        d = -((-F0 * pow(r0, 2) * pow(cutoff, 2)) + F0 * r0 * pow(cutoff, 3) - 3.0 * r0 * pow(cutoff, 2) * V0 + pow(cutoff, 3) * V0) / denom;
+    }
+
     void calculate_forces(
         int num_atoms,
         const double *positions,
@@ -24,8 +50,7 @@ extern "C"
         double epsilon,
         double sigma,
         double cutoff,
-        const double *box_lengths // 长度为 3
-    )
+        const double *box_lengths)
     {
         // 清零力数组
         for (int i = 0; i < 3 * num_atoms; ++i)
@@ -34,8 +59,11 @@ extern "C"
         }
 
         double cutoff_sq = cutoff * cutoff;
-        // 计算力的截断修正
-        double force_shift = 48.0 * epsilon * (pow(sigma / cutoff, 12) - 0.5 * pow(sigma / cutoff, 6));
+        double r0 = 0.9 * cutoff; // 统一设置平滑过渡的起点
+
+        // 预计算三次多项式系数
+        double a, b, c, d;
+        solve_cutoff_cubic(cutoff, r0, sigma, epsilon, a, b, c, d);
 
         // 力的计算
         for (int i = 0; i < num_atoms; ++i)
@@ -60,18 +88,25 @@ extern "C"
                 if (r2 < cutoff_sq)
                 {
                     double r = sqrt(r2);
-                    double r2_inv = 1.0 / r2;
-                    double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
-                    double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5);
+                    double force_scalar;
 
-                    // 力的截断修正
-                    force_scalar -= force_shift;
+                    if (r < r0)
+                    {
+                        double r_inv = 1.0 / r;
+                        double r6_inv = pow(sigma * r_inv, 6); // (σ/r)^6
+                        force_scalar = 24.0 * epsilon * (2.0 * r6_inv * r6_inv - r6_inv) * r_inv;
+                    }
+                    else
+                    {
+                        // 使用三次多项式过渡区的力 F(r) = -dV/dr = -(3a*r^2 + 2b*r + c)
+                        force_scalar = -(3.0 * a * r * r + 2.0 * b * r + c);
+                    }
 
                     for (int k = 0; k < 3; ++k)
                     {
                         double fij = force_scalar * rij[k];
-                        forces[3 * i + k] += fij;
-                        forces[3 * j + k] -= fij;
+                        forces[3 * i + k] -= fij;
+                        forces[3 * j + k] += fij;
                     }
                 }
             }
@@ -95,13 +130,17 @@ extern "C"
         double epsilon,
         double sigma,
         double cutoff,
-        const double *box_lengths // 长度为 3
-    )
+        const double *box_lengths)
     {
         double energy = 0.0;
         double cutoff_sq = cutoff * cutoff;
-        double shift = 4.0 * epsilon * (pow(sigma / cutoff, 12) - pow(sigma / cutoff, 6));
+        double r0 = 0.9 * cutoff; // 统一设置平滑过渡的起点
 
+        // 预计算三次多项式系数
+        double a, b, c, d;
+        solve_cutoff_cubic(cutoff, r0, sigma, epsilon, a, b, c, d);
+
+        // 势能的计算
         for (int i = 0; i < num_atoms; ++i)
         {
             const double *ri = &positions[3 * i];
@@ -123,9 +162,21 @@ extern "C"
 
                 if (r2 < cutoff_sq)
                 {
-                    double r2_inv = 1.0 / r2;
-                    double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
-                    double potential = 4.0 * epsilon * (r6_inv * r6_inv - r6_inv) - shift;
+                    double r = sqrt(r2);
+                    double potential;
+
+                    if (r < r0)
+                    {
+                        double r_inv = 1.0 / r;
+                        double r6_inv = pow(sigma * r_inv, 6); // (σ/r)^6
+                        potential = 4.0 * epsilon * (r6_inv * r6_inv - r6_inv);
+                    }
+                    else
+                    {
+                        // 使用三次多项式过渡区的势能 V(r) = a*r^3 + b*r^2 + c*r + d
+                        potential = a * pow(r, 3) + b * pow(r, 2) + c * r + d;
+                    }
+
                     energy += potential;
                 }
             }

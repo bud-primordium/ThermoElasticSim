@@ -62,7 +62,8 @@ extern "C"
         }
 
         double cutoff_sq = cutoff * cutoff;
-        double shift = 4.0 * epsilon * (pow(sigma / cutoff, 12) - pow(sigma / cutoff, 6));
+        // 计算力的截断修正
+        double force_shift = 48.0 * epsilon * (pow(sigma / cutoff, 12) - 0.5 * pow(sigma / cutoff, 6));
 
         // 力的计算
         for (int i = 0; i < num_atoms; ++i)
@@ -86,15 +87,13 @@ extern "C"
 
                 if (r2 < cutoff_sq)
                 {
-                    double r2_inv = 1.0 / r2;
-                    double r6_inv = r2_inv * r2_inv * r2_inv;
-                    double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5) * r2_inv;
-
-                    // 力的截断修正，确保在截断半径处力为零
                     double r = sqrt(r2);
-                    double cutoff_r6_inv = pow(sigma / cutoff, 6);
-                    double cutoff_force = 48.0 * epsilon * cutoff_r6_inv * (cutoff_r6_inv - 0.5) / (cutoff * cutoff);
-                    force_scalar -= cutoff_force / r;
+                    double r2_inv = 1.0 / r2;
+                    double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
+                    double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5);
+
+                    // 力的截断修正
+                    force_scalar -= force_shift;
 
                     for (int k = 0; k < 3; ++k)
                     {
@@ -153,8 +152,8 @@ extern "C"
                 if (r2 < cutoff_sq)
                 {
                     double r2_inv = 1.0 / r2;
-                    double r6_inv = r2_inv * r2_inv * r2_inv;
-                    double potential = 4.0 * epsilon * (pow(sigma * sigma * r2_inv, 6) - pow(sigma * sigma * r2_inv, 3)) - shift;
+                    double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
+                    double potential = 4.0 * epsilon * (r6_inv * r6_inv - r6_inv) - shift;
                     energy += potential;
                 }
             }
@@ -678,7 +677,7 @@ class ElasticConstantsCalculator:
         self.strain_calculator = StrainCalculator()
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
-                max_steps=1000, tol=1e-6, step_size=1e-4
+                max_steps=1000, tol=1e-6, step_size=1e-3
             )
         elif optimizer_type == "BFGS":
             self.optimizer = BFGSOptimizer(tol=1e-6)
@@ -953,7 +952,7 @@ class GradientDescentOptimizer(Optimizer):
         for step in range(self.max_steps):
             # 计算最大力
             max_force = max(np.linalg.norm(atom.force) for atom in atoms)
-            print(f"Step {step}: Max force = {max_force}")
+            # print(f"Step {step}: Max force = {max_force}")
             if max_force < self.tol:
                 print(f"Converged after {step} steps")
                 self.converged = True
@@ -1250,7 +1249,7 @@ class NoseHooverThermostat(Thermostat):
         self.target_temperature = target_temperature
         self.time_constant = time_constant
         self.cpp_interface = CppInterface("nose_hoover")
-        self.xi = 0.0  # 初始热浴变量
+        self.xi = np.array([0.0], dtype=np.float64)  # 初始热浴变量，改为 NumPy 数组
         self.Q = 10.0  # 热浴质量参数，可根据需要调整
 
     def apply(self, atoms, dt):
@@ -1269,11 +1268,11 @@ class NoseHooverThermostat(Thermostat):
                 masses,
                 velocities,
                 forces,
-                self.xi,
+                self.xi,  # 传递 NumPy 数组
                 self.Q,
                 self.target_temperature,
             )
-            self.xi = updated_xi
+            self.xi[0] = updated_xi  # 更新 xi 的值
         except OSError as e:
             print(f"C++ Nose-Hoover 调用失败: {e}")
             raise
@@ -1314,6 +1313,7 @@ class NoseHooverChainThermostat(Thermostat):
             forces,
             xi_chain,
             Q,
+            self.chain_length,
             self.target_temperature,
         )
 
@@ -1503,7 +1503,8 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
-from ..utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
+
+# from ..utils import AMU_TO_EVFSA2  # 如果需要，确保导入单位转换常量
 
 
 class CppInterface:
@@ -1682,26 +1683,26 @@ class CppInterface:
         masses,
         velocities,
         forces,
-        xi,
+        xi_array,  # 现在接受一个numpy数组
         Q,
         target_temperature,
     ):
         """
         实现 Nose-Hoover 恒温器算法
         """
-        # 创建指向 xi 的指针
-        xi_ptr = ctypes.c_double(xi)
+        if not isinstance(xi_array, np.ndarray) or xi_array.size != 1:
+            raise ValueError("xi must be a numpy array with one element.")
         self.lib.nose_hoover(
             dt,
             num_atoms,
             masses,
             velocities,
             forces,
-            ctypes.byref(xi_ptr),
+            xi_array.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
             Q,
             target_temperature,
         )
-        return xi_ptr.value
+        return xi_array[0]  # 返回更新后的 xi 值
 
     def nose_hoover_chain(
         self,
