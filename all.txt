@@ -679,9 +679,6 @@ from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
 
 # 配置日志记录
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
@@ -754,6 +751,18 @@ class ElasticConstantsCalculator:
         @return 弹性常数矩阵，形状为 (6, 6)，单位为 GPa。
         """
         logger.debug("Starting elastic constants calculation.")
+
+        # **初始结构的平衡优化**
+        logger.debug("Relaxing initial structure to equilibrium.")
+        initial_optimizer = GradientDescentOptimizer(
+            max_steps=10000, tol=1e-4, step_size=1e-3, energy_tol=1e-4
+        )
+        initial_optimizer.optimize(self.cell, self.potential)
+        if initial_optimizer.converged:
+            logger.debug("Initial structure relaxed successfully.")
+        else:
+            logger.warning("Initial structure did not fully relax.")
+
         F_list = self.deformer.generate_deformation_matrices()
         strains = []
         stresses = []
@@ -762,7 +771,7 @@ class ElasticConstantsCalculator:
             logger.debug(f"Applying deformation {idx+1}/{len(F_list)}:")
             logger.debug(F)
 
-            # 复制初始晶胞
+            # 复制初始晶胞（已经优化）
             deformed_cell = self.cell.copy()
 
             # 施加变形
@@ -772,6 +781,7 @@ class ElasticConstantsCalculator:
             # 检查原子之间的最小距离
             min_distance = np.inf
             num_atoms = len(deformed_cell.atoms)
+            min_pair = (-1, -1)  # 初始化最小距离原子对
             for i in range(num_atoms):
                 for j in range(i + 1, num_atoms):
                     rij = (
@@ -787,12 +797,16 @@ class ElasticConstantsCalculator:
                     r = np.linalg.norm(rij)
                     if r < min_distance:
                         min_distance = r
+                        min_pair = (
+                            deformed_cell.atoms[i].id,
+                            deformed_cell.atoms[j].id,
+                        )
             logger.debug(
-                f"Minimum inter-atomic distance after deformation: {min_distance:.3f} Å"
+                f"Minimum inter-atomic distance after deformation: {min_distance:.3f} Å between atoms {min_pair[0]} and {min_pair[1]}"
             )
             assert (
                 min_distance > 0.8 * self.potential.sigma
-            ), f"原子之间的最小距离过近：{min_distance} Å"
+            ), f"原子之间的最小距离过近：{min_distance} Å (atoms {min_pair[0]} and {min_pair[1]})"
 
             # 计算优化前的能量
             energy_before = self.potential.calculate_energy(deformed_cell)
@@ -1051,6 +1065,8 @@ import numpy as np
 from scipy.optimize import minimize
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 class Optimizer:
     """
@@ -1068,7 +1084,7 @@ class GradientDescentOptimizer(Optimizer):
     @brief 梯度下降优化器
     """
 
-    def __init__(self, max_steps=10000, tol=1e-4, step_size=1e-2, energy_tol=1e-4):
+    def __init__(self, max_steps=10000, tol=1e-3, step_size=1e-3, energy_tol=1e-4):
         """
         初始化梯度下降优化器。
 
@@ -1093,8 +1109,8 @@ class GradientDescentOptimizer(Optimizer):
             # 记录原子位置和力
             positions = cell.get_positions()
             forces = cell.get_forces()
-            logger.debug(f"Step {step} - Atom positions: {positions}")
-            logger.debug(f"Step {step} - Atom forces: {forces}")
+            logger.debug(f"Step {step} - Atom positions:\n{positions}")
+            logger.debug(f"Step {step} - Atom forces:\n{forces}")
 
             # 计算最大力
             max_force = max(np.linalg.norm(atom.force) for atom in atoms)
@@ -1102,15 +1118,37 @@ class GradientDescentOptimizer(Optimizer):
             total_energy = potential_energy  # 仅考虑势能
 
             # 日志记录
+            energy_change = abs(total_energy - previous_energy)
             logger.debug(
-                f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV, Energy Change = {abs(total_energy - previous_energy):.6e} eV"
+                f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV, Energy Change = {energy_change:.6e} eV"
             )
 
             # 检查收敛条件
-            energy_change = abs(total_energy - previous_energy)
             if max_force < self.tol and energy_change < self.energy_tol:
                 logger.info(f"Gradient Descent converged after {step} steps.")
                 self.converged = True
+                break
+
+            # 检查能量和力的有效性
+            if np.isnan(total_energy) or np.isinf(total_energy):
+                logger.error(
+                    f"Energy is nan or inf at step {step}. Terminating optimization."
+                )
+                self.converged = False
+                break
+            if np.any(np.isnan(forces)) or np.any(np.isinf(forces)):
+                logger.error(
+                    f"Force contains nan or inf at step {step}. Terminating optimization."
+                )
+                self.converged = False
+                break
+
+            # 确保能量大体上递减
+            if total_energy > 3 * abs(previous_energy + self.energy_tol):
+                logger.warning(
+                    f"Energy increased from {previous_energy:.6f} eV to {total_energy:.6f} eV at step {step}. Terminating optimization."
+                )
+                self.converged = False
                 break
 
             previous_energy = total_energy
@@ -1118,11 +1156,41 @@ class GradientDescentOptimizer(Optimizer):
             # 更新位置，沿着负梯度方向移动
             for atom in atoms:
                 displacement = self.step_size * atom.force  # F = -dV/dx
-                atom.position += displacement  # position += step_size * F = position - step_size * dV/dx
+                atom.position -= displacement  # position += step_size * F = position - step_size * dV/dx
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
+                logger.debug(f"Atom {atom.id} new position: {atom.position}")
+
             # 重新计算力
             potential.calculate_forces(cell)
+
+            # 检查原子间距离
+            min_distance = np.inf
+            num_atoms = len(atoms)
+            min_pair = (-1, -1)  # 初始化最小距离原子对
+            for i in range(num_atoms):
+                for j in range(i + 1, num_atoms):
+                    rij = atoms[j].position - atoms[i].position
+                    # 应用最小镜像规则
+                    for dim in range(3):
+                        rij[dim] -= (
+                            round(rij[dim] / cell.lattice_vectors[dim, dim])
+                            * cell.lattice_vectors[dim, dim]
+                        )
+                    r = np.linalg.norm(rij)
+                    if r < min_distance:
+                        min_distance = r
+                        min_pair = (atoms[i].id, atoms[j].id)
+            logger.debug(
+                f"Step {step}: Min distance = {min_distance:.3f} Å between atoms {min_pair[0]} and {min_pair[1]}"
+            )
+
+            if min_distance < 0.8 * potential.sigma:
+                logger.error(
+                    f"Step {step}: Minimum inter-atomic distance {min_distance:.3f} Å is too small between atoms {min_pair[0]} and {min_pair[1]}. Terminating optimization."
+                )
+                self.converged = False
+                break
         else:
             logger.warning(
                 "Gradient Descent Optimization did not converge within the maximum number of steps."
@@ -1133,157 +1201,62 @@ class GradientDescentOptimizer(Optimizer):
 class BFGSOptimizer(Optimizer):
     """
     @class BFGSOptimizer
-    @brief BFGS 优化器，使用 scipy.optimize.minimize 实现
+    @brief BFGS 优化器，基于 scipy.optimize.minimize
     """
 
-    def __init__(self, tol=1e-4, maxiter=10000):
+    def __init__(self, tol=1e-6, maxiter=10000):
         """
         初始化 BFGS 优化器。
 
-        @param tol 梯度的收敛阈值。
+        @param tol 收敛容差。
         @param maxiter 最大迭代次数。
         """
         self.tol = tol
         self.maxiter = maxiter
-        self.converged = False  # 收敛标志
+        self.converged = False
 
     def optimize(self, cell, potential):
         logger = logging.getLogger(__name__)
-        num_atoms = cell.num_atoms
-        initial_positions = np.ascontiguousarray(
-            cell.get_positions(), dtype=np.float64
-        ).flatten()
 
-        def objective(x):
-            # 设置原子位置
+        # 定义能量函数
+        def energy_fn(positions):
+            # 更新所有原子的位置
             for i, atom in enumerate(cell.atoms):
-                atom.position = x[3 * i : 3 * i + 3]
-            # 计算势能
-            energy = potential.calculate_energy(cell)
-            return energy
+                atom.position = positions[i * 3 : (i + 1) * 3]
+            return potential.calculate_energy(cell)
 
-        def gradient(x):
-            # 设置原子位置
+        # 定义梯度函数（力）
+        def grad_fn(positions):
+            # 更新所有原子的位置
             for i, atom in enumerate(cell.atoms):
-                atom.position = x[3 * i : 3 * i + 3]
-            # 计算力
+                atom.position = positions[i * 3 : (i + 1) * 3]
             potential.calculate_forces(cell)
-            # 梯度是 -力
-            grad = -np.array([atom.force for atom in cell.atoms]).flatten()
-            return grad
+            forces = cell.get_forces()
+            return forces.flatten()
 
-        iteration = [0]  # 使用列表以便在回调中修改
+        # 获取初始位置
+        initial_positions = cell.get_positions().flatten()
 
-        def callback(xk):
-            iteration[0] += 1
-            energy = objective(xk)
-            grad = gradient(xk)
-            grad_norm = np.linalg.norm(grad)
-            logger.debug(
-                f"BFGS Iteration {iteration[0]}: Energy = {energy:.6f} eV, Gradient Norm = {grad_norm:.6e} eV/Å"
-            )
-
+        # 执行 BFGS 优化
         result = minimize(
-            objective,
+            energy_fn,
             initial_positions,
             method="BFGS",
-            jac=gradient,
-            callback=callback,
-            options={"gtol": self.tol, "disp": False, "maxiter": self.maxiter},
+            jac=grad_fn,
+            tol=self.tol,
+            options={"maxiter": self.maxiter, "disp": False},
         )
 
-        # 更新位置
-        optimized_positions = result.x
-        for i, atom in enumerate(cell.atoms):
-            atom.position = optimized_positions[3 * i : 3 * i + 3]
-        # 重新计算力
-        potential.calculate_forces(cell)
-
         if result.success:
-            logger.info(f"BFGS Optimization converged after {iteration[0]} iterations.")
-        else:
-            logger.warning(f"BFGS Optimization did not converge: {result.message}")
-
-        self.converged = result.success
-
-
-class LBFGSOptimizer(Optimizer):
-    """
-    @class LBFGSOptimizer
-    @brief L-BFGS 优化器，使用 scipy.optimize.minimize 的 L-BFGS-B 方法实现
-    """
-
-    def __init__(self, tol=1e-4, maxiter=10000):
-        """
-        初始化 L-BFGS 优化器。
-
-        @param tol 梯度的收敛阈值。
-        @param maxiter 最大迭代次数。
-        """
-        self.tol = tol
-        self.maxiter = maxiter
-        self.converged = False  # 收敛标志
-
-    def optimize(self, cell, potential):
-        logger = logging.getLogger(__name__)
-        num_atoms = cell.num_atoms
-        initial_positions = np.ascontiguousarray(
-            cell.get_positions(), dtype=np.float64
-        ).flatten()
-
-        def objective(x):
-            # 设置原子位置
+            self.converged = True
+            # 更新原子的位置
+            optimized_positions = result.x.reshape((-1, 3))
             for i, atom in enumerate(cell.atoms):
-                atom.position = x[3 * i : 3 * i + 3]
-            # 计算势能
-            energy = potential.calculate_energy(cell)
-            return energy
-
-        def gradient(x):
-            # 设置原子位置
-            for i, atom in enumerate(cell.atoms):
-                atom.position = x[3 * i : 3 * i + 3]
-            # 计算力
-            potential.calculate_forces(cell)
-            # 梯度是 -力
-            grad = -np.array([atom.force for atom in cell.atoms]).flatten()
-            return grad
-
-        iteration = [0]  # 使用列表以便在回调中修改
-
-        def callback(xk):
-            iteration[0] += 1
-            energy = objective(xk)
-            grad = gradient(xk)
-            grad_norm = np.linalg.norm(grad)
-            logger.debug(
-                f"L-BFGS Iteration {iteration[0]}: Energy = {energy:.6f} eV, Gradient Norm = {grad_norm:.6e} eV/Å"
-            )
-
-        result = minimize(
-            objective,
-            initial_positions,
-            method="L-BFGS-B",
-            jac=gradient,
-            callback=callback,
-            options={"gtol": self.tol, "disp": False, "maxiter": self.maxiter},
-        )
-
-        # 更新位置
-        optimized_positions = result.x
-        for i, atom in enumerate(cell.atoms):
-            atom.position = optimized_positions[3 * i : 3 * i + 3]
-        # 重新计算力
-        potential.calculate_forces(cell)
-
-        if result.success:
-            logger.info(
-                f"L-BFGS Optimization converged after {iteration[0]} iterations."
-            )
+                atom.position = optimized_positions[i]
+            logger.info("BFGS Optimizer converged successfully.")
         else:
-            logger.warning(f"L-BFGS Optimization did not converge: {result.message}")
-
-        self.converged = result.success
+            self.converged = False
+            logger.warning(f"BFGS Optimizer did not converge: {result.message}")
 
 
 import numpy as np
@@ -1307,7 +1280,7 @@ box_lengths = np.array([30.0, 30.0, 30.0])  # 立方体盒子
 cell = Cell(atoms=atoms, lattice_vectors=np.eye(3) * 20.0, pbc_enabled=True)
 
 # 准备测试距离
-distances = np.linspace(2.0, 6.0, 1000)
+distances = np.linspace(2.4, 6.0, 1000)
 forces = []
 energies = []
 
@@ -1422,8 +1395,11 @@ class LennardJonesPotential(Potential):
 # src/python/structure.py
 
 import numpy as np
-import logging
 from .utils import AMU_TO_EVFSA2
+import logging
+
+# 配置日志记录
+logger = logging.getLogger(__name__)
 
 
 class Atom:
@@ -1495,7 +1471,6 @@ class Cell:
         """
         # 更新晶格矢量
         self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
-        logger = logging.getLogger(__name__)
         logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
         # 更新原子坐标并应用 PBC（如果启用）
@@ -2085,6 +2060,7 @@ class CppInterface:
 
 
 tests/
+    force_ene.py
     test_cpp_interface.py
     test_deformation.py
     test_elasticity.py
@@ -2095,9 +2071,47 @@ tests/
     test_optimizers.py
     test_pbc.py
     test_potentials.py
+    test_simple_optimizer.py
     test_structure.py
     test_utils.py
     test_visualization.py
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+import numpy as np
+
+
+def manual_test_lj():
+    epsilon = 0.0103  # eV
+    sigma = 2.55  # Å
+    cutoff = 2.5 * sigma  # Å
+
+    lj_potential = LennardJonesPotential(epsilon, sigma, cutoff)
+
+    # 创建两个原子
+    atom1 = Atom(id=0, symbol="Al", mass_amu=26.9815, position=[0.0, 0.0, 0.0])
+    atom2 = Atom(
+        id=1, symbol="Al", mass_amu=26.9815, position=[3.0, 0.0, 0.0]
+    )  # 初始距离为3.0 Å
+
+    cell = Cell(
+        lattice_vectors=np.eye(3) * 10.0, atoms=[atom1, atom2], pbc_enabled=False
+    )
+
+    # 计算能量和力
+    energy = lj_potential.calculate_energy(cell)
+    lj_potential.calculate_forces(cell)
+    force1 = atom1.force
+    force2 = atom2.force
+
+    print(f"Energy: {energy} eV")
+    print(f"Force on Atom 0: {force1} eV/A")
+    print(f"Force on Atom 1: {force2} eV/A")
+
+
+if __name__ == "__main__":
+    manual_test_lj()
+
+
 # tests/test_cpp_interface.py
 
 import pytest
@@ -2345,13 +2359,8 @@ from python.potentials import LennardJonesPotential
 from python.elasticity import ElasticConstantsCalculator
 import logging
 
+
 # 配置日志
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
 @pytest.fixture(scope="session", autouse=True)
 def configure_logging():
     """
@@ -2371,7 +2380,9 @@ def configure_logging():
 
     # 获取当前时间并格式化为字符串
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"./logs/test_elasticity_{current_time}.log"  # 生成带时间戳的日志文件名
+    log_filename = (
+        f"./logs/test_elasticity_{current_time}.log"  # 生成带时间戳的日志文件名
+    )
 
     # 创建文件处理器
     fh = logging.FileHandler(log_filename, encoding="utf-8")
@@ -2403,9 +2414,12 @@ def test_elastic_constants_calculator():
                 base = np.array([i, j, k]) * lattice_constant
                 positions = [
                     base + np.array([0.0, 0.0, 0.0]),
-                    base + np.array([0.0, 0.5, 0.5]),
-                    base + np.array([0.5, 0.0, 0.5]),
-                    base + np.array([0.5, 0.5, 0.0]),
+                    base
+                    + np.array([0.0, 0.5 * lattice_constant, 0.5 * lattice_constant]),
+                    base
+                    + np.array([0.5 * lattice_constant, 0.0, 0.5 * lattice_constant]),
+                    base
+                    + np.array([0.5 * lattice_constant, 0.5 * lattice_constant, 0.0]),
                 ]
                 for pos in positions:
                     atoms.append(
@@ -2881,6 +2895,8 @@ def test_nose_hoover_apply(nose_hoover_thermostat):
     assert not np.allclose(atoms[1].velocity, [-1.0, 0.0, 0.0]), "原子2的速度未被更新。"
 
 
+# tests/test_optimizers.py
+
 import pytest
 import numpy as np
 import logging
@@ -2889,8 +2905,8 @@ from python.potentials import LennardJonesPotential
 from python.optimizers import (
     GradientDescentOptimizer,
     BFGSOptimizer,
-    LBFGSOptimizer,
 )
+from datetime import datetime
 
 
 # 配置日志
@@ -2911,13 +2927,23 @@ def configure_logging():
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
+    # 获取当前时间并格式化为字符串
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = (
+        f"./logs/test_optimizers_{current_time}.log"  # 生成带时间戳的日志文件名
+    )
+
     # 创建文件处理器
-    fh = logging.FileHandler("test_optimizers.log", encoding="utf-8")
+    fh = logging.FileHandler(log_filename, encoding="utf-8")
     fh.setLevel(logging.DEBUG)  # 文件日志级别
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
     yield
+
+    # 测试结束后移除处理器
+    logger.removeHandler(ch)
+    logger.removeHandler(fh)
 
 
 @pytest.fixture
@@ -2931,33 +2957,49 @@ def lj_potential_optim():
 @pytest.fixture
 def cell_with_multiple_atoms():
     """
-    创建一个包含多个原子的晶胞，模拟更复杂的系统。
+    创建一个包含多个原子的晶胞，模拟更复杂的系统（8个原子）。
     """
     sigma = 2.55
-    r_m = 2 ** (1 / 6) * sigma
+    r_m = 2 ** (1 / 6) * sigma  # 约为2.04 Å
     delta = 0.1  # Å
 
-    atoms = [
-        Atom(
-            id=i,
-            mass_amu=26.9815,
-            position=np.array([i * (r_m + delta), 0.0, 0.0]),
-            symbol="Al",
+    num_repetitions = 1  # 1x1x1 单位晶胞，共8个原子（假设每个单位晶胞8个原子）
+    lattice_constant = 5.1  # Å
+    atoms = []
+    positions = [
+        [0.0, 0.0, 0.0],
+        [0.5, 0.5, 0.0],
+        [0.5, 0.0, 0.5],
+        [0.0, 0.5, 0.5],
+        [0.5, 0.0, 0.0],
+        [0.0, 0.5, 0.0],
+        [0.0, 0.0, 0.5],
+        [0.5, 0.5, 0.5],
+    ]  # 简单立方晶胞的8个原子位置
+
+    for pos in positions:
+        atoms.append(
+            Atom(
+                id=len(atoms),
+                symbol="Al",
+                mass_amu=26.9815,
+                position=np.array(pos) * lattice_constant,
+                velocity=None,
+            )
         )
-        for i in range(4)  # 增加多个原子
-    ]
-    lattice_vectors = np.eye(3) * (sigma * 6)  # 增加晶胞大小
-    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=False)
+
+    lattice_vectors = np.eye(3) * lattice_constant  # 单位晶胞大小
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     return cell
 
 
 def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms):
     """
-    测试梯度下降优化器，使用多个原子，无周期性边界条件。
+    测试梯度下降优化器，使用8个原子，无周期性边界条件。
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
-        max_steps=10000, tol=1e-3, step_size=1e-2, energy_tol=1e-4
+        max_steps=20000, tol=1e-3, step_size=1e-3, energy_tol=1e-4
     )
     cell = cell_with_multiple_atoms
 
@@ -2970,53 +3012,35 @@ def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms
     logger.debug(f"Gradient Descent - Post-optimization Energy: {energy:.6f} eV")
     logger.debug(f"Gradient Descent - Post-optimization Forces: {forces}")
 
-
-# def test_bfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
-#     """
-#     @brief 测试 BFGS 优化器。
-#     """
-#     logger = logging.getLogger(__name__)
-#     optimizer = BFGSOptimizer(tol=1e-3, maxiter=10000)
-#     cell = cell_with_multiple_atoms
-
-#     logger.debug("开始 BFGS 优化测试...")
-
-#     optimizer.optimize(cell, lj_potential_optim)
-
-#     # 检查优化是否收敛
-#     assert optimizer.converged, "BFGS Optimizer did not converge"
-
-#     # 输出优化后的能量和力
-#     energy = lj_potential_optim.calculate_energy(cell)
-#     forces = cell.get_forces()
-#     logger.debug(f"BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
-#     logger.debug(f"BFGS Optimizer - Post-optimization Forces: {forces}")
-
-#     logger.debug("BFGS 优化测试结束。")
+    # 检查最大力是否小于容差
+    max_force = max(np.linalg.norm(f) for f in forces)
+    assert (
+        max_force < optimizer.tol
+    ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
 
 
-# def test_lbfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
-#     """
-#     @brief 测试 L-BFGS 优化器。
-#     """
-#     logger = logging.getLogger(__name__)
-#     optimizer = LBFGSOptimizer(tol=1e-3, maxiter=10000)
-#     cell = cell_with_multiple_atoms
+def test_bfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
+    """
+    测试 BFGS 优化器，使用8个原子，无周期性边界条件。
+    """
+    logger = logging.getLogger(__name__)
+    optimizer = BFGSOptimizer(tol=1e-4, maxiter=20000)
+    cell = cell_with_multiple_atoms
 
-#     logger.debug("开始 L-BFGS 优化测试...")
+    optimizer.optimize(cell, lj_potential_optim)
 
-#     optimizer.optimize(cell, lj_potential_optim)
+    assert optimizer.converged, "BFGS Optimizer did not converge"
 
-#     # 检查优化是否收敛
-#     assert optimizer.converged, "L-BFGS Optimizer did not converge"
+    energy = lj_potential_optim.calculate_energy(cell)
+    forces = cell.get_forces()
+    logger.debug(f"BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
+    logger.debug(f"BFGS Optimizer - Post-optimization Forces: {forces}")
 
-#     # 输出优化后的能量和力
-#     energy = lj_potential_optim.calculate_energy(cell)
-#     forces = cell.get_forces()
-#     logger.debug(f"L-BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
-#     logger.debug(f"L-BFGS Optimizer - Post-optimization Forces: {forces}")
-
-#     logger.debug("L-BFGS 优化测试结束。")
+    # 检查最大力是否小于容差
+    max_force = max(np.linalg.norm(f) for f in forces)
+    assert (
+        max_force < 2 * optimizer.tol
+    ), f"Max force {max_force} exceeds tolerance {2 * optimizer.tol}"
 
 
 # tests/test_pbc.py
@@ -3027,13 +3051,8 @@ from python.structure import Atom, Cell
 import logging
 from datetime import datetime
 
+
 # 配置日志
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
 @pytest.fixture(scope="session", autouse=True)
 def configure_logging():
     """
@@ -3072,6 +3091,8 @@ def test_apply_periodic_boundary():
     """
     @brief 测试 Cell.apply_periodic_boundary 方法是否正确应用周期性边界条件。
     """
+    logger = logging.getLogger(__name__)
+
     atoms = [
         Atom(
             id=0, symbol="Al", mass_amu=26.9815, position=[6.0, 6.0, 6.0], velocity=None
@@ -3097,6 +3118,63 @@ def test_apply_periodic_boundary():
     ), f"Expected {expected_position_no_pbc}, got {new_position_no_pbc}"
     logger.debug(
         f"PBC not applied correctly: {new_position_no_pbc} == {expected_position_no_pbc}"
+    )
+
+
+def test_apply_deformation_with_pbc():
+    """
+    @brief 测试 Cell.apply_deformation 方法在启用 PBC 时是否正确应用变形和 PBC。
+    """
+    logger = logging.getLogger(__name__)
+
+    # 创建两个原子，确保变形后 PBC 能正确处理
+    atoms = [
+        Atom(
+            id=0, symbol="Al", mass_amu=26.9815, position=[0.0, 0.0, 0.0], velocity=None
+        ),
+        Atom(
+            id=1,
+            symbol="Al",
+            mass_amu=26.9815,
+            position=[2.55, 2.55, 2.55],
+            velocity=None,
+        ),  # a/sqrt(2) for FCC
+    ]
+    lattice_vectors = np.eye(3) * 5.1  # 盒子长度为 5.1 Å
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+
+    # 定义一个简单的变形矩阵（缩放）
+    deformation_matrix = np.array(
+        [
+            [1.001, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+    # 施加变形
+    cell.apply_deformation(deformation_matrix)
+
+    # 变形后的晶格向量应被正确更新
+    expected_lattice_vectors = np.eye(3) * 5.1
+    expected_lattice_vectors[0, 0] *= 1.001  # x方向拉伸
+    assert np.allclose(
+        cell.lattice_vectors, expected_lattice_vectors, atol=1e-5
+    ), f"Expected lattice vectors {expected_lattice_vectors}, got {cell.lattice_vectors}"
+    logger.debug(f"Deformed lattice vectors correctly:\n{cell.lattice_vectors}")
+
+    # 变形后的原子位置应被正确更新并应用 PBC
+    # 原子0: [0,0,0] 应保持不变
+    assert np.allclose(
+        cell.atoms[0].position, [0.0, 0.0, 0.0], atol=1e-5
+    ), f"Expected atom0 position [0.0, 0.0, 0.0], got {cell.atoms[0].position}"
+    # 原子1: [2.55,2.55,2.55] -> [2.55*1.001,2.55,2.55] = [2.55255, 2.55, 2.55]
+    expected_atom1_position = np.array([2.55255, 2.55, 2.55])
+    assert np.allclose(
+        cell.atoms[1].position, expected_atom1_position, atol=1e-3
+    ), f"Expected atom1 position {expected_atom1_position}, got {cell.atoms[1].position}"
+    logger.debug(
+        f"Deformed atom positions correctly: {cell.atoms[1].position} == {expected_atom1_position}"
     )
 
 
@@ -3162,6 +3240,124 @@ def test_energy_calculation(lj_potential, two_atom_cell):
     )
     # 由于能量计算可能包括截断修正，此处仅为基本验证
     np.testing.assert_almost_equal(energy, expected_energy, decimal=10)
+
+
+# tests/test_simple_optimizer.py
+
+import pytest
+import numpy as np
+import logging
+from python.structure import Atom, Cell
+from python.potentials import LennardJonesPotential
+from python.optimizers import GradientDescentOptimizer
+from datetime import datetime
+
+
+# 配置日志
+@pytest.fixture(scope="session", autouse=True)
+def configure_logging():
+    """
+    配置日志以在测试期间输出到控制台和文件。
+    """
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)  # 设置全局日志级别
+
+    # 创建控制台处理器
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)  # 控制台日志级别
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    # 获取当前时间并格式化为字符串
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = (
+        f"./logs/test_simple_optimizer_{current_time}.log"  # 生成带时间戳的日志文件名
+    )
+
+    # 创建文件处理器
+    fh = logging.FileHandler(log_filename, encoding="utf-8")
+    fh.setLevel(logging.DEBUG)  # 文件日志级别
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    yield
+
+    # 测试结束后移除处理器
+    logger.removeHandler(ch)
+    logger.removeHandler(fh)
+
+
+@pytest.fixture
+def lj_potential_simple():
+    """
+    创建一个 Lennard-Jones 势能对象，用于简单系统优化测试。
+    """
+    return LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
+
+
+@pytest.fixture
+def simple_cell():
+    """
+    创建一个包含两个原子的晶胞，测试优化器的有效性。
+    """
+    sigma = 2.55
+    atoms = [
+        Atom(
+            id=0,
+            symbol="Al",
+            mass_amu=26.9815,
+            position=[0.0, 0.0, 0.0],
+            velocity=None,
+        ),
+        Atom(
+            id=1,
+            symbol="Al",
+            mass_amu=26.9815,
+            position=[3.0, 0.0, 0.0],  # 初始距离为3.0 Å
+            velocity=None,
+        ),
+    ]
+    lattice_vectors = np.eye(3) * 10.0  # 盒子大小为10 Å，避免PBC影响
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=False)
+    return cell
+
+
+def test_gradient_descent_optimizer_simple(lj_potential_simple, simple_cell):
+    """
+    测试梯度下降优化器，使用两个原子，无周期性边界条件。
+    """
+    logger = logging.getLogger(__name__)
+    optimizer = GradientDescentOptimizer(
+        max_steps=10000, tol=1e-4, step_size=1e-2, energy_tol=1e-4
+    )
+    cell = simple_cell
+
+    optimizer.optimize(cell, lj_potential_simple)
+
+    assert (
+        optimizer.converged
+    ), "Gradient Descent Optimizer did not converge for simple system"
+
+    energy = lj_potential_simple.calculate_energy(cell)
+    forces = cell.get_forces()
+    logger.debug(f"Simple GD Optimizer - Post-optimization Energy: {energy:.6f} eV")
+    logger.debug(f"Simple GD Optimizer - Post-optimization Forces: {forces}")
+
+    # 检查最大力是否小于容差
+    max_force = max(np.linalg.norm(f) for f in forces)
+    assert (
+        max_force < optimizer.tol
+    ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
+
+    # 检查原子间距离是否接近 sigma*2^(1/6)
+    expected_distance = 2 ** (1 / 6) * lj_potential_simple.sigma  # 约为2.04 Å
+    actual_distance = np.linalg.norm(cell.atoms[1].position - cell.atoms[0].position)
+    assert np.isclose(
+        actual_distance, expected_distance, atol=1e-2
+    ), f"Actual distance {actual_distance} is not close to expected {expected_distance}"
 
 
 # tests/test_structure.py

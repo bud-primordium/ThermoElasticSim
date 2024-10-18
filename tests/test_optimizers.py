@@ -92,13 +92,13 @@ def cell_with_multiple_atoms():
         )
 
     lattice_vectors = np.eye(3) * lattice_constant  # 单位晶胞大小
-    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=False)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     return cell
 
 
 def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms):
     """
-    测试梯度下降优化器，使用4个原子，无周期性边界条件。
+    测试梯度下降优化器，使用8个原子，无周期性边界条件。
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
@@ -124,7 +124,7 @@ def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms
 
 def test_bfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
     """
-    测试 BFGS 优化器，使用4个原子，无周期性边界条件。
+    测试 BFGS 优化器，使用8个原子，无周期性边界条件。
     """
     logger = logging.getLogger(__name__)
     optimizer = BFGSOptimizer(tol=1e-4, maxiter=20000)

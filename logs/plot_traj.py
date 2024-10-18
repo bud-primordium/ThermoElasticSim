@@ -7,7 +7,7 @@ from matplotlib.animation import FuncAnimation
 
 def extract_data_from_simplified_log(log_file):
     """
-    从精简后的日志文件中提取原子位置、能量、最大力和能量变化等信息。
+    从精简后的日志文件中提取原子位置、能量、最大力、能量变化以及最小距离等信息。
     """
     data = {
         "steps": [],
@@ -15,13 +15,18 @@ def extract_data_from_simplified_log(log_file):
         "energies": [],
         "max_forces": [],
         "energy_changes": [],
+        "min_distances": [],
+        "atom_pairs": [],
     }
 
     step_pattern = re.compile(r"Step (\d+):")
-    position_pattern = re.compile(r"\[\s*([-.0-9e\s,]+)\s*\]")
+    position_pattern = re.compile(r"\[\s*([-.0-9e\s,]+)\s*\]")  # 这里的正则表达式不变
     energy_pattern = re.compile(r"Total Energy: ([-0-9.e+]+) eV")
     max_force_pattern = re.compile(r"Max Force: ([-0-9.e+]+) eV/Å")
     energy_change_pattern = re.compile(r"Energy Change: ([-0-9.e+]+) eV")
+    min_distance_pattern = re.compile(
+        r"Min Distance: ([0-9.e]+) Å between atoms (\d+) and (\d+)"
+    )
 
     with open(log_file, "r", encoding="utf-8") as f:
         current_positions = []
@@ -29,6 +34,8 @@ def extract_data_from_simplified_log(log_file):
         current_energy = None
         current_max_force = None
         current_energy_change = None
+        current_min_distance = None
+        current_atom_pair = None
 
         for line in f:
             # 匹配步骤
@@ -40,6 +47,8 @@ def extract_data_from_simplified_log(log_file):
                     data["energies"].append(current_energy)
                     data["max_forces"].append(current_max_force)
                     data["energy_changes"].append(current_energy_change)
+                    data["min_distances"].append(current_min_distance)
+                    data["atom_pairs"].append(current_atom_pair)
 
                 # 重置当前步骤数据
                 current_step = int(step_match.group(1))
@@ -47,12 +56,15 @@ def extract_data_from_simplified_log(log_file):
                 current_energy = None
                 current_max_force = None
                 current_energy_change = None
+                current_min_distance = None
+                current_atom_pair = None
 
             # 匹配原子位置
             position_match = position_pattern.findall(line)
             if position_match:
                 for pos in position_match:
-                    pos_list = [float(x) for x in pos.split(",")]
+                    # 修改这里：使用 split() 以空格分隔
+                    pos_list = [float(x) for x in pos.split()]
                     current_positions.append(pos_list)
 
             # 匹配能量、最大力和能量变化
@@ -68,6 +80,15 @@ def extract_data_from_simplified_log(log_file):
             if energy_change_match:
                 current_energy_change = float(energy_change_match.group(1))
 
+            # 匹配最小距离信息
+            min_distance_match = min_distance_pattern.search(line)
+            if min_distance_match:
+                current_min_distance = float(min_distance_match.group(1))
+                current_atom_pair = (
+                    int(min_distance_match.group(2)),
+                    int(min_distance_match.group(3)),
+                )
+
         # 处理最后一个步骤的数据
         if current_step is not None and current_positions:
             data["steps"].append(current_step)
@@ -75,6 +96,8 @@ def extract_data_from_simplified_log(log_file):
             data["energies"].append(current_energy)
             data["max_forces"].append(current_max_force)
             data["energy_changes"].append(current_energy_change)
+            data["min_distances"].append(current_min_distance)
+            data["atom_pairs"].append(current_atom_pair)
 
     return data
 
@@ -85,7 +108,28 @@ def update_plot(step, data, scatter, ax):
     """
     ax.cla()  # 清除当前的绘图内容
     pos = data["positions"][step]
-    scatter = ax.scatter(pos[:, 0], pos[:, 1], pos[:, 2])
+    scatter = ax.scatter(
+        pos[:, 0], pos[:, 1], pos[:, 2], c="blue"
+    )  # 普通原子显示为蓝色
+
+    # 获取最近两个原子的索引
+    atom_pair = data["atom_pairs"][step]
+    if atom_pair:
+        # 标红最近的两个原子
+        ax.scatter(
+            pos[atom_pair[0], 0],
+            pos[atom_pair[0], 1],
+            pos[atom_pair[0], 2],
+            c="red",
+            s=100,
+        )
+        ax.scatter(
+            pos[atom_pair[1], 0],
+            pos[atom_pair[1], 1],
+            pos[atom_pair[1], 2],
+            c="red",
+            s=100,
+        )
 
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
@@ -96,16 +140,25 @@ def update_plot(step, data, scatter, ax):
     energy = data["energies"][step]
     max_force = data["max_forces"][step]
     energy_change = data["energy_changes"][step]
+    min_distance = data["min_distances"][step]
 
     ax.text2D(0.05, 0.95, f"Energy: {energy:.6f} eV", transform=ax.transAxes)
     ax.text2D(0.05, 0.90, f"Max Force: {max_force:.6f} eV/Å", transform=ax.transAxes)
     ax.text2D(
         0.05, 0.85, f"Energy Change: {energy_change:.6e} eV", transform=ax.transAxes
     )
+    if min_distance and atom_pair:
+        ax.text2D(
+            0.05,
+            0.80,
+            f"Min Distance: {min_distance:.6f} Å between atoms {atom_pair[0]} and {atom_pair[1]}",
+            transform=ax.transAxes,
+        )
 
-    ax.set_xlim([-1, 3])  # 根据你的数据设定合理的x轴范围
-    ax.set_ylim([-1, 3])  # 根据你的数据设定合理的y轴范围
-    ax.set_zlim([-1, 3])  # 根据你的数据设定合理的z轴范围
+    # 动态调整 x、y、z 轴范围
+    ax.set_xlim([pos[:, 0].min() - 1, pos[:, 0].max() + 1])
+    ax.set_ylim([pos[:, 1].min() - 1, pos[:, 1].max() + 1])
+    ax.set_zlim([pos[:, 2].min() - 1, pos[:, 2].max() + 1])
 
     return (scatter,)
 
