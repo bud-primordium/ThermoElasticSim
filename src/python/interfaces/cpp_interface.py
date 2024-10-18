@@ -83,7 +83,7 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ctypes.POINTER(ctypes.c_double),  # xi (input/output)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi (input/output)
                 ctypes.c_double,  # Q
                 ctypes.c_double,  # target_temperature
             ]
@@ -183,26 +183,25 @@ class CppInterface:
         masses,
         velocities,
         forces,
-        xi,
+        xi_array,  # 现在接受一个numpy数组
         Q,
         target_temperature,
     ):
         """
         实现 Nose-Hoover 恒温器算法
         """
-        # 创建指向 xi 的指针
-        xi_ptr = ctypes.c_double(xi)
+        if not isinstance(xi_array, np.ndarray) or xi_array.size != 1:
+            raise ValueError("xi must be a numpy array with one element.")
         self.lib.nose_hoover(
             dt,
             num_atoms,
             masses,
             velocities,
             forces,
-            ctypes.byref(xi_ptr),
+            xi_array.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
             Q,
             target_temperature,
         )
-        return xi_ptr.value
 
     def nose_hoover_chain(
         self,

@@ -32,7 +32,7 @@ class GradientDescentOptimizer(Optimizer):
         for step in range(self.max_steps):
             # 计算最大力
             max_force = max(np.linalg.norm(atom.force) for atom in atoms)
-            print(f"Step {step}: Max force = {max_force}")
+            # print(f"Step {step}: Max force = {max_force}")
             if max_force < self.tol:
                 print(f"Converged after {step} steps")
                 self.converged = True

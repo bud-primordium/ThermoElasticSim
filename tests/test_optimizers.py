@@ -51,7 +51,7 @@ def test_optimizer_convergence():
     """
     @brief 测试优化器的收敛性。
     """
-    optimizer = GradientDescentOptimizer(max_steps=1000, tol=1e-6, step_size=1e-4)
+    optimizer = GradientDescentOptimizer(max_steps=1000, tol=1e-6, step_size=1e-3)
     # 创建一个简单的晶胞
     atoms = [
         Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),

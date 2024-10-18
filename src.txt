@@ -653,7 +653,7 @@ class ElasticConstantsSolver:
 
         # 使用最小二乘法求解 C * strains.T = stresses.T
         # 这里 C 是一个 6x6 矩阵，每一行对应一个应力分量的线性组合
-        C = np.linalg.lstsq(strains, stresses, rcond=None)[0]
+        C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
         return C
 
 
@@ -877,8 +877,12 @@ class StressCalculatorLJ(StressCalculator):
         forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
         box_lengths = cell.get_box_lengths()
+
+        # Initialize stress tensor array
+        stress_tensor = np.zeros(9, dtype=np.float64)
+
         # 调用 C++ 实现的应力计算函数
-        stress_tensor = self.cpp_interface.compute_stress(
+        self.cpp_interface.compute_stress(
             num_atoms,
             positions,
             velocities,
@@ -886,7 +890,11 @@ class StressCalculatorLJ(StressCalculator):
             masses,
             volume,
             box_lengths,
+            stress_tensor,
         )
+
+        # Reshape the stress tensor to 3x3 matrix
+        stress_tensor = stress_tensor.reshape(3, 3)
         return stress_tensor
 
 
@@ -933,10 +941,11 @@ class GradientDescentOptimizer(Optimizer):
     @brief 梯度下降优化器
     """
 
-    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-4):
+    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-3):
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
+        self.converged = False  # 添加收敛标志
 
     def optimize(self, cell, potential):
         atoms = cell.atoms
@@ -947,6 +956,7 @@ class GradientDescentOptimizer(Optimizer):
             print(f"Step {step}: Max force = {max_force}")
             if max_force < self.tol:
                 print(f"Converged after {step} steps")
+                self.converged = True
                 break
             # 更新 position
             for atom in atoms:
@@ -958,6 +968,7 @@ class GradientDescentOptimizer(Optimizer):
             potential.calculate_forces(cell)
         else:
             print("Optimization did not converge within the maximum number of steps.")
+            self.converged = False
 
 
 class BFGSOptimizer(Optimizer):
@@ -968,10 +979,13 @@ class BFGSOptimizer(Optimizer):
 
     def __init__(self, tol=1e-6):
         self.tol = tol
+        self.converged = False  # 添加收敛标志
 
     def optimize(self, cell, potential):
-        num_atoms = len(cell.atoms)
-        initial_positions = np.array([atom.position for atom in cell.atoms]).flatten()
+        num_atoms = cell.num_atoms
+        initial_positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
 
         def objective(x):
             # Set positions
@@ -1006,11 +1020,13 @@ class BFGSOptimizer(Optimizer):
         # Recalculate forces
         potential.calculate_forces(cell)
 
+        self.converged = result.success
+
 
 # src/python/potentials.py
 
 import numpy as np
-from python.interfaces.cpp_interface import CppInterface
+from .interfaces.cpp_interface import CppInterface
 
 
 class Potential:
@@ -1048,12 +1064,13 @@ class LennardJonesPotential(Potential):
         self.cpp_interface = CppInterface("lennard_jones")
 
     def calculate_forces(self, cell):
-        num_atoms = len(cell.atoms)
-        positions = np.array(
-            [atom.position for atom in cell.atoms], dtype=np.float64
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
         ).flatten()
-        forces = np.zeros_like(positions)
-        box_lengths = cell.get_box_lengths()
+        forces = np.zeros_like(positions, dtype=np.float64)
+        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+
         self.cpp_interface.calculate_forces(
             num_atoms,
             positions,
@@ -1064,15 +1081,17 @@ class LennardJonesPotential(Potential):
             box_lengths,
         )
         # 更新原子力
+        forces = forces.reshape((num_atoms, 3))
         for i, atom in enumerate(cell.atoms):
-            atom.force = forces[3 * i : 3 * i + 3]
+            atom.force = forces[i]
 
     def calculate_energy(self, cell):
-        num_atoms = len(cell.atoms)
-        positions = np.array(
-            [atom.position for atom in cell.atoms], dtype=np.float64
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
         ).flatten()
-        box_lengths = cell.get_box_lengths()
+        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+
         energy = self.cpp_interface.calculate_energy(
             num_atoms,
             positions,
@@ -1099,9 +1118,13 @@ class Atom:
         self.id = id
         self.symbol = symbol
         self.mass = mass
-        self.position = np.array(position)
-        self.velocity = np.zeros(3) if velocity is None else np.array(velocity)
-        self.force = np.zeros(3)
+        self.position = np.array(position, dtype=np.float64)
+        self.velocity = (
+            np.zeros(3, dtype=np.float64)
+            if velocity is None
+            else np.array(velocity, dtype=np.float64)
+        )
+        self.force = np.zeros(3, dtype=np.float64)
 
     def update_position(self, delta_r):
         self.position += delta_r
@@ -1117,7 +1140,7 @@ class Cell:
     """
 
     def __init__(self, lattice_vectors, atoms, pbc_enabled=True):
-        self.lattice_vectors = np.array(lattice_vectors)
+        self.lattice_vectors = np.array(lattice_vectors, dtype=np.float64)
         self.atoms = atoms  # 原子列表
         self.volume = self.calculate_volume()
         self.pbc_enabled = pbc_enabled
@@ -1168,6 +1191,38 @@ class Cell:
         ]
         return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
 
+    @property
+    def num_atoms(self):
+        """
+        @property num_atoms
+        @brief 返回原子数量。
+        """
+        return len(self.atoms)
+
+    def get_positions(self):
+        """
+        @brief 获取所有原子的位置信息。
+
+        @return numpy.ndarray, 形状为 (num_atoms, 3)
+        """
+        return np.array([atom.position for atom in self.atoms], dtype=np.float64)
+
+    def get_velocities(self):
+        """
+        @brief 获取所有原子的速度信息。
+
+        @return numpy.ndarray, 形状为 (num_atoms, 3)
+        """
+        return np.array([atom.velocity for atom in self.atoms], dtype=np.float64)
+
+    def get_forces(self):
+        """
+        @brief 获取所有原子的力信息。
+
+        @return numpy.ndarray, 形状为 (num_atoms, 3)
+        """
+        return np.array([atom.force for atom in self.atoms], dtype=np.float64)
+
 
 # src/python/thermostats.py
 
@@ -1195,34 +1250,38 @@ class NoseHooverThermostat(Thermostat):
         self.target_temperature = target_temperature
         self.time_constant = time_constant
         self.cpp_interface = CppInterface("nose_hoover")
+        self.xi = 0.0  # 初始热浴变量
+        self.Q = 10.0  # 热浴质量参数，可根据需要调整
 
-    def apply_thermostat(self, cell, dt, xi, Q):
-        num_atoms = len(cell.atoms)
-        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
+    def apply(self, atoms, dt):
+        num_atoms = len(atoms)
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
         velocities = np.array(
-            [atom.velocity for atom in cell.atoms], dtype=np.float64
+            [atom.velocity for atom in atoms], dtype=np.float64
         ).flatten()
-        forces = np.array(
-            [atom.force for atom in cell.atoms], dtype=np.float64
-        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
 
-        updated_xi = self.cpp_interface.nose_hoover(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            xi,
-            Q,
-            self.target_temperature,
-        )
+        # 调用 C++ Nose-Hoover 函数
+        try:
+            updated_xi = self.cpp_interface.nose_hoover(
+                dt,
+                num_atoms,
+                masses,
+                velocities,
+                forces,
+                self.xi,
+                self.Q,
+                self.target_temperature,
+            )
+            self.xi = updated_xi
+        except OSError as e:
+            print(f"C++ Nose-Hoover 调用失败: {e}")
+            raise
 
         # 更新原子的速度
         velocities = velocities.reshape((num_atoms, 3))
-        for i, atom in enumerate(cell.atoms):
+        for i, atom in enumerate(atoms):
             atom.velocity = velocities[i]
-
-        return updated_xi
 
 
 class NoseHooverChainThermostat(Thermostat):
@@ -1444,7 +1503,7 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
-from python.utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
+from ..utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
 
 
 class CppInterface:
@@ -1523,11 +1582,11 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ctypes.c_double,  # xi
+                ctypes.POINTER(ctypes.c_double),  # xi (input/output)
                 ctypes.c_double,  # Q
                 ctypes.c_double,  # target_temperature
             ]
-            self.lib.nose_hoover.restype = ctypes.c_double
+            self.lib.nose_hoover.restype = None
 
         elif lib_name == "nose_hoover_chain":
             self.lib.nose_hoover_chain.argtypes = [
@@ -1537,7 +1596,8 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi_chain
-                ctypes.c_double,  # Q
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
+                ctypes.c_int,  # chain_length
                 ctypes.c_double,  # target_temperature
             ]
             self.lib.nose_hoover_chain.restype = None
@@ -1629,17 +1689,19 @@ class CppInterface:
         """
         实现 Nose-Hoover 恒温器算法
         """
-        updated_xi = self.lib.nose_hoover(
+        # 创建指向 xi 的指针
+        xi_ptr = ctypes.c_double(xi)
+        self.lib.nose_hoover(
             dt,
             num_atoms,
             masses,
             velocities,
             forces,
-            xi,
+            ctypes.byref(xi_ptr),
             Q,
             target_temperature,
         )
-        return updated_xi
+        return xi_ptr.value
 
     def nose_hoover_chain(
         self,
@@ -1650,6 +1712,7 @@ class CppInterface:
         forces,
         xi_chain,
         Q,
+        chain_length,
         target_temperature,
     ):
         """
@@ -1663,6 +1726,7 @@ class CppInterface:
             forces,
             xi_chain,
             Q,
+            chain_length,
             target_temperature,
         )
 

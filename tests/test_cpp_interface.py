@@ -46,8 +46,16 @@ def test_calculate_energy(lj_interface):
 
     # 检查能量是否为浮点数
     assert isinstance(energy, float), "Energy is not a float."
-    # 根据原子距离检查能量是否合理（这里假设能量应为负数，因为原子相距小于截断半径）
-    assert energy < 0, f"Energy {energy} is not less than 0."
+    # 根据 r = sigma，能量应为 -shift，即正值
+    expected_shift = (
+        4.0 * 0.0103 * ((2.55 / (2.5 * 2.55)) ** 12 - (2.55 / (2.5 * 2.55)) ** 6)
+    )
+    expected_energy = (
+        -expected_shift
+    )  # 因为 U(r) = 4ε[(σ/r)^12 - (σ/r)^6] - shift, 在 r=σ, U(r)=-shift
+    assert np.isclose(
+        energy, expected_energy, atol=1e-6
+    ), f"Energy {energy} is not close to expected {expected_energy}."
 
 
 def test_calculate_forces(lj_interface):
@@ -72,9 +80,25 @@ def test_calculate_forces(lj_interface):
     # 重新形状为 (num_atoms, 3)
     forces = forces.reshape((num_atoms, 3))
 
-    # 检查力是否合理
-    # 由于两个原子相距 sigma, 理论上力为0
-    np.testing.assert_array_almost_equal(forces, np.zeros_like(forces), decimal=6)
+    # 计算期望的力
+    epsilon = 0.0103
+    expected_force_scalar = (
+        48.0
+        * epsilon
+        * (pow(2.55 / (2.5 * 2.55), 12) - 0.5 * pow(2.55 / (2.5 * 2.55), 6))
+    )
+    expected_force = (
+        48.0 * epsilon * (pow(2.55 / 2.55, 12) - 0.5 * pow(2.55 / 2.55, 6)) / 2.55
+    )  # At r = sigma
+
+    # 理论上，在 r = sigma，力 = 24 * epsilon
+    expected_force_theory = 24.0 * epsilon  # 0.2472 eV/Å
+
+    # 检查力是否接近理论值
+    np.testing.assert_allclose(forces[0, 0], expected_force_theory, atol=1e-6)
+    np.testing.assert_allclose(forces[1, 0], -expected_force_theory, atol=1e-6)
+    # 其他方向的力应为零
+    np.testing.assert_allclose(forces[:, 1:], 0.0, atol=1e-6)
 
 
 def test_nose_hoover(nose_hoover_interface):
@@ -99,7 +123,7 @@ def test_nose_hoover(nose_hoover_interface):
         masses,
         velocities,
         forces,
-        xi_array,
+        xi_array,  # 传递数组
         Q,
         target_temperature,
     )
@@ -144,6 +168,3 @@ def test_nose_hoover_chain(nose_hoover_chain_interface):
     assert xi_chain.shape == (chain_length,), "xi_chain shape mismatch."
     # 检查是否有变化
     assert not np.all(xi_chain == 0.0), "xi_chain was not updated."
-
-
-# Optionally, add more tests for other C++ functions

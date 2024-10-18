@@ -59,7 +59,7 @@ class ElasticConstantsCalculator:
         self.strain_calculator = StrainCalculator()
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
-                max_steps=1000, tol=1e-6, step_size=1e-4
+                max_steps=1000, tol=1e-6, step_size=1e-3
             )
         elif optimizer_type == "BFGS":
             self.optimizer = BFGSOptimizer(tol=1e-6)

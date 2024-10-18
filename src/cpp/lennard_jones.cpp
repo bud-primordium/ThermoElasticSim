@@ -34,7 +34,8 @@ extern "C"
         }
 
         double cutoff_sq = cutoff * cutoff;
-        double shift = 4.0 * epsilon * (pow(sigma / cutoff, 12) - pow(sigma / cutoff, 6));
+        // 计算力的截断修正
+        double force_shift = 48.0 * epsilon * (pow(sigma / cutoff, 12) - 0.5 * pow(sigma / cutoff, 6));
 
         // 力的计算
         for (int i = 0; i < num_atoms; ++i)
@@ -58,15 +59,13 @@ extern "C"
 
                 if (r2 < cutoff_sq)
                 {
+                    double r = sqrt(r2);
                     double r2_inv = 1.0 / r2;
-                    double r6_inv = r2_inv * r2_inv * r2_inv;
+                    double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
                     double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5) * r2_inv;
 
-                    // 力的截断修正，确保在截断半径处力为零
-                    double r = sqrt(r2);
-                    double cutoff_r6_inv = pow(sigma / cutoff, 6);
-                    double cutoff_force = 48.0 * epsilon * cutoff_r6_inv * (cutoff_r6_inv - 0.5) / (cutoff * cutoff);
-                    force_scalar -= cutoff_force / r;
+                    // 力的截断修正
+                    force_scalar -= force_shift;
 
                     for (int k = 0; k < 3; ++k)
                     {
@@ -125,8 +124,8 @@ extern "C"
                 if (r2 < cutoff_sq)
                 {
                     double r2_inv = 1.0 / r2;
-                    double r6_inv = r2_inv * r2_inv * r2_inv;
-                    double potential = 4.0 * epsilon * (pow(sigma * sigma * r2_inv, 6) - pow(sigma * sigma * r2_inv, 3)) - shift;
+                    double r6_inv = pow(sigma * sigma * r2_inv, 3); // (sigma/r)^6
+                    double potential = 4.0 * epsilon * (r6_inv * r6_inv - r6_inv) - shift;
                     energy += potential;
                 }
             }
