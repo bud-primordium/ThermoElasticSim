@@ -63,7 +63,7 @@ def test_md_simulation(simple_cell, lj_potential, integrator):
         cell=simple_cell,
         potential=lj_potential,
         integrator=integrator,
-        thermostat=None,  # 先不加恒温器。
+        thermostat=None,
     )
     md_simulator.run(steps=10, dt=1.0)  # dt 单位为 fs
 

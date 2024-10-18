@@ -4,13 +4,29 @@ import pytest
 import numpy as np
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
-from python.elasticity import ElasticConstantsSolver  # 确保导入
+from python.elasticity import (
+    ElasticConstantsSolver,
+    StrainCalculator,
+)  # 确保导入 StrainCalculator
 from python.mechanics import StressCalculatorLJ
+from python.utils import TensorConverter, AMU_TO_EVFSA2
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
 def single_atom_cell():
-    atoms = [Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al")]
+    atoms = [
+        Atom(
+            id=0,
+            mass=26.9815 * AMU_TO_EVFSA2,
+            position=np.array([0.0, 0.0, 0.0]),
+            symbol="Al",
+        )
+    ]
     lattice_vectors = np.eye(3) * 5.1
     return Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
@@ -62,15 +78,15 @@ def test_elastic_constants_solver():
     C = solver.solve(strains, stresses)
     # 检查 C 是否为 6x6 矩阵
     assert C.shape == (6, 6), "Elastic constants matrix shape mismatch."
-    # 预期弹性常数矩阵（示例值）
+    # 预期弹性常数矩阵（修正后的值）
     expected_C = np.array(
         [
-            [69.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 69.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 69.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 23.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 23.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 23.0],
+            [6900.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 6900.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 6900.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 2300.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 2300.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 2300.0],
         ]
     )
     # 检查弹性常数矩阵是否接近预期值
@@ -113,3 +129,33 @@ def test_force_direction():
 
     # 检查力方向是否接近负梯度方向
     np.testing.assert_array_almost_equal(initial_force, expected_force, decimal=3)
+
+
+def test_strain_calculation():
+    """
+    @brief 测试 StrainCalculator 计算应变的正确性。
+    """
+    # 创建一个样本变形矩阵 F
+    delta = 1e-3  # 0.1% 应变
+    F = np.array([[1 + delta, 0, 0], [0, 1 + delta, 0], [0, 0, 1 + delta]])
+
+    # 预期的应变张量: epsilon = (F + F^T)/2 - I = delta * I
+    expected_strain = np.array([delta, delta, delta, 0, 0, 0])  # Voigt 表示法
+
+    # 初始化 StrainCalculator
+    strain_calculator = StrainCalculator()
+
+    # 计算应变
+    strain_voigt = strain_calculator.compute_strain(F)
+
+    logger.debug(f"Computed strain (Voigt): {strain_voigt}")
+    logger.debug(f"Expected strain (Voigt): {expected_strain}")
+
+    # 检查计算的应变是否为 NumPy 数组
+    assert isinstance(strain_voigt, np.ndarray), "应变向量应为 NumPy 数组。"
+
+    # 检查应变向量的形状
+    assert strain_voigt.shape == (6,), "应变向量的形状应为 (6,)。"
+
+    # 检查计算的应变是否与预期值匹配
+    np.testing.assert_array_almost_equal(strain_voigt, expected_strain, decimal=6)

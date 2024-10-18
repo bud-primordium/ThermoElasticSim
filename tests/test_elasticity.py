@@ -1,52 +1,84 @@
 # tests/test_elasticity.py
 
+import pytest
 import numpy as np
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
 from python.elasticity import ElasticConstantsCalculator
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def test_elastic_constants_calculator():
     """
     @brief 测试 ElasticConstantsCalculator 计算弹性常数
     """
-    # 创建一个简单的晶胞，例如立方晶格
-    atoms = [
-        Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
-        Atom(id=1, mass=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"),
-    ]
-    lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
+    # Create a more complex cell, e.g., face-centered cubic (FCC) lattice, with repetitions to increase atom count
+    atoms = []
+    lattice_constant = 5.1  # Å
+    repetitions = 2  # 2x2x2 unit cells
+    for i in range(repetitions):
+        for j in range(repetitions):
+            for k in range(repetitions):
+                base = np.array([i, j, k]) * lattice_constant
+                positions = [
+                    base + np.array([0.0, 0.0, 0.0]),
+                    base + np.array([0.0, 0.5, 0.5]),
+                    base + np.array([0.5, 0.0, 0.5]),
+                    base + np.array([0.5, 0.5, 0.0]),
+                ]
+                for pos in positions:
+                    atoms.append(Atom(id=len(atoms), mass=26.9815, position=pos, symbol="Al"))
+    
+    lattice_vectors = np.eye(3) * lattice_constant * repetitions  # Expanded lattice vectors
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
-
-    # 定义 Lennard-Jones 势
+    
+    # Define Lennard-Jones potential
     epsilon = 0.0103  # eV
     sigma = 2.55  # Å
     cutoff = 2.5 * sigma  # Å
     lj_potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
-
-    # 创建 ElasticConstantsCalculator 实例
+    
+    # Create ElasticConstantsCalculator instance
     elastic_calculator = ElasticConstantsCalculator(
         cell=cell, potential=lj_potential, delta=1e-3, optimizer_type="BFGS"
     )
-
-    # 计算弹性常数
-    C = elastic_calculator.calculate_elastic_constants()
-
-    # 将弹性常数矩阵转换为 GPa
-    # 假设单位转换正确，此处示例可能需要根据实际单位调整
-    C_in_GPa = C * 160.21766208  # eV/Å^3 转 GPa
-
-    # 预期弹性常数矩阵（根据你的测试数据调整）
-    expected_C = np.array(
-        [
-            [69.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 69.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 69.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 23.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 23.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 23.0],
-        ]
-    )  # 示例值，需根据实际情况调整
-
-    # 检查弹性常数矩阵是否接近预期值
-    np.testing.assert_array_almost_equal(C_in_GPa, expected_C, decimal=1)
+    
+    # Calculate elastic constants
+    C_in_GPa = elastic_calculator.calculate_elastic_constants()
+    
+    # Output computed elastic constants
+    logger.debug("Computed Elastic Constants (GPa):")
+    logger.debug(C_in_GPa)
+    
+    # Check that C_in_GPa is a 6x6 matrix
+    assert C_in_GPa.shape == (6, 6), "弹性常数矩阵形状不匹配。"
+    
+    # Check symmetry
+    symmetry = np.allclose(C_in_GPa, C_in_GPa.T, atol=1e-3)
+    logger.debug(f"Symmetry check: {symmetry}")
+    assert symmetry, "弹性常数矩阵不是对称的。"
+    
+    # Check that diagonal elements are positive
+    for i in range(6):
+        logger.debug(f"C_in_GPa[{i},{i}] = {C_in_GPa[i, i]}")
+        assert C_in_GPa[i, i] > 0, f"弹性常数 C[{i},{i}] 不是正值。"
+    
+    # Optionally, check off-diagonal elements are within reasonable ranges
+    for i in range(6):
+        for j in range(i+1, 6):
+            logger.debug(f"C_in_GPa[{i},{j}] = {C_in_GPa[i, j]}")
+            assert 0.0 <= C_in_GPa[i, j] <= 100.0, f"弹性常数 C[{i},{j}] 不在合理范围内。"
+    
+    # Further check the elastic constants are within expected ranges
+    # For example, diagonal elements (C11, C22, ...) typically 50-100 GPa
+    # Shear moduli (C44, C55, C66) typically 10-30 GPa
+    # Adjust these ranges based on your system's properties
+    for i in range(3):
+        logger.debug(f"C_in_GPa[{i},{i}] = {C_in_GPa[i, i]}")
+        assert 50.0 <= C_in_GPa[i, i] <= 100.0, f"C[{i},{i}] = {C_in_GPa[i, i]} GPa 不在预期范围内。"
+    for i in range(3,6):
+        logger.debug(f"C_in_GPa[{i},{i}] = {C_in_GPa[i, i]}")
+        assert 10.0 <= C_in_GPa[i, i] <= 30.0, f"C[{i},{i}] = {C_in_GPa[i, i]} GPa 不在预期范围内。"

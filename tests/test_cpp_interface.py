@@ -32,8 +32,10 @@ def test_calculate_energy(lj_interface):
     测试 C++ 实现的 Lennard-Jones 势能计算函数
     """
     num_atoms = 2
-    positions = np.array([0.0, 0.0, 0.0, 2.55, 0.0, 0.0], dtype=np.float64)
-    box_lengths = np.array([5.1, 5.1, 5.1], dtype=np.float64)
+    positions = np.array(
+        [0.0, 0.0, 0.0, 2.55, 0.0, 0.0], dtype=np.float64
+    )  # 两个原子，距离 r = σ = 2.55 Å
+    box_lengths = np.array([5.1, 5.1, 5.1], dtype=np.float64)  # 模拟盒子长度
 
     energy = lj_interface.calculate_energy(
         num_atoms,
@@ -46,13 +48,10 @@ def test_calculate_energy(lj_interface):
 
     # 检查能量是否为浮点数
     assert isinstance(energy, float), "Energy is not a float."
-    # 根据 r = sigma，能量应为 -shift，即正值
-    expected_shift = (
-        4.0 * 0.0103 * ((2.55 / (2.5 * 2.55)) ** 12 - (2.55 / (2.5 * 2.55)) ** 6)
-    )
-    expected_energy = (
-        -expected_shift
-    )  # 因为 U(r) = 4ε[(σ/r)^12 - (σ/r)^6] - shift, 在 r=σ, U(r)=-shift
+
+    # 根据 r = sigma, 势能应为 0
+    expected_energy = 0.0
+
     assert np.isclose(
         energy, expected_energy, atol=1e-6
     ), f"Energy {energy} is not close to expected {expected_energy}."
@@ -82,14 +81,6 @@ def test_calculate_forces(lj_interface):
 
     # 计算期望的力
     epsilon = 0.0103
-    expected_force_scalar = (
-        48.0
-        * epsilon
-        * (pow(2.55 / (2.5 * 2.55), 12) - 0.5 * pow(2.55 / (2.5 * 2.55), 6))
-    )
-    expected_force = (
-        48.0 * epsilon * (pow(2.55 / 2.55, 12) - 0.5 * pow(2.55 / 2.55, 6)) / 2.55
-    )  # At r = sigma
 
     # 理论上，在 r = sigma，力 = 24 * epsilon
     expected_force_theory = 24.0 * epsilon  # 0.2472 eV/Å

@@ -59,4 +59,4 @@ def test_energy_calculation(lj_potential, two_atom_cell):
         * ((lj_potential.sigma / r) ** 12 - (lj_potential.sigma / r) ** 6)
     )
     # 由于能量计算可能包括截断修正，此处仅为基本验证
-    np.testing.assert_almost_equal(energy, expected_energy, decimal=3)
+    np.testing.assert_almost_equal(energy, expected_energy, decimal=10)
