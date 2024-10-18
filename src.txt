@@ -106,6 +106,62 @@ extern "C"
             }
         }
     }
+
+    /**
+     * @brief 计算 Lennard-Jones 势能，使用最小镜像法处理周期性边界条件
+     *
+     * @param num_atoms 原子数量
+     * @param positions 原子位置数组（长度为 3*num_atoms）
+     * @param epsilon Lennard-Jones 势参数 ε，单位为 eV
+     * @param sigma Lennard-Jones 势参数 σ，单位为 Å
+     * @param cutoff 截断半径，单位为 Å
+     * @param box_lengths 模拟盒子在每个维度的长度（长度为 3）
+     * @return 总 Lennard-Jones 势能，单位为 eV
+     */
+    double calculate_energy(
+        int num_atoms,
+        const double *positions,
+        double epsilon,
+        double sigma,
+        double cutoff,
+        const double *box_lengths // 长度为 3
+    )
+    {
+        double energy = 0.0;
+        double cutoff_sq = cutoff * cutoff;
+        double shift = 4.0 * epsilon * (pow(sigma / cutoff, 12) - pow(sigma / cutoff, 6));
+
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            const double *ri = &positions[3 * i];
+            for (int j = i + 1; j < num_atoms; ++j)
+            {
+                const double *rj = &positions[3 * j];
+                double rij[3];
+                for (int k = 0; k < 3; ++k)
+                {
+                    rij[k] = ri[k] - rj[k];
+                    // 最小镜像法
+                    if (rij[k] > 0.5 * box_lengths[k])
+                        rij[k] -= box_lengths[k];
+                    else if (rij[k] < -0.5 * box_lengths[k])
+                        rij[k] += box_lengths[k];
+                }
+
+                double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
+
+                if (r2 < cutoff_sq)
+                {
+                    double r2_inv = 1.0 / r2;
+                    double r6_inv = r2_inv * r2_inv * r2_inv;
+                    double potential = 4.0 * epsilon * (pow(sigma * sigma * r2_inv, 6) - pow(sigma * sigma * r2_inv, 3)) - shift;
+                    energy += potential;
+                }
+            }
+        }
+
+        return energy;
+    }
 }
 
 
@@ -564,24 +620,62 @@ class Deformer:
 # src/python/elasticity.py
 
 import numpy as np
-from .mechanics import StressCalculatorLJ, ElasticConstantsSolver
+from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter
 
 
+class ElasticConstantsSolver:
+    """
+    @class ElasticConstantsSolver
+    @brief 计算弹性常数的求解器类。
+    """
+
+    def solve(self, strains, stresses):
+        """
+        @brief 通过最小二乘法求解弹性常数矩阵。
+
+        @param strains 应变数据列表，形状为 (N, 6)
+        @param stresses 应力数据列表，形状为 (N, 6)
+        @return 弹性常数矩阵，形状为 (6, 6)
+        """
+        strains = np.array(strains)
+        stresses = np.array(stresses)
+
+        # 检查输入数据维度
+        if strains.ndim != 2 or stresses.ndim != 2:
+            raise ValueError("Strains and stresses must be 2D arrays.")
+        if strains.shape[0] != stresses.shape[0]:
+            raise ValueError("Number of strain and stress samples must be equal.")
+        if strains.shape[1] != 6 or stresses.shape[1] != 6:
+            raise ValueError("Strains and stresses must have 6 components each.")
+
+        # 使用最小二乘法求解 C * strains.T = stresses.T
+        # 这里 C 是一个 6x6 矩阵，每一行对应一个应力分量的线性组合
+        C = np.linalg.lstsq(strains, stresses, rcond=None)[0]
+        return C
+
+
 class ElasticConstantsCalculator:
     """
     @class ElasticConstantsCalculator
-    @brief 用于计算弹性常数的类
+    @brief 用于计算弹性常数的类。
     """
 
-    def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
+    def __init__(self, cell, potential, delta=1e-3, optimizer_type="BFGS"):
+        """
+        @param cell 晶胞对象
+        @param potential 势能对象
+        @param delta 变形大小
+        @param optimizer_type 优化器类型，支持 'GD'（梯度下降）和 'BFGS'
+        """
         self.cell = cell
         self.potential = potential
         self.delta = delta
         self.deformer = Deformer(delta)
         self.stress_calculator = StressCalculatorLJ()
+        self.strain_calculator = StrainCalculator()
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
                 max_steps=1000, tol=1e-6, step_size=1e-4
@@ -593,9 +687,9 @@ class ElasticConstantsCalculator:
 
     def calculate_elastic_constants(self):
         """
-        @brief 计算弹性常数矩阵
+        @brief 计算弹性常数矩阵。
 
-        @return 弹性常数矩阵，形状为 (6, 6)
+        @return 弹性常数矩阵，形状为 (6, 6)。
         """
         F_list = self.deformer.generate_deformation_matrices()
         strains = []
@@ -614,16 +708,13 @@ class ElasticConstantsCalculator:
                 deformed_cell, self.potential
             )
             # 计算应变
-            strain_tensor = 0.5 * (np.dot(F.T, F) - np.identity(3))
-            # 转换为 Voigt 表示
-            strain_voigt = TensorConverter.to_voigt(strain_tensor)
+            strain_voigt = self.strain_calculator.compute_strain(F)
+            # 转换应力张量为 Voigt 表示
             stress_voigt = TensorConverter.to_voigt(stress_tensor)
             strains.append(strain_voigt)
             stresses.append(stress_voigt)
 
-        # 拟合弹性常数矩阵
-        strains = np.array(strains)
-        stresses = np.array(stresses)
+        # 使用弹性常数求解器
         elastic_solver = ElasticConstantsSolver()
         C = elastic_solver.solve(strains, stresses)
         return C
@@ -757,7 +848,7 @@ from .interfaces.cpp_interface import CppInterface
 class StressCalculator:
     """
     @class StressCalculator
-    @brief 应力计算器基类
+    @brief 应力计算器基类。
     """
 
     def compute_stress(self, cell, potential):
@@ -767,7 +858,7 @@ class StressCalculator:
 class StressCalculatorLJ(StressCalculator):
     """
     @class StressCalculatorLJ
-    @brief 基于 Lennard-Jones 势的应力计算器
+    @brief 基于 Lennard-Jones 势的应力计算器。
     """
 
     def __init__(self):
@@ -797,6 +888,27 @@ class StressCalculatorLJ(StressCalculator):
             box_lengths,
         )
         return stress_tensor
+
+
+class StrainCalculator:
+    """
+    @class StrainCalculator
+    @brief 应变计算器类。
+    """
+
+    def compute_strain(self, F):
+        """
+        @brief 计算应变张量。
+
+        @param F 变形矩阵
+        @return 应变向量，形状为 (6,)
+        """
+        strain_tensor = 0.5 * (np.dot(F.T, F) - np.identity(3))
+        # 转换为 Voigt 表示
+        strain_voigt = TensorConverter.to_voigt(strain_tensor)
+        # 对剪切分量乘以 2
+        strain_voigt[3:] *= 2
+        return strain_voigt
 
 
 # src/python/optimizers.py
@@ -898,7 +1010,7 @@ class BFGSOptimizer(Optimizer):
 # src/python/potentials.py
 
 import numpy as np
-from .interfaces.cpp_interface import CppInterface
+from python.interfaces.cpp_interface import CppInterface
 
 
 class Potential:
@@ -1079,37 +1191,38 @@ class NoseHooverThermostat(Thermostat):
     @brief Nose-Hoover 恒温器的实现
     """
 
-    def __init__(self, target_temperature, time_constant, Q=None):
+    def __init__(self, target_temperature, time_constant):
         self.target_temperature = target_temperature
-        self.Q = Q  # 热浴质量参数
-        self.xi = 0.0  # 热浴变量初始值
+        self.time_constant = time_constant
         self.cpp_interface = CppInterface("nose_hoover")
-        if self.Q is None:
-            # 根据时间常数估计 Q
-            kB = 8.617333262e-5  # eV/K
-            self.Q = time_constant * time_constant * 3 * kB * target_temperature
 
-    def apply(self, atoms, dt):
-        num_atoms = len(atoms)
-        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+    def apply_thermostat(self, cell, dt, xi, Q):
+        num_atoms = len(cell.atoms)
+        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
         velocities = np.array(
-            [atom.velocity for atom in atoms], dtype=np.float64
+            [atom.velocity for atom in cell.atoms], dtype=np.float64
         ).flatten()
-        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
-        # 调用 C++ 函数
-        self.xi = self.cpp_interface.nose_hoover(
+        forces = np.array(
+            [atom.force for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+
+        updated_xi = self.cpp_interface.nose_hoover(
             dt,
             num_atoms,
             masses,
             velocities,
             forces,
-            self.xi,
-            self.Q,
+            xi,
+            Q,
             self.target_temperature,
         )
-        # 更新原子速度
-        for i, atom in enumerate(atoms):
-            atom.velocity = velocities[3 * i : 3 * i + 3]
+
+        # 更新原子的速度
+        velocities = velocities.reshape((num_atoms, 3))
+        for i, atom in enumerate(cell.atoms):
+            atom.velocity = velocities[i]
+
+        return updated_xi
 
 
 class NoseHooverChainThermostat(Thermostat):
@@ -1118,40 +1231,37 @@ class NoseHooverChainThermostat(Thermostat):
     @brief Nose-Hoover 链恒温器的实现
     """
 
-    def __init__(self, target_temperature, time_constant, chain_length=3, Q=None):
+    def __init__(self, target_temperature, time_constant, chain_length=2):
         self.target_temperature = target_temperature
+        self.time_constant = time_constant
         self.chain_length = chain_length
-        self.Q = Q  # 热浴质量参数数组
-        self.xi = np.zeros(chain_length)  # 热浴变量数组
         self.cpp_interface = CppInterface("nose_hoover_chain")
-        if self.Q is None:
-            # 根据时间常数估计 Q
-            kB = 8.617333262e-5  # eV/K
-            Q_base = time_constant * time_constant * 3 * kB * target_temperature
-            self.Q = np.array([Q_base * (i + 1) for i in range(chain_length)])
 
-    def apply(self, atoms, dt):
-        num_atoms = len(atoms)
-        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+    def apply_thermostat(self, cell, dt, xi_chain, Q):
+        num_atoms = len(cell.atoms)
+        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
         velocities = np.array(
-            [atom.velocity for atom in atoms], dtype=np.float64
+            [atom.velocity for atom in cell.atoms], dtype=np.float64
         ).flatten()
-        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
-        # 调用 C++ 函数
-        self.xi = self.cpp_interface.nose_hoover_chain(
+        forces = np.array(
+            [atom.force for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+
+        self.cpp_interface.nose_hoover_chain(
             dt,
             num_atoms,
             masses,
             velocities,
             forces,
-            self.xi,
-            self.Q,
-            self.chain_length,
+            xi_chain,
+            Q,
             self.target_temperature,
         )
-        # 更新原子速度
-        for i, atom in enumerate(atoms):
-            atom.velocity = velocities[3 * i : 3 * i + 3]
+
+        # 更新原子的速度
+        velocities = velocities.reshape((num_atoms, 3))
+        for i, atom in enumerate(cell.atoms):
+            atom.velocity = velocities[i]
 
 
 # src/python/utils.py
@@ -1160,12 +1270,18 @@ import numpy as np
 
 
 class TensorConverter:
+    """
+    @class TensorConverter
+    @brief 张量转换工具类。
+    """
+
     @staticmethod
     def to_voigt(tensor):
         """
-        将 3x3 张量转换为 Voigt 表示的长度为6的向量。
+        @brief 将 3x3 张量转换为 Voigt 表示的 6 元素向量。
 
-        顺序为 [σ_xx, σ_yy, σ_zz, σ_yz, σ_xz, σ_xy]
+        @param tensor 3x3 numpy 数组
+        @return 6 元素的 numpy 数组
         """
         voigt = np.array(
             [
@@ -1179,21 +1295,46 @@ class TensorConverter:
         )
         return voigt
 
+    @staticmethod
+    def from_voigt(voigt):
+        """
+        @brief 将 Voigt 表示的 6 元素向量转换为 3x3 张量。
+
+        @param voigt 6 元素的 numpy 数组
+        @return 3x3 numpy 数组
+        """
+        tensor = np.array(
+            [
+                [voigt[0], voigt[5], voigt[4]],
+                [voigt[5], voigt[1], voigt[3]],
+                [voigt[4], voigt[3], voigt[2]],
+            ]
+        )
+        return tensor
+
 
 class DataCollector:
     """
     @class DataCollector
-    @brief 数据收集器，用于在模拟过程中收集数据。
+    @brief 数据收集工具类，用于收集模拟过程中的各种数据。
     """
 
     def __init__(self):
         self.data = []
 
     def collect(self, cell):
-        # 收集需要的数据
+        """
+        @brief 收集晶胞中的原子位置和速度。
+        """
         positions = [atom.position.copy() for atom in cell.atoms]
         velocities = [atom.velocity.copy() for atom in cell.atoms]
         self.data.append({"positions": positions, "velocities": velocities})
+
+
+# 添加单位转换常量
+# 单位转换常量
+# 1 amu = 104.3968445 eV·fs²/Å²
+AMU_TO_EVFSA2 = 104.3968445
 
 
 # src/python/visualization.py
@@ -1284,24 +1425,17 @@ class Visualizer:
 from .structure import Atom, Cell
 from .potentials import Potential, LennardJonesPotential
 from .integrators import Integrator, VelocityVerletIntegrator, RK4Integrator
-from .thermostats import (
-    Thermostat,
-    NoseHooverThermostat,
-    NoseHooverChainThermostat,
-)
-from .barostats import Barostat, MTKBarostat, ParrinelloRahmanHooverBarostat
-from .mechanics import (
-    StressCalculator,
-    StressCalculatorLJ,
-    ElasticConstantsSolver,
-)
+from .thermostats import Thermostat, NoseHooverThermostat, NoseHooverChainThermostat
+from .barostats import Barostat, ParrinelloRahmanHooverBarostat
+from .mechanics import StressCalculator, StressCalculatorLJ, StrainCalculator
+from .elasticity import ElasticConstantsSolver, ElasticConstantsCalculator
 from .optimizers import Optimizer, GradientDescentOptimizer, BFGSOptimizer
 from .deformation import Deformer
 from .utils import TensorConverter, DataCollector
 from .visualization import Visualizer
-from .elasticity import ElasticConstantsCalculator
 from .md_simulator import MDSimulator
 from .config import ConfigManager
+from .interfaces.cpp_interface import CppInterface
 
 
 # src/python/interfaces/cpp_interface.py
@@ -1310,6 +1444,7 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
+from python.utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
 
 
 class CppInterface:
@@ -1320,7 +1455,7 @@ class CppInterface:
 
     def __init__(self, lib_name):
         """
-        @param lib_name 库的名称
+        @param lib_name 库的名称，不包括前缀和扩展名
         """
         if os.name == "nt":  # Windows
             lib_extension = ".dll"
@@ -1328,6 +1463,7 @@ class CppInterface:
         else:  # Unix/Linux
             lib_extension = ".so"
             lib_prefix = "lib"
+
         # 获取当前文件所在目录的绝对路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
         # 获取项目根目录的绝对路径
@@ -1339,46 +1475,25 @@ class CppInterface:
         # 检查库文件是否存在
         if not os.path.exists(lib_path):
             raise FileNotFoundError(f"无法找到库文件: {lib_path}")
+
         self.lib = ctypes.CDLL(lib_path)
 
-        if lib_name == "nose_hoover":
-            self.lib.nose_hoover.argtypes = [
-                ctypes.c_double,  # dt
+        # 配置不同库的函数签名
+        if lib_name == "stress_calculator":
+            self.lib.compute_stress.argtypes = [
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ctypes.POINTER(ctypes.c_double),  # xi
-                ctypes.c_double,  # Q
-                ctypes.c_double,  # target_temperature
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (amu)
+                ctypes.c_double,  # volume
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # stress_tensor (output)
             ]
-            self.lib.nose_hoover.restype = None
-        elif lib_name == "nose_hoover_chain":
-            self.lib.nose_hoover_chain.argtypes = [
-                ctypes.c_double,  # dt
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
-                ctypes.c_int,  # chain_length
-                ctypes.c_double,  # target_temperature
-            ]
-            self.lib.nose_hoover_chain.restype = None
-        elif lib_name == "parrinello_rahman_hoover":
-            self.lib.parrinello_rahman_hoover.argtypes = [
-                ctypes.c_double,  # dt
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
-                ctypes.c_double,  # target_pressure
-            ]
-            self.lib.parrinello_rahman_hoover.restype = None
+            self.lib.compute_stress.restype = None
+
         elif lib_name == "lennard_jones":
             self.lib.calculate_forces.argtypes = [
                 ctypes.c_int,  # num_atoms
@@ -1400,118 +1515,59 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
             ]
             self.lib.calculate_energy.restype = ctypes.c_double
-        elif lib_name == "stress_calculator":
-            self.lib.compute_stress.argtypes = [
+
+        elif lib_name == "nose_hoover":
+            self.lib.nose_hoover.argtypes = [
+                ctypes.c_double,  # dt
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
-                ctypes.c_double,  # volume
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # stress_tensor (output)
+                ctypes.c_double,  # xi
+                ctypes.c_double,  # Q
+                ctypes.c_double,  # target_temperature
             ]
-            self.lib.compute_stress.restype = None
+            self.lib.nose_hoover.restype = ctypes.c_double
 
-    def nose_hoover(
-        self, dt, num_atoms, masses, velocities, forces, xi, Q, target_temperature
-    ):
-        """
-        调用 C++ 实现的 Nose-Hoover 恒温器。
+        elif lib_name == "nose_hoover_chain":
+            self.lib.nose_hoover_chain.argtypes = [
+                ctypes.c_double,  # dt
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi_chain
+                ctypes.c_double,  # Q
+                ctypes.c_double,  # target_temperature
+            ]
+            self.lib.nose_hoover_chain.restype = None
 
-        返回更新后的 xi。
-        """
-        xi_c = ctypes.c_double(xi)
-        self.lib.nose_hoover(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            ctypes.byref(xi_c),
-            Q,
-            target_temperature,
-        )
-        return xi_c.value
+        else:
+            raise ValueError(f"未知的库名称: {lib_name}")
 
-    def nose_hoover_chain(
-        self,
-        dt,
-        num_atoms,
-        masses,
-        velocities,
-        forces,
-        xi,
-        Q,
-        chain_length,
-        target_temperature,
-    ):
-        """
-        调用 C++ 实现的 Nose-Hoover 链恒温器。
-
-        返回更新后的 xi。
-        """
-        self.lib.nose_hoover_chain(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            xi,
-            Q,
-            chain_length,
-            target_temperature,
-        )
-        return xi  # xi 已在 C++ 中更新
-
-    def parrinello_rahman_hoover(
-        self,
-        dt,
-        num_atoms,
-        masses,
-        velocities,
-        forces,
-        lattice_vectors,
-        xi,
-        Q,
-        target_pressure,
-    ):
-        """
-        调用 C++ 实现的 Parrinello-Rahman-Hoover 恒温器。
-        """
-        self.lib.parrinello_rahman_hoover(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            lattice_vectors,
-            xi,
-            Q,
-            target_pressure,
-        )
-        # xi 已在 C++ 中更新
-
-    def calculate_forces(
+    def compute_stress(
         self,
         num_atoms,
         positions,
+        velocities,
         forces,
-        epsilon,
-        sigma,
-        cutoff,
+        masses,
+        volume,
         box_lengths,
+        stress_tensor,
     ):
-        self.lib.calculate_forces(
+        """
+        计算应力张量。
+        """
+        self.lib.compute_stress(
             num_atoms,
             positions,
+            velocities,
             forces,
-            epsilon,
-            sigma,
-            cutoff,
+            masses,
+            volume,
             box_lengths,
+            stress_tensor,
         )
 
     def calculate_energy(
@@ -1523,6 +1579,9 @@ class CppInterface:
         cutoff,
         box_lengths,
     ):
+        """
+        计算系统的总 Lennard-Jones 势能。
+        """
         energy = self.lib.calculate_energy(
             num_atoms,
             positions,
@@ -1533,28 +1592,79 @@ class CppInterface:
         )
         return energy
 
-    def compute_stress(
+    def calculate_forces(
         self,
         num_atoms,
         positions,
-        velocities,
         forces,
-        masses,
-        volume,
+        epsilon,
+        sigma,
+        cutoff,
         box_lengths,
     ):
-        stress_tensor = np.zeros(9, dtype=np.float64)
-        self.lib.compute_stress(
+        """
+        计算系统的力。
+        """
+        self.lib.calculate_forces(
             num_atoms,
             positions,
+            forces,
+            epsilon,
+            sigma,
+            cutoff,
+            box_lengths,
+        )
+
+    def nose_hoover(
+        self,
+        dt,
+        num_atoms,
+        masses,
+        velocities,
+        forces,
+        xi,
+        Q,
+        target_temperature,
+    ):
+        """
+        实现 Nose-Hoover 恒温器算法
+        """
+        updated_xi = self.lib.nose_hoover(
+            dt,
+            num_atoms,
+            masses,
             velocities,
             forces,
-            masses,
-            volume,
-            box_lengths,
-            stress_tensor,
+            xi,
+            Q,
+            target_temperature,
         )
-        return stress_tensor.reshape((3, 3))
+        return updated_xi
+
+    def nose_hoover_chain(
+        self,
+        dt,
+        num_atoms,
+        masses,
+        velocities,
+        forces,
+        xi_chain,
+        Q,
+        target_temperature,
+    ):
+        """
+        实现 Nose-Hoover 链恒温器算法
+        """
+        self.lib.nose_hoover_chain(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            xi_chain,
+            Q,
+            target_temperature,
+        )
 
 
 # src/python/interfaces/__init__.py

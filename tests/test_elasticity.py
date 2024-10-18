@@ -8,6 +8,7 @@ from python.deformation import Deformer
 from python.optimizers import BFGSOptimizer
 from python.structure import Cell, Atom
 from python.potentials import LennardJonesPotential
+from python.utils import TensorConverter
 
 
 def test_elastic_constants_calculator():
@@ -20,7 +21,7 @@ def test_elastic_constants_calculator():
         Atom(id=1, mass=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"),
     ]
     lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
-    cell = Cell(atoms=atoms, lattice_vectors=lattice_vectors)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
     # 定义 Lennard-Jones 势
     epsilon = 0.0103  # eV

@@ -18,7 +18,7 @@ def single_atom_cell():
     mass = 26.9815  # 原子量，amu
     position = np.array([0.0, 0.0, 0.0])
     atom = Atom(id=0, symbol="Al", mass=mass, position=position)
-    cell = Cell(lattice_vectors, [atom], pbc_enabled=True)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=[atom], pbc_enabled=True)
     return cell
 
 
@@ -39,12 +39,26 @@ def test_stress_calculation(single_atom_cell, lj_potential_single):
     """
     stress_calculator = StressCalculatorLJ()
     # 计算力
-    lj_potential_single.calculate_forces(single_atom_cell)
+    lj_potential_single.calculate_forces(
+        num_atoms=single_atom_cell.num_atoms,
+        positions=single_atom_cell.get_positions(),
+        forces=single_atom_cell.get_forces(),
+        box_lengths=single_atom_cell.get_box_lengths(),
+    )
     # 计算应力
     stress_tensor = stress_calculator.compute_stress(
-        single_atom_cell, lj_potential_single
+        num_atoms=single_atom_cell.num_atoms,
+        positions=single_atom_cell.get_positions(),
+        forces=single_atom_cell.get_forces(),
+        masses=np.array(
+            [atom.mass for atom in single_atom_cell.atoms], dtype=np.float64
+        ),
+        volume=single_atom_cell.calculate_volume(),
+        box_lengths=single_atom_cell.get_box_lengths(),
+        stress_tensor=np.zeros(9, dtype=np.float64),  # stress_tensor (output)
     )
     # 检查应力张量是否为 3x3 矩阵
+    stress_tensor = stress_tensor.reshape(3, 3)
     assert stress_tensor.shape == (3, 3)
     # 由于只有一个原子且无力作用，应力张量应为零
     np.testing.assert_array_almost_equal(stress_tensor, np.zeros((3, 3)), decimal=6)

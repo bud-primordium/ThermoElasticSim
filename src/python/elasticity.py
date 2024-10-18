@@ -83,8 +83,9 @@ class ElasticConstantsCalculator:
             deformed_cell.apply_deformation(F)
             # 优化结构
             self.optimizer.optimize(deformed_cell, self.potential)
-            # 计算应力
+            # 计算力
             self.potential.calculate_forces(deformed_cell)
+            # 计算应力
             stress_tensor = self.stress_calculator.compute_stress(
                 deformed_cell, self.potential
             )

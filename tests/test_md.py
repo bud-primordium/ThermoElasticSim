@@ -22,7 +22,9 @@ def simple_cell(pbc_enabled=True):
     position2 = np.array([2.55, 0.0, 0.0])  # 与原子1相距 σ = 2.55 Å
     atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
     atom2 = Atom(id=1, symbol="Al", mass=mass, position=position2)
-    cell = Cell(lattice_vectors, [atom1, atom2], pbc_enabled=pbc_enabled)
+    cell = Cell(
+        lattice_vectors=lattice_vectors, atoms=[atom1, atom2], pbc_enabled=pbc_enabled
+    )
     return cell
 
 

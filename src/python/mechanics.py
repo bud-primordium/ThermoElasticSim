@@ -37,8 +37,12 @@ class StressCalculatorLJ(StressCalculator):
         forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
         box_lengths = cell.get_box_lengths()
+
+        # Initialize stress tensor array
+        stress_tensor = np.zeros(9, dtype=np.float64)
+
         # 调用 C++ 实现的应力计算函数
-        stress_tensor = self.cpp_interface.compute_stress(
+        self.cpp_interface.compute_stress(
             num_atoms,
             positions,
             velocities,
@@ -46,7 +50,11 @@ class StressCalculatorLJ(StressCalculator):
             masses,
             volume,
             box_lengths,
+            stress_tensor,
         )
+
+        # Reshape the stress tensor to 3x3 matrix
+        stress_tensor = stress_tensor.reshape(3, 3)
         return stress_tensor
 
 
