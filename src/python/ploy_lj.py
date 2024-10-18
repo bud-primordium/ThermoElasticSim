@@ -19,7 +19,7 @@ box_lengths = np.array([30.0, 30.0, 30.0])  # 立方体盒子
 cell = Cell(atoms=atoms, lattice_vectors=np.eye(3) * 20.0, pbc_enabled=True)
 
 # 准备测试距离
-distances = np.linspace(2.5, 6.0, 1000)
+distances = np.linspace(2.0, 6.0, 1000)
 forces = []
 energies = []
 

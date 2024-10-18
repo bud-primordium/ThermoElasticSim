@@ -65,7 +65,11 @@ class DataCollector:
         self.data.append({"positions": positions, "velocities": velocities})
 
 
-# 添加单位转换常量
 # 单位转换常量
+# src/python/utils.py
+
 # 1 amu = 104.3968445 eV·fs²/Å²
 AMU_TO_EVFSA2 = 104.3968445
+
+# 1 eV/Å^3 = 160.21766208 GPa
+EV_TO_GPA = 160.2176565

@@ -1,6 +1,7 @@
 # src/python/structure.py
 
 import numpy as np
+import logging
 from .utils import AMU_TO_EVFSA2
 
 
@@ -13,6 +14,7 @@ class Atom:
     def __init__(self, id, symbol, mass_amu, position, velocity=None):
         self.id = id
         self.symbol = symbol
+        self.mass_amu = mass_amu  # 保留原始质量
         self.mass = mass_amu * AMU_TO_EVFSA2  # 质量转换为 eV/fs^2
         self.position = np.array(position, dtype=np.float64)
         self.velocity = (
@@ -27,6 +29,19 @@ class Atom:
 
     def update_velocity(self, delta_v):
         self.velocity += delta_v
+
+    def copy(self):
+        """
+        @brief 创建 Atom 的深拷贝。
+        @return Atom 对象的拷贝。
+        """
+        return Atom(
+            id=self.id,
+            symbol=self.symbol,
+            mass_amu=self.mass_amu,
+            position=self.position.copy(),
+            velocity=self.velocity.copy(),
+        )
 
 
 class Cell:
@@ -59,32 +74,44 @@ class Cell:
         """
         # 更新晶格矢量
         self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
-        # 更新原子坐标
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
+
+        # 更新原子坐标并应用 PBC（如果启用）
         for atom in self.atoms:
+            original_position = atom.position.copy()
             atom.position = np.dot(deformation_matrix, atom.position)
+            if self.pbc_enabled:
+                atom.position = self.apply_periodic_boundary(atom.position)
+            logger.debug(
+                f"Atom {atom.id} position changed from {original_position} to {atom.position}"
+            )
 
     def apply_periodic_boundary(self, position):
+        """
+        @brief 应用周期性边界条件，将原子位置限制在晶胞内。
+
+        @param position 原子的笛卡尔坐标位置
+        @return 应用 PBC 后的笛卡尔坐标位置
+        """
         if self.pbc_enabled:
             # 转换到分数坐标
             fractional = np.linalg.solve(self.lattice_vectors.T, position)
             # 确保在 [0, 1) 范围内
             fractional = fractional % 1.0
             # 转换回笛卡尔坐标
-            return np.dot(self.lattice_vectors.T, fractional)
+            new_position = np.dot(self.lattice_vectors.T, fractional)
+            return new_position
         else:
             return position
 
     def copy(self):
-        atoms_copy = [
-            Atom(
-                atom.id,
-                atom.symbol,
-                atom.mass_amu,
-                atom.position.copy(),
-                atom.velocity.copy(),
-            )
-            for atom in self.atoms
-        ]
+        """
+        @brief 创建 Cell 的深拷贝。
+
+        @return Cell 对象的拷贝。
+        """
+        atoms_copy = [atom.copy() for atom in self.atoms]
         return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
 
     @property
