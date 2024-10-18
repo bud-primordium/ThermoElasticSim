@@ -1,3 +1,31 @@
+src/
+    cpp/
+        lennard_jones.cpp
+        nose_hoover.cpp
+        nose_hoover_chain.cpp
+        parrinello_rahman_hoover.cpp
+        stress_calculator.cpp
+    lib/
+        lennard_jones.dll
+        nose_hoover.dll
+        nose_hoover_chain.dll
+        parrinello_rahman_hoover.dll
+        stress_calculator.dll
+    python/
+        barostats.py
+        config.py
+        deformation.py
+        elasticity.py
+        integrators.py
+        md_simulator.py
+        mechanics.py
+        optimizers.py
+        potentials.py
+        structure.py
+        thermostats.py
+        utils.py
+        visualization.py
+        __init__.py
 // src/cpp/lennard_jones.cpp
 
 #include <cmath>
@@ -7,7 +35,7 @@
 extern "C"
 {
     /**
-     * @brief 计算 Lennard-Jones 力
+     * @brief 计算 Lennard-Jones 力，使用最小镜像法处理周期性边界条件
      *
      * @param num_atoms 原子数量
      * @param positions 原子位置数组（长度为 3*num_atoms）
@@ -15,7 +43,7 @@ extern "C"
      * @param epsilon Lennard-Jones 势参数 ε，单位为 eV
      * @param sigma Lennard-Jones 势参数 σ，单位为 Å
      * @param cutoff 截断半径，单位为 Å
-     * @param lattice_vectors 晶格矢量（长度为 9，按列存储 3x3 矩阵）
+     * @param box_lengths 模拟盒子在每个维度的长度（长度为 3）
      */
     void calculate_forces(
         int num_atoms,
@@ -24,7 +52,7 @@ extern "C"
         double epsilon,
         double sigma,
         double cutoff,
-        const double *lattice_vectors // 9 个元素：H = [a1, a2, a3] 作为列
+        const double *box_lengths // 长度为 3
     )
     {
         // 清零力数组
@@ -33,39 +61,8 @@ extern "C"
             forces[i] = 0.0;
         }
 
-        // 构建晶格矩阵 H 和逆矩阵 H_inv
-        double H[3][3];
-        for (int i = 0; i < 3; ++i)
-        {
-            H[0][i] = lattice_vectors[3 * i];
-            H[1][i] = lattice_vectors[3 * i + 1];
-            H[2][i] = lattice_vectors[3 * i + 2];
-        }
-        // 计算 H_inv
-        double det = H[0][0] * (H[1][1] * H[2][2] - H[1][2] * H[2][1]) -
-                     H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) +
-                     H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
-        if (det == 0)
-        {
-            std::cerr << "错误：晶格矩阵的行列式为零，无法求逆。" << std::endl;
-            return;
-        }
-        double H_inv[3][3];
-        H_inv[0][0] = (H[1][1] * H[2][2] - H[1][2] * H[2][1]) / det;
-        H_inv[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) / det;
-        H_inv[0][2] = (H[0][1] * H[1][2] - H[0][2] * H[1][1]) / det;
-        H_inv[1][0] = (H[1][2] * H[2][0] - H[1][0] * H[2][2]) / det;
-        H_inv[1][1] = (H[0][0] * H[2][2] - H[0][2] * H[2][0]) / det;
-        H_inv[1][2] = (H[0][2] * H[1][0] - H[0][0] * H[1][2]) / det;
-        H_inv[2][0] = (H[1][0] * H[2][1] - H[1][1] * H[2][0]) / det;
-        H_inv[2][1] = (H[0][1] * H[2][0] - H[0][0] * H[2][1]) / det;
-        H_inv[2][2] = (H[0][0] * H[1][1] - H[0][1] * H[1][0]) / det;
-
-        // 预计算在截断距离处的力，以用于力的偏移
-        double sr_cutoff = sigma / cutoff;
-        double sr6_cutoff = pow(sr_cutoff, 6);
-        double sr12_cutoff = sr6_cutoff * sr6_cutoff;
-        double F_LJ_cutoff = 24.0 * epsilon * (2.0 * sr12_cutoff - sr6_cutoff) / cutoff;
+        double cutoff_sq = cutoff * cutoff;
+        double shift = 4.0 * epsilon * (pow(sigma / cutoff, 12) - pow(sigma / cutoff, 6));
 
         // 力的计算
         for (int i = 0; i < num_atoms; ++i)
@@ -75,58 +72,36 @@ extern "C"
             {
                 const double *rj = &positions[3 * j];
                 double rij[3];
-                // 计算 rij = rj - ri
                 for (int k = 0; k < 3; ++k)
                 {
-                    rij[k] = rj[k] - ri[k];
-                }
-
-                // 转换到分数坐标 s = H_inv * rij
-                double s[3];
-                for (int k = 0; k < 3; ++k)
-                {
-                    s[k] = H_inv[k][0] * rij[0] + H_inv[k][1] * rij[1] + H_inv[k][2] * rij[2];
-                    // 映射到 [-0.5, 0.5]
-                    s[k] -= round(s[k]);
-                }
-
-                // 转换回笛卡尔坐标 rij = H * s
-                for (int k = 0; k < 3; ++k)
-                {
-                    rij[k] = H[0][k] * s[0] + H[1][k] * s[1] + H[2][k] * s[2];
+                    rij[k] = ri[k] - rj[k];
+                    // 最小镜像法
+                    if (rij[k] > 0.5 * box_lengths[k])
+                        rij[k] -= box_lengths[k];
+                    else if (rij[k] < -0.5 * box_lengths[k])
+                        rij[k] += box_lengths[k];
                 }
 
                 double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
-                double r = sqrt(r2);
 
-                // 添加极小距离保护
-                if (r < 1e-8)
+                if (r2 < cutoff_sq)
                 {
-                    std::cerr << "警告：原子 " << i << " 和原子 " << j << " 太近 (r=" << r << ")，跳过力的计算。" << std::endl;
-                    continue;
-                }
+                    double r2_inv = 1.0 / r2;
+                    double r6_inv = r2_inv * r2_inv * r2_inv;
+                    double force_scalar = 48.0 * epsilon * r6_inv * (r6_inv - 0.5) * r2_inv;
 
-                if (r < cutoff)
-                {
-                    double sr = sigma / r;
-                    double sr6 = pow(sr, 6);
-                    double sr12 = sr6 * sr6;
-                    double F_LJ = 24.0 * epsilon * (2.0 * sr12 - sr6) / r;
+                    // 力的截断修正，确保在截断半径处力为零
+                    double r = sqrt(r2);
+                    double cutoff_r6_inv = pow(sigma / cutoff, 6);
+                    double cutoff_force = 48.0 * epsilon * cutoff_r6_inv * (cutoff_r6_inv - 0.5) / (cutoff * cutoff);
+                    force_scalar -= cutoff_force / r;
 
-                    // 力的偏移，使得在截断距离处力为零
-                    double force_scalar = F_LJ - F_LJ_cutoff;
-
-                    // 应用力
-                    double fij[3];
                     for (int k = 0; k < 3; ++k)
                     {
-                        fij[k] = -force_scalar * rij[k] / r;
-                        forces[3 * i + k] += fij[k];
-                        forces[3 * j + k] -= fij[k];
+                        double fij = force_scalar * rij[k];
+                        forces[3 * i + k] += fij;
+                        forces[3 * j + k] -= fij;
                     }
-
-                    // 调试输出
-                    // std::cout << "原子 " << i << " - 原子 " << j << " 力：[" << fij[0] << ", " << fij[1] << ", " << fij[2] << "]" << std::endl;
                 }
             }
         }
@@ -163,17 +138,97 @@ extern "C"
         double Q,
         double target_temperature)
     {
-        double dt2 = dt / 2.0;
+        double dt_half = dt * 0.5;
         double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
-        double kT = kB * target_temperature;
 
-        // 第一半步：更新速度
+        // 第一半步：更新速度，考虑力
         for (int i = 0; i < num_atoms; ++i)
         {
-            velocities[3 * i] += dt2 * (forces[3 * i] / masses[i]);
-            velocities[3 * i + 1] += dt2 * (forces[3 * i + 1] / masses[i]);
-            velocities[3 * i + 2] += dt2 * (forces[3 * i + 2] / masses[i]);
+            velocities[3 * i] += dt_half * forces[3 * i] / masses[i];
+            velocities[3 * i + 1] += dt_half * forces[3 * i + 1] / masses[i];
+            velocities[3 * i + 2] += dt_half * forces[3 * i + 2] / masses[i];
         }
+
+        // 更新 xi（热浴变量） - 第一半步
+        double kinetic_energy = 0.0;
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            double vx = velocities[3 * i];
+            double vy = velocities[3 * i + 1];
+            double vz = velocities[3 * i + 2];
+            kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
+        }
+        double G_xi = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q;
+        *xi += dt_half * G_xi;
+
+        // 缩放速度
+        double scale = exp(-(*xi) * dt);
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] *= scale;
+            velocities[3 * i + 1] *= scale;
+            velocities[3 * i + 2] *= scale;
+        }
+
+        // 更新 xi（热浴变量） - 第二半步
+        kinetic_energy = 0.0;
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            double vx = velocities[3 * i];
+            double vy = velocities[3 * i + 1];
+            double vz = velocities[3 * i + 2];
+            kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
+        }
+        G_xi = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q;
+        *xi += dt_half * G_xi;
+
+        // 第二半步：更新速度，考虑力
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] += dt_half * forces[3 * i] / masses[i];
+            velocities[3 * i + 1] += dt_half * forces[3 * i + 1] / masses[i];
+            velocities[3 * i + 2] += dt_half * forces[3 * i + 2] / masses[i];
+        }
+    }
+}
+
+
+// src/cpp/nose_hoover_chain.cpp
+
+#include <cmath>
+#include <vector>
+
+extern "C"
+{
+    /**
+     * @brief 应用 Nose-Hoover 链恒温器
+     *
+     * @param dt 时间步长
+     * @param num_atoms 原子数量
+     * @param masses 原子质量数组（长度为 num_atoms）
+     * @param velocities 原子速度数组（长度为 3*num_atoms）
+     * @param forces 原子力数组（长度为 3*num_atoms）
+     * @param xi 热浴变量数组（长度为 chain_length）
+     * @param Q 热浴质量参数数组（长度为 chain_length）
+     * @param chain_length 热浴链的长度
+     * @param target_temperature 目标温度
+     */
+    void nose_hoover_chain(
+        double dt,
+        int num_atoms,
+        const double *masses,
+        double *velocities,
+        const double *forces,
+        double *xi,
+        const double *Q,
+        int chain_length,
+        double target_temperature)
+    {
+        // 使用 std::vector 代替动态数组
+        std::vector<double> G_chain(chain_length, 0.0);
+
+        double dt_half = dt * 0.5;
+        double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
 
         // 计算动能
         double kinetic_energy = 0.0;
@@ -185,17 +240,111 @@ extern "C"
             kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
         }
 
-        // 更新热浴变量 xi
-        double Gxi = (2.0 * kinetic_energy - 3.0 * num_atoms * kT) / Q;
-        *xi += dt * Gxi;
+        // 递推更新 Nose-Hoover 链
+        G_chain[0] = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q[0];
+        for (int i = 1; i < chain_length; ++i)
+        {
+            G_chain[i] = (Q[i - 1] * xi[i - 1] * xi[i - 1] - kB * target_temperature) / Q[i];
+        }
 
-        // 第二半步：更新速度，考虑热浴变量的影响
-        double exp_factor = exp(-dt * (*xi));
+        // 更新 xi
+        for (int i = chain_length - 1; i >= 0; --i)
+        {
+            xi[i] += G_chain[i] * dt_half;
+        }
+
+        // 缩放速度
+        double scale = exp(-xi[0] * dt);
         for (int i = 0; i < num_atoms; ++i)
         {
-            velocities[3 * i] = velocities[3 * i] * exp_factor + dt2 * (forces[3 * i] / masses[i]);
-            velocities[3 * i + 1] = velocities[3 * i + 1] * exp_factor + dt2 * (forces[3 * i + 1] / masses[i]);
-            velocities[3 * i + 2] = velocities[3 * i + 2] * exp_factor + dt2 * (forces[3 * i + 2] / masses[i]);
+            velocities[3 * i] *= scale;
+            velocities[3 * i + 1] *= scale;
+            velocities[3 * i + 2] *= scale;
+        }
+
+        // 更新 xi
+        for (int i = 0; i < chain_length; ++i)
+        {
+            xi[i] += G_chain[i] * dt_half;
+        }
+
+        // 更新速度，考虑力
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] += dt * forces[3 * i] / masses[i];
+            velocities[3 * i + 1] += dt * forces[3 * i + 1] / masses[i];
+            velocities[3 * i + 2] += dt * forces[3 * i + 2] / masses[i];
+        }
+    }
+}
+
+
+// src/cpp/parrinello_rahman_hoover.cpp
+
+#include <cmath>
+#include <vector>
+
+extern "C"
+{
+    /**
+     * @brief 应用 Parrinello-Rahman-Hoover 恒压器
+     *
+     * @param dt 时间步长
+     * @param num_atoms 原子数量
+     * @param masses 原子质量数组（长度为 num_atoms）
+     * @param velocities 原子速度数组（长度为 3*num_atoms）
+     * @param forces 原子力数组（长度为 3*num_atoms）
+     * @param lattice_vectors 当前晶格矢量（长度为 9, row-major order）
+     * @param xi 热浴变量数组（长度为 6}
+     * @param Q 热浴质量参数数组（长度为 6}
+     * @param target_pressure 目标压力
+     */
+    void parrinello_rahman_hoover(
+        double dt,
+        int num_atoms,
+        const double *masses,
+        double *velocities,
+        const double *forces,
+        double *lattice_vectors, // 3x3 matrix, row-major
+        double *xi,
+        const double *Q,
+        double target_pressure)
+    {
+        // 这个是一个简单的实现示例，实际的 PRH 恒温器更复杂
+        // 这里只提供一个简单的缩放实现
+
+        // 计算当前压力（简化示例）
+        double current_pressure = 0.0;
+        for (int i = 0; i < 3; ++i)
+        {
+            for (int j = 0; j < 3; ++j)
+            {
+                current_pressure += lattice_vectors[i * 3 + j] * forces[j * 3 + i];
+            }
+        }
+        current_pressure /= 3.0;
+
+        // 计算压力差
+        double delta_P = current_pressure - target_pressure;
+
+        // 更新热浴变量
+        for (int i = 0; i < 6; ++i)
+        {
+            xi[i] += (delta_P)*dt / Q[i];
+        }
+
+        // 调整晶胞的晶格向量
+        for (int i = 0; i < 9; ++i)
+        {
+            lattice_vectors[i] *= exp(-xi[i % 6] * dt); // 简单缩放
+        }
+
+        // 更新原子速度（简化示例）
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] *= exp(-xi[0] * dt);
+            velocities[3 * i + 1] *= exp(-xi[1] * dt);
+            velocities[3 * i + 2] *= exp(-xi[2] * dt);
         }
     }
 }
@@ -217,10 +366,7 @@ extern "C"
      * @param forces 原子力数组（长度为 3*num_atoms）
      * @param masses 原子质量数组（长度为 num_atoms）
      * @param volume 系统体积
-     * @param epsilon Lennard-Jones 势参数 ε，单位为 eV
-     * @param sigma Lennard-Jones 势参数 σ，单位为 Å
-     * @param cutoff 截断半径，单位为 Å
-     * @param lattice_vectors 晶格矢量（长度为 9，按列存储 3x3 矩阵）
+     * @param box_lengths 模拟盒子在每个维度的长度（长度为 3）
      * @param stress_tensor 输出的应力张量（长度为 9，按行主序存储 3x3 矩阵）
      */
     void compute_stress(
@@ -230,10 +376,7 @@ extern "C"
         const double *forces,
         const double *masses,
         double volume,
-        double epsilon,
-        double sigma,
-        double cutoff,
-        const double *lattice_vectors,
+        const double *box_lengths,
         double *stress_tensor // 输出
     )
     {
@@ -243,30 +386,7 @@ extern "C"
             stress_tensor[i] = 0.0;
         }
 
-        // 构建晶格矩阵 H 和逆矩阵 H_inv
-        double H[3][3];
-        for (int i = 0; i < 3; ++i)
-        {
-            H[0][i] = lattice_vectors[3 * i];
-            H[1][i] = lattice_vectors[3 * i + 1];
-            H[2][i] = lattice_vectors[3 * i + 2];
-        }
-        // 计算 H_inv
-        double det = H[0][0] * (H[1][1] * H[2][2] - H[1][2] * H[2][1]) -
-                     H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) +
-                     H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
-        double H_inv[3][3];
-        H_inv[0][0] = (H[1][1] * H[2][2] - H[1][2] * H[2][1]) / det;
-        H_inv[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) / det;
-        H_inv[0][2] = (H[0][1] * H[1][2] - H[0][2] * H[1][1]) / det;
-        H_inv[1][0] = (H[1][2] * H[2][0] - H[1][0] * H[2][2]) / det;
-        H_inv[1][1] = (H[0][0] * H[2][2] - H[0][2] * H[2][0]) / det;
-        H_inv[1][2] = (H[0][2] * H[1][0] - H[0][0] * H[1][2]) / det;
-        H_inv[2][0] = (H[1][0] * H[2][1] - H[1][1] * H[2][0]) / det;
-        H_inv[2][1] = (H[0][1] * H[2][0] - H[0][0] * H[2][1]) / det;
-        H_inv[2][2] = (H[0][0] * H[1][1] - H[0][1] * H[1][0]) / det;
-
-        // 动能项
+        // 动能贡献
         for (int i = 0; i < num_atoms; ++i)
         {
             double m = masses[i];
@@ -280,67 +400,89 @@ extern "C"
             }
         }
 
-        // 势能项
+        // 势能贡献
         for (int i = 0; i < num_atoms; ++i)
         {
             const double *ri = &positions[3 * i];
-            for (int j = i + 1; j < num_atoms; ++j)
+            const double *fi = &forces[3 * i];
+            for (int alpha = 0; alpha < 3; ++alpha)
             {
-                const double *rj = &positions[3 * j];
-                double rij[3];
-                // 计算 rij = rj - ri
-                for (int k = 0; k < 3; ++k)
+                for (int beta = 0; beta < 3; ++beta)
                 {
-                    rij[k] = rj[k] - ri[k];
-                }
-
-                // 转换到分数坐标 s = H_inv * rij
-                double s[3];
-                for (int k = 0; k < 3; ++k)
-                {
-                    s[k] = H_inv[k][0] * rij[0] + H_inv[k][1] * rij[1] + H_inv[k][2] * rij[2];
-                    // 映射到 [-0.5, 0.5]
-                    s[k] -= round(s[k]);
-                }
-
-                // 转换回笛卡尔坐标 rij = H * s
-                for (int k = 0; k < 3; ++k)
-                {
-                    rij[k] = H[0][k] * s[0] + H[1][k] * s[1] + H[2][k] * s[2];
-                }
-
-                double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
-                double r = sqrt(r2);
-
-                if (r < cutoff)
-                {
-                    double sr = sigma / r;
-                    double sr6 = pow(sr, 6);
-                    double sr12 = sr6 * sr6;
-                    double force_scalar = 24.0 * epsilon * (2.0 * sr12 - sr6) / r;
-                    double fij[3];
-                    for (int k = 0; k < 3; ++k)
-                    {
-                        fij[k] = force_scalar * rij[k] / r;
-                    }
-                    for (int alpha = 0; alpha < 3; ++alpha)
-                    {
-                        for (int beta = 0; beta < 3; ++beta)
-                        {
-                            stress_tensor[3 * alpha + beta] += rij[alpha] * fij[beta];
-                        }
-                    }
+                    stress_tensor[3 * alpha + beta] += ri[beta] * fi[alpha];
                 }
             }
         }
 
-        // 归一化并取负号
+        // 归一化
         for (int i = 0; i < 9; ++i)
         {
-            stress_tensor[i] = -stress_tensor[i] / volume;
+            stress_tensor[i] = (stress_tensor[i]) / volume;
         }
     }
 }
+
+
+# src/python/barostats.py
+
+import numpy as np
+from .interfaces.cpp_interface import CppInterface
+from .mechanics import StressCalculatorLJ
+
+
+class Barostat:
+    """
+    @class Barostat
+    @brief 恒压器基类
+    """
+
+    def apply(self, cell, dt):
+        raise NotImplementedError
+
+
+class ParrinelloRahmanHooverBarostat(Barostat):
+    """
+    @class ParrinelloRahmanHooverBarostat
+    @brief Parrinello-Rahman-Hoover (PRH) 恒压器的实现
+    """
+
+    def __init__(self, target_pressure, time_constant, Qp=None):
+        self.target_pressure = target_pressure
+        self.time_constant = time_constant
+        self.Qp = Qp if Qp is not None else np.ones(6) * (time_constant**2)
+        self.xi = np.zeros(6)  # 热浴变量数组
+        self.cpp_interface = CppInterface("parrinello_rahman_hoover")
+
+    def apply(self, cell, dt):
+        num_atoms = len(cell.atoms)
+        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
+        velocities = np.array(
+            [atom.velocity for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array(
+            [atom.force for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        lattice_vectors = cell.lattice_vectors.flatten()
+
+        # 调用 C++ PRH 函数
+        self.cpp_interface.parrinello_rahman_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            lattice_vectors,
+            self.xi,
+            self.Qp,
+            self.target_pressure,
+        )
+
+        # 更新 lattice_vectors
+        cell.lattice_vectors = lattice_vectors.reshape((3, 3))
+
+        # 更新 atom velocities
+        for i, atom in enumerate(cell.atoms):
+            atom.velocity = velocities[3 * i : 3 * i + 3]
 
 
 # src/python/config.py
@@ -424,7 +566,7 @@ class Deformer:
 import numpy as np
 from .mechanics import StressCalculatorLJ, ElasticConstantsSolver
 from .deformation import Deformer
-from .optimizers import GradientDescentOptimizer
+from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter
 
 
@@ -434,15 +576,20 @@ class ElasticConstantsCalculator:
     @brief 用于计算弹性常数的类
     """
 
-    def __init__(self, cell, potential, delta=1e-3):
+    def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
         self.cell = cell
         self.potential = potential
         self.delta = delta
         self.deformer = Deformer(delta)
         self.stress_calculator = StressCalculatorLJ()
-        self.optimizer = GradientDescentOptimizer(
-            max_steps=1000, tol=1e-6, step_size=1e-4
-        )
+        if optimizer_type == "GD":
+            self.optimizer = GradientDescentOptimizer(
+                max_steps=1000, tol=1e-6, step_size=1e-4
+            )
+        elif optimizer_type == "BFGS":
+            self.optimizer = BFGSOptimizer(tol=1e-6)
+        else:
+            raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
 
     def calculate_elastic_constants(self):
         """
@@ -482,10 +629,9 @@ class ElasticConstantsCalculator:
         return C
 
 
-# src/python/md.py
+# src/python/integrators.py
 
 import numpy as np
-from .interfaces.cpp_interface import CppInterface
 
 
 class Integrator:
@@ -494,7 +640,7 @@ class Integrator:
     @brief 积分器基类
     """
 
-    def integrate(self, cell, potential, thermostat, dt):
+    def integrate(self, cell, potential, dt):
         raise NotImplementedError
 
 
@@ -504,7 +650,7 @@ class VelocityVerletIntegrator(Integrator):
     @brief 速度 Verlet 积分器的实现
     """
 
-    def integrate(self, cell, potential, thermostat, dt):
+    def integrate(self, cell, potential, dt):
         atoms = cell.atoms
         # 第一半步：更新位置
         for atom in atoms:
@@ -518,54 +664,58 @@ class VelocityVerletIntegrator(Integrator):
         # 第二半步：更新速度
         for atom, force_old in zip(atoms, forces_old):
             atom.velocity += 0.5 * (atom.force + force_old) / atom.mass * dt
-        # 应用恒温器
-        if thermostat is not None:
-            thermostat.apply(atoms, dt)
 
 
-class Thermostat:
+class RK4Integrator(Integrator):
     """
-    @class Thermostat
-    @brief 恒温器基类
+    @class RK4Integrator
+    @brief 四阶 Runge-Kutta 积分器的实现
     """
 
-    def apply(self, atoms, dt):
-        raise NotImplementedError
+    def integrate(self, cell, potential, dt):
+        def get_state():
+            return np.concatenate(
+                [atom.position for atom in cell.atoms]
+                + [atom.velocity for atom in cell.atoms]
+            )
+
+        def set_state(state):
+            num_atoms = len(cell.atoms)
+            positions = state[: 3 * num_atoms].reshape((num_atoms, 3))
+            velocities = state[3 * num_atoms :].reshape((num_atoms, 3))
+            for i, atom in enumerate(cell.atoms):
+                atom.position = positions[i]
+                atom.velocity = velocities[i]
+
+        def compute_derivatives(state):
+            # Set the state
+            num_atoms = len(cell.atoms)
+            positions = state[: 3 * num_atoms].reshape((num_atoms, 3))
+            velocities = state[3 * num_atoms :].reshape((num_atoms, 3))
+            for i, atom in enumerate(cell.atoms):
+                atom.position = positions[i]
+                atom.velocity = velocities[i]
+            # Compute forces
+            potential.calculate_forces(cell)
+            # Compute derivatives
+            derivatives = np.zeros_like(state)
+            for i, atom in enumerate(cell.atoms):
+                derivatives[3 * i : 3 * i + 3] = atom.velocity
+                derivatives[3 * num_atoms + 3 * i : 3 * num_atoms + 3 * i + 3] = (
+                    atom.force / atom.mass
+                )
+            return derivatives
+
+        state = get_state()
+        k1 = compute_derivatives(state)
+        k2 = compute_derivatives(state + 0.5 * dt * k1)
+        k3 = compute_derivatives(state + 0.5 * dt * k2)
+        k4 = compute_derivatives(state + dt * k3)
+        new_state = state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+        set_state(new_state)
 
 
-class NoseHooverThermostat(Thermostat):
-    """
-    @class NoseHooverThermostat
-    @brief Nose-Hoover 恒温器的实现
-    """
-
-    def __init__(self, target_temperature, time_constant):
-        self.target_temperature = target_temperature
-        self.Q = time_constant  # 热浴质量参数
-        self.xi = 0.0  # 热浴变量初始值
-        self.cpp_interface = CppInterface("nose_hoover")
-
-    def apply(self, atoms, dt):
-        num_atoms = len(atoms)
-        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
-        velocities = np.array(
-            [atom.velocity for atom in atoms], dtype=np.float64
-        ).flatten()
-        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
-        # 调用 C++ 函数
-        self.xi = self.cpp_interface.nose_hoover(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            self.xi,
-            self.Q,
-            self.target_temperature,
-        )
-        # 更新原子速度
-        for i, atom in enumerate(atoms):
-            atom.velocity = velocities[3 * i : 3 * i + 3]
+# src/python/md_simulator.py
 
 
 class MDSimulator:
@@ -574,17 +724,24 @@ class MDSimulator:
     @brief 分子动力学模拟器
     """
 
-    def __init__(self, cell, potential, integrator, thermostat=None):
+    def __init__(self, cell, potential, integrator, thermostat=None, barostat=None):
         self.cell = cell
         self.potential = potential
         self.integrator = integrator
         self.thermostat = thermostat
+        self.barostat = barostat  # 为 NPT 系综预留
 
     def run(self, steps, dt, data_collector=None):
         # 初始化力
         self.potential.calculate_forces(self.cell)
         for step in range(steps):
-            self.integrator.integrate(self.cell, self.potential, self.thermostat, dt)
+            self.integrator.integrate(self.cell, self.potential, dt)
+            # 应用恒温器
+            if self.thermostat is not None:
+                self.thermostat.apply(self.cell.atoms, dt)
+            # 应用压强控制器（如果有）
+            if self.barostat is not None:
+                self.barostat.apply(self.cell, dt)
             if data_collector is not None:
                 data_collector.collect(self.cell)
             print(f"MD Step {step} completed.")
@@ -628,10 +785,7 @@ class StressCalculatorLJ(StressCalculator):
         ).flatten()
         forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
-        epsilon = potential.epsilon
-        sigma = potential.sigma
-        cutoff = potential.cutoff
-        lattice_vectors = cell.lattice_vectors.flatten()
+        box_lengths = cell.get_box_lengths()
         # 调用 C++ 实现的应力计算函数
         stress_tensor = self.cpp_interface.compute_stress(
             num_atoms,
@@ -640,50 +794,15 @@ class StressCalculatorLJ(StressCalculator):
             forces,
             masses,
             volume,
-            epsilon,
-            sigma,
-            cutoff,
-            lattice_vectors,
+            box_lengths,
         )
         return stress_tensor
-
-
-class StrainCalculator:
-    """
-    @class StrainCalculator
-    @brief 应变计算器
-    """
-
-    def compute_strain(self, deformation_gradient):
-        C = np.dot(deformation_gradient.T, deformation_gradient)
-        strain_tensor = 0.5 * (C - np.identity(3))
-        return strain_tensor
-
-
-class ElasticConstantsSolver:
-    """
-    @class ElasticConstantsSolver
-    @brief 弹性常数求解器
-    """
-
-    def solve(self, strains, stresses):
-        """
-        @brief 求解弹性常数矩阵
-
-        @param strains 应变列表，形状为 (N, 6)
-        @param stresses 应力列表，形状为 (N, 6)
-
-        @return 弹性常数矩阵，形状为 (6, 6)
-        """
-        strains = np.array(strains)
-        stresses = np.array(stresses)
-        C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
-        return C
 
 
 # src/python/optimizers.py
 
 import numpy as np
+from scipy.optimize import minimize
 
 
 class Optimizer:
@@ -717,20 +836,63 @@ class GradientDescentOptimizer(Optimizer):
             if max_force < self.tol:
                 print(f"Converged after {step} steps")
                 break
-            # 更新位置
+            # 更新 position
             for atom in atoms:
                 displacement = self.step_size * atom.force
                 atom.position += displacement
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
-                # print(f"Atom {atom.id} Position: {atom.position}")
             # 重新计算力
             potential.calculate_forces(cell)
-            # 打印新力
-            # for atom in atoms:
-            #     print(f"Atom {atom.id} Force: {atom.force}")
         else:
             print("Optimization did not converge within the maximum number of steps.")
+
+
+class BFGSOptimizer(Optimizer):
+    """
+    @class BFGSOptimizer
+    @brief BFGS 优化器，使用 scipy.optimize.minimize 实现
+    """
+
+    def __init__(self, tol=1e-6):
+        self.tol = tol
+
+    def optimize(self, cell, potential):
+        num_atoms = len(cell.atoms)
+        initial_positions = np.array([atom.position for atom in cell.atoms]).flatten()
+
+        def objective(x):
+            # Set positions
+            for i, atom in enumerate(cell.atoms):
+                atom.position = x[3 * i : 3 * i + 3]
+            # Calculate potential energy
+            energy = potential.calculate_energy(cell)
+            return energy
+
+        def gradient(x):
+            # Set positions
+            for i, atom in enumerate(cell.atoms):
+                atom.position = x[3 * i : 3 * i + 3]
+            # Calculate forces
+            potential.calculate_forces(cell)
+            # Gradient is -force
+            grad = -np.array([atom.force for atom in cell.atoms]).flatten()
+            return grad
+
+        result = minimize(
+            objective,
+            initial_positions,
+            method="BFGS",
+            jac=gradient,
+            options={"gtol": self.tol, "disp": True},
+        )
+
+        # Update positions after optimization
+        optimized_positions = result.x
+        for i, atom in enumerate(cell.atoms):
+            atom.position = optimized_positions[3 * i : 3 * i + 3]
+        # Recalculate forces
+        potential.calculate_forces(cell)
 
 
 # src/python/potentials.py
@@ -755,6 +917,9 @@ class Potential:
     def calculate_forces(self, cell):
         raise NotImplementedError
 
+    def calculate_energy(self, cell):
+        raise NotImplementedError
+
 
 class LennardJonesPotential(Potential):
     """
@@ -776,7 +941,7 @@ class LennardJonesPotential(Potential):
             [atom.position for atom in cell.atoms], dtype=np.float64
         ).flatten()
         forces = np.zeros_like(positions)
-        lattice_vectors = cell.lattice_vectors.flatten()
+        box_lengths = cell.get_box_lengths()
         self.cpp_interface.calculate_forces(
             num_atoms,
             positions,
@@ -784,17 +949,27 @@ class LennardJonesPotential(Potential):
             self.epsilon,
             self.sigma,
             self.cutoff,
-            lattice_vectors,
+            box_lengths,
         )
-        # 检查 forces 数组是否更新
-        if np.allclose(forces, 0):
-            print("警告：计算得到的力全为零")
-        else:
-            print("计算得到的力非零")
-            # print("计算得到的力数组：", forces)
         # 更新原子力
         for i, atom in enumerate(cell.atoms):
             atom.force = forces[3 * i : 3 * i + 3]
+
+    def calculate_energy(self, cell):
+        num_atoms = len(cell.atoms)
+        positions = np.array(
+            [atom.position for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        box_lengths = cell.get_box_lengths()
+        energy = self.cpp_interface.calculate_energy(
+            num_atoms,
+            positions,
+            self.epsilon,
+            self.sigma,
+            self.cutoff,
+            box_lengths,
+        )
+        return energy
 
 
 # src/python/structure.py
@@ -838,6 +1013,13 @@ class Cell:
     def calculate_volume(self):
         return np.linalg.det(self.lattice_vectors)
 
+    def get_box_lengths(self):
+        """
+        返回模拟盒子在 x、y、z 方向的长度。
+        """
+        box_lengths = np.linalg.norm(self.lattice_vectors, axis=1)
+        return box_lengths
+
     def apply_deformation(self, deformation_matrix):
         """
         @brief 对晶胞和原子坐标施加变形矩阵。
@@ -875,6 +1057,103 @@ class Cell:
         return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
 
 
+# src/python/thermostats.py
+
+import numpy as np
+from .interfaces.cpp_interface import CppInterface
+
+
+class Thermostat:
+    """
+    @class Thermostat
+    @brief 恒温器基类
+    """
+
+    def apply(self, atoms, dt):
+        raise NotImplementedError
+
+
+class NoseHooverThermostat(Thermostat):
+    """
+    @class NoseHooverThermostat
+    @brief Nose-Hoover 恒温器的实现
+    """
+
+    def __init__(self, target_temperature, time_constant, Q=None):
+        self.target_temperature = target_temperature
+        self.Q = Q  # 热浴质量参数
+        self.xi = 0.0  # 热浴变量初始值
+        self.cpp_interface = CppInterface("nose_hoover")
+        if self.Q is None:
+            # 根据时间常数估计 Q
+            kB = 8.617333262e-5  # eV/K
+            self.Q = time_constant * time_constant * 3 * kB * target_temperature
+
+    def apply(self, atoms, dt):
+        num_atoms = len(atoms)
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
+        # 调用 C++ 函数
+        self.xi = self.cpp_interface.nose_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            self.xi,
+            self.Q,
+            self.target_temperature,
+        )
+        # 更新原子速度
+        for i, atom in enumerate(atoms):
+            atom.velocity = velocities[3 * i : 3 * i + 3]
+
+
+class NoseHooverChainThermostat(Thermostat):
+    """
+    @class NoseHooverChainThermostat
+    @brief Nose-Hoover 链恒温器的实现
+    """
+
+    def __init__(self, target_temperature, time_constant, chain_length=3, Q=None):
+        self.target_temperature = target_temperature
+        self.chain_length = chain_length
+        self.Q = Q  # 热浴质量参数数组
+        self.xi = np.zeros(chain_length)  # 热浴变量数组
+        self.cpp_interface = CppInterface("nose_hoover_chain")
+        if self.Q is None:
+            # 根据时间常数估计 Q
+            kB = 8.617333262e-5  # eV/K
+            Q_base = time_constant * time_constant * 3 * kB * target_temperature
+            self.Q = np.array([Q_base * (i + 1) for i in range(chain_length)])
+
+    def apply(self, atoms, dt):
+        num_atoms = len(atoms)
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
+        # 调用 C++ 函数
+        self.xi = self.cpp_interface.nose_hoover_chain(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            self.xi,
+            self.Q,
+            self.chain_length,
+            self.target_temperature,
+        )
+        # 更新原子速度
+        for i, atom in enumerate(atoms):
+            atom.velocity = velocities[3 * i : 3 * i + 3]
+
+
 # src/python/utils.py
 
 import numpy as np
@@ -886,16 +1165,16 @@ class TensorConverter:
         """
         将 3x3 张量转换为 Voigt 表示的长度为6的向量。
 
-        顺序为 [σ_xx, σ_yy, σ_zz, σ_xy, σ_xz, σ_yz]
+        顺序为 [σ_xx, σ_yy, σ_zz, σ_yz, σ_xz, σ_xy]
         """
         voigt = np.array(
             [
                 tensor[0, 0],
                 tensor[1, 1],
                 tensor[2, 2],
-                tensor[0, 1],
-                tensor[0, 2],
                 tensor[1, 2],
+                tensor[0, 2],
+                tensor[0, 1],
             ]
         )
         return voigt
@@ -1004,23 +1283,24 @@ class Visualizer:
 # 导入子模块
 from .structure import Atom, Cell
 from .potentials import Potential, LennardJonesPotential
-from .md import (
-    MDSimulator,
-    Integrator,
-    VelocityVerletIntegrator,
+from .integrators import Integrator, VelocityVerletIntegrator, RK4Integrator
+from .thermostats import (
     Thermostat,
     NoseHooverThermostat,
+    NoseHooverChainThermostat,
 )
+from .barostats import Barostat, MTKBarostat, ParrinelloRahmanHooverBarostat
 from .mechanics import (
     StressCalculator,
     StressCalculatorLJ,
-    StrainCalculator,
     ElasticConstantsSolver,
 )
-from .optimizers import Optimizer, GradientDescentOptimizer
+from .optimizers import Optimizer, GradientDescentOptimizer, BFGSOptimizer
 from .deformation import Deformer
 from .utils import TensorConverter, DataCollector
 from .visualization import Visualizer
+from .elasticity import ElasticConstantsCalculator
+from .md_simulator import MDSimulator
 from .config import ConfigManager
 
 
@@ -1073,6 +1353,32 @@ class CppInterface:
                 ctypes.c_double,  # target_temperature
             ]
             self.lib.nose_hoover.restype = None
+        elif lib_name == "nose_hoover_chain":
+            self.lib.nose_hoover_chain.argtypes = [
+                ctypes.c_double,  # dt
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
+                ctypes.c_int,  # chain_length
+                ctypes.c_double,  # target_temperature
+            ]
+            self.lib.nose_hoover_chain.restype = None
+        elif lib_name == "parrinello_rahman_hoover":
+            self.lib.parrinello_rahman_hoover.argtypes = [
+                ctypes.c_double,  # dt
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
+                ctypes.c_double,  # target_pressure
+            ]
+            self.lib.parrinello_rahman_hoover.restype = None
         elif lib_name == "lennard_jones":
             self.lib.calculate_forces.argtypes = [
                 ctypes.c_int,  # num_atoms
@@ -1081,9 +1387,19 @@ class CppInterface:
                 ctypes.c_double,  # epsilon
                 ctypes.c_double,  # sigma
                 ctypes.c_double,  # cutoff
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
             ]
             self.lib.calculate_forces.restype = None
+
+            self.lib.calculate_energy.argtypes = [
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
+                ctypes.c_double,  # epsilon
+                ctypes.c_double,  # sigma
+                ctypes.c_double,  # cutoff
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
+            ]
+            self.lib.calculate_energy.restype = ctypes.c_double
         elif lib_name == "stress_calculator":
             self.lib.compute_stress.argtypes = [
                 ctypes.c_int,  # num_atoms
@@ -1092,10 +1408,7 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ctypes.c_double,  # volume
-                ctypes.c_double,  # epsilon
-                ctypes.c_double,  # sigma
-                ctypes.c_double,  # cutoff
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
                 ndpointer(
                     ctypes.c_double, flags="C_CONTIGUOUS"
                 ),  # stress_tensor (output)
@@ -1105,6 +1418,11 @@ class CppInterface:
     def nose_hoover(
         self, dt, num_atoms, masses, velocities, forces, xi, Q, target_temperature
     ):
+        """
+        调用 C++ 实现的 Nose-Hoover 恒温器。
+
+        返回更新后的 xi。
+        """
         xi_c = ctypes.c_double(xi)
         self.lib.nose_hoover(
             dt,
@@ -1118,6 +1436,64 @@ class CppInterface:
         )
         return xi_c.value
 
+    def nose_hoover_chain(
+        self,
+        dt,
+        num_atoms,
+        masses,
+        velocities,
+        forces,
+        xi,
+        Q,
+        chain_length,
+        target_temperature,
+    ):
+        """
+        调用 C++ 实现的 Nose-Hoover 链恒温器。
+
+        返回更新后的 xi。
+        """
+        self.lib.nose_hoover_chain(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            xi,
+            Q,
+            chain_length,
+            target_temperature,
+        )
+        return xi  # xi 已在 C++ 中更新
+
+    def parrinello_rahman_hoover(
+        self,
+        dt,
+        num_atoms,
+        masses,
+        velocities,
+        forces,
+        lattice_vectors,
+        xi,
+        Q,
+        target_pressure,
+    ):
+        """
+        调用 C++ 实现的 Parrinello-Rahman-Hoover 恒温器。
+        """
+        self.lib.parrinello_rahman_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            lattice_vectors,
+            xi,
+            Q,
+            target_pressure,
+        )
+        # xi 已在 C++ 中更新
+
     def calculate_forces(
         self,
         num_atoms,
@@ -1126,7 +1502,7 @@ class CppInterface:
         epsilon,
         sigma,
         cutoff,
-        lattice_vectors,
+        box_lengths,
     ):
         self.lib.calculate_forces(
             num_atoms,
@@ -1135,8 +1511,27 @@ class CppInterface:
             epsilon,
             sigma,
             cutoff,
-            lattice_vectors,
+            box_lengths,
         )
+
+    def calculate_energy(
+        self,
+        num_atoms,
+        positions,
+        epsilon,
+        sigma,
+        cutoff,
+        box_lengths,
+    ):
+        energy = self.lib.calculate_energy(
+            num_atoms,
+            positions,
+            epsilon,
+            sigma,
+            cutoff,
+            box_lengths,
+        )
+        return energy
 
     def compute_stress(
         self,
@@ -1146,10 +1541,7 @@ class CppInterface:
         forces,
         masses,
         volume,
-        epsilon,
-        sigma,
-        cutoff,
-        lattice_vectors,
+        box_lengths,
     ):
         stress_tensor = np.zeros(9, dtype=np.float64)
         self.lib.compute_stress(
@@ -1159,10 +1551,7 @@ class CppInterface:
             forces,
             masses,
             volume,
-            epsilon,
-            sigma,
-            cutoff,
-            lattice_vectors,
+            box_lengths,
             stress_tensor,
         )
         return stress_tensor.reshape((3, 3))

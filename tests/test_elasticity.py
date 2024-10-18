@@ -13,9 +13,9 @@ def test_elastic_constants_calculator():
     """
     # 创建一个简单的晶胞，例如立方晶格
     atoms = [
-        Atom(id=0, mass=2816.78346, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
+        Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
         Atom(
-            id=1, mass=2816.78346, position=np.array([2.55, 2.55, 2.55]), symbol="Al"
+            id=1, mass=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"
         ),  # sigma=2.55 Å
     ]
     lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
@@ -29,7 +29,7 @@ def test_elastic_constants_calculator():
 
     # 创建 ElasticConstantsCalculator 实例
     elastic_calculator = ElasticConstantsCalculator(
-        cell=cell, potential=lj_potential, delta=1e-3
+        cell=cell, potential=lj_potential, delta=1e-3, optimizer_type="BFGS"
     )
 
     # 计算弹性常数

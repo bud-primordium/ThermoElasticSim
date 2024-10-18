@@ -11,7 +11,7 @@ def test_tensor_converter_to_voigt():
     @brief 测试 TensorConverter 的 to_voigt 方法
     """
     tensor = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
-    expected_voigt = np.array([1.0, 5.0, 9.0, 2.0, 3.0, 6.0])
+    expected_voigt = np.array([1.0, 5.0, 9.0, 6.0, 3.0, 2.0])
     voigt = TensorConverter.to_voigt(tensor)
     np.testing.assert_array_almost_equal(voigt, expected_voigt, decimal=6)
 

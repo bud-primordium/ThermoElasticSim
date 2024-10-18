@@ -39,6 +39,13 @@ class Cell:
     def calculate_volume(self):
         return np.linalg.det(self.lattice_vectors)
 
+    def get_box_lengths(self):
+        """
+        返回模拟盒子在 x、y、z 方向的长度。
+        """
+        box_lengths = np.linalg.norm(self.lattice_vectors, axis=1)
+        return box_lengths
+
     def apply_deformation(self, deformation_matrix):
         """
         @brief 对晶胞和原子坐标施加变形矩阵。

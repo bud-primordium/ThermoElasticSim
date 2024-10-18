@@ -2,17 +2,25 @@
 
 import pytest
 import numpy as np
-from python.optimizers import GradientDescentOptimizer
+from python.optimizers import GradientDescentOptimizer, BFGSOptimizer
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
 
 
 @pytest.fixture
-def optimizer():
+def gradient_descent_optimizer():
     """
     @fixture 定义梯度下降优化器
     """
     return GradientDescentOptimizer(max_steps=5000, tol=1e-8, step_size=0.1)
+
+
+@pytest.fixture
+def bfgs_optimizer():
+    """
+    @fixture 定义 BFGS 优化器
+    """
+    return BFGSOptimizer(tol=1e-6)
 
 
 @pytest.fixture
@@ -25,7 +33,7 @@ def optimization_cell(pbc_enabled=False):
     else:
         lattice_vectors = np.eye(3) * 1e8  # Å, 以禁用 PBC
 
-    mass = 2816.78346  # eV·fs²/Å²
+    mass = 26.9815  # amu
     position1 = np.array([0.0, 0.0, 0.0])
     position2 = np.array([2.55, 0.0, 0.0])  # 初始距离为 σ = 2.55 Å
     atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
@@ -45,11 +53,13 @@ def lj_potential_optim():
     return LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
 
 
-def test_gradient_descent_optimizer(optimizer, optimization_cell, lj_potential_optim):
+def test_gradient_descent_optimizer(
+    gradient_descent_optimizer, optimization_cell, lj_potential_optim
+):
     """
     @brief 测试梯度下降优化器
     """
-    optimizer.optimize(optimization_cell, lj_potential_optim)
+    gradient_descent_optimizer.optimize(optimization_cell, lj_potential_optim)
 
     # 获取优化后的原子位置
     optimized_position1 = optimization_cell.atoms[0].position
@@ -63,11 +73,31 @@ def test_gradient_descent_optimizer(optimizer, optimization_cell, lj_potential_o
     assert np.isclose(optimized_distance, equilibrium_distance, atol=2e-3)
 
 
-def test_optimizer_convergence(optimizer, optimization_cell, lj_potential_optim):
+def test_bfgs_optimizer(bfgs_optimizer, optimization_cell, lj_potential_optim):
     """
-    @brief 测试优化器是否能收敛
+    @brief 测试 BFGS 优化器
     """
-    optimizer.optimize(optimization_cell, lj_potential_optim)
+    bfgs_optimizer.optimize(optimization_cell, lj_potential_optim)
+
+    # 获取优化后的原子位置
+    optimized_position1 = optimization_cell.atoms[0].position
+    optimized_position2 = optimization_cell.atoms[1].position
+
+    # 计算优化后的距离
+    optimized_distance = np.linalg.norm(optimized_position2 - optimized_position1)
+
+    # 预期优化后的距离应接近 2^(1/6) * sigma ≈ 2.857 Å
+    equilibrium_distance = 2 ** (1 / 6) * lj_potential_optim.sigma
+    assert np.isclose(optimized_distance, equilibrium_distance, atol=2e-3)
+
+
+def test_optimizer_convergence(
+    gradient_descent_optimizer, optimization_cell, lj_potential_optim
+):
+    """
+    @brief 测试梯度下降优化器是否能收敛
+    """
+    gradient_descent_optimizer.optimize(optimization_cell, lj_potential_optim)
 
     # 计算优化后的距离
     optimized_distance = np.linalg.norm(
@@ -85,11 +115,11 @@ def test_force_direction():
     """
     # 创建一个简单的晶胞
     atoms = [
-        Atom(id=0, mass=2816.78346, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
-        Atom(id=1, mass=2816.78346, position=np.array([2.55, 2.55, 2.55]), symbol="Al"),
+        Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
+        Atom(id=1, mass=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"),
     ]
     lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
-    cell = Cell(atoms=atoms, lattice_vectors=lattice_vectors)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
     # 定义 Lennard-Jones 势
     epsilon = 0.0103  # eV

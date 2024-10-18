@@ -27,19 +27,18 @@ extern "C"
         double Q,
         double target_temperature)
     {
-        double dt2 = dt / 2.0;
+        double dt_half = dt * 0.5;
         double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
-        double kT = kB * target_temperature;
 
-        // 第一半步：更新速度
+        // 第一半步：更新速度，考虑力
         for (int i = 0; i < num_atoms; ++i)
         {
-            velocities[3 * i] += dt2 * (forces[3 * i] / masses[i]);
-            velocities[3 * i + 1] += dt2 * (forces[3 * i + 1] / masses[i]);
-            velocities[3 * i + 2] += dt2 * (forces[3 * i + 2] / masses[i]);
+            velocities[3 * i] += dt_half * forces[3 * i] / masses[i];
+            velocities[3 * i + 1] += dt_half * forces[3 * i + 1] / masses[i];
+            velocities[3 * i + 2] += dt_half * forces[3 * i + 2] / masses[i];
         }
 
-        // 计算动能
+        // 更新 xi（热浴变量） - 第一半步
         double kinetic_energy = 0.0;
         for (int i = 0; i < num_atoms; ++i)
         {
@@ -48,18 +47,36 @@ extern "C"
             double vz = velocities[3 * i + 2];
             kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
         }
+        double G_xi = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q;
+        *xi += dt_half * G_xi;
 
-        // 更新热浴变量 xi
-        double Gxi = (2.0 * kinetic_energy - 3.0 * num_atoms * kT) / Q;
-        *xi += dt * Gxi;
-
-        // 第二半步：更新速度，考虑热浴变量的影响
-        double exp_factor = exp(-dt * (*xi));
+        // 缩放速度
+        double scale = exp(-(*xi) * dt);
         for (int i = 0; i < num_atoms; ++i)
         {
-            velocities[3 * i] = velocities[3 * i] * exp_factor + dt2 * (forces[3 * i] / masses[i]);
-            velocities[3 * i + 1] = velocities[3 * i + 1] * exp_factor + dt2 * (forces[3 * i + 1] / masses[i]);
-            velocities[3 * i + 2] = velocities[3 * i + 2] * exp_factor + dt2 * (forces[3 * i + 2] / masses[i]);
+            velocities[3 * i] *= scale;
+            velocities[3 * i + 1] *= scale;
+            velocities[3 * i + 2] *= scale;
+        }
+
+        // 更新 xi（热浴变量） - 第二半步
+        kinetic_energy = 0.0;
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            double vx = velocities[3 * i];
+            double vy = velocities[3 * i + 1];
+            double vz = velocities[3 * i + 2];
+            kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
+        }
+        G_xi = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q;
+        *xi += dt_half * G_xi;
+
+        // 第二半步：更新速度，考虑力
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            velocities[3 * i] += dt_half * forces[3 * i] / masses[i];
+            velocities[3 * i + 1] += dt_half * forces[3 * i + 1] / masses[i];
+            velocities[3 * i + 2] += dt_half * forces[3 * i + 2] / masses[i];
         }
     }
 }

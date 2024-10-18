@@ -3,7 +3,7 @@
 import numpy as np
 from .mechanics import StressCalculatorLJ, ElasticConstantsSolver
 from .deformation import Deformer
-from .optimizers import GradientDescentOptimizer
+from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter
 
 
@@ -13,15 +13,20 @@ class ElasticConstantsCalculator:
     @brief 用于计算弹性常数的类
     """
 
-    def __init__(self, cell, potential, delta=1e-3):
+    def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
         self.cell = cell
         self.potential = potential
         self.delta = delta
         self.deformer = Deformer(delta)
         self.stress_calculator = StressCalculatorLJ()
-        self.optimizer = GradientDescentOptimizer(
-            max_steps=1000, tol=1e-6, step_size=1e-4
-        )
+        if optimizer_type == "GD":
+            self.optimizer = GradientDescentOptimizer(
+                max_steps=1000, tol=1e-6, step_size=1e-4
+            )
+        elif optimizer_type == "BFGS":
+            self.optimizer = BFGSOptimizer(tol=1e-6)
+        else:
+            raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
 
     def calculate_elastic_constants(self):
         """

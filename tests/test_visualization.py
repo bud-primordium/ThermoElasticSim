@@ -17,9 +17,9 @@ def test_plot_cell_structure():
     """
     # 创建一个简单的晶胞
     atoms = [
-        Atom(id=0, mass=2816.78346, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
+        Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
         Atom(
-            id=1, mass=2816.78346, position=np.array([2.55, 2.55, 2.55]), symbol="Al"
+            id=1, mass=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"
         ),  # sigma=2.55 Å
     ]
     lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量

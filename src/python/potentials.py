@@ -20,6 +20,9 @@ class Potential:
     def calculate_forces(self, cell):
         raise NotImplementedError
 
+    def calculate_energy(self, cell):
+        raise NotImplementedError
+
 
 class LennardJonesPotential(Potential):
     """
@@ -41,7 +44,7 @@ class LennardJonesPotential(Potential):
             [atom.position for atom in cell.atoms], dtype=np.float64
         ).flatten()
         forces = np.zeros_like(positions)
-        lattice_vectors = cell.lattice_vectors.flatten()
+        box_lengths = cell.get_box_lengths()
         self.cpp_interface.calculate_forces(
             num_atoms,
             positions,
@@ -49,14 +52,24 @@ class LennardJonesPotential(Potential):
             self.epsilon,
             self.sigma,
             self.cutoff,
-            lattice_vectors,
+            box_lengths,
         )
-        # 检查 forces 数组是否更新
-        if np.allclose(forces, 0):
-            print("警告：计算得到的力全为零")
-        else:
-            print("计算得到的力非零")
-            # print("计算得到的力数组：", forces)
         # 更新原子力
         for i, atom in enumerate(cell.atoms):
             atom.force = forces[3 * i : 3 * i + 3]
+
+    def calculate_energy(self, cell):
+        num_atoms = len(cell.atoms)
+        positions = np.array(
+            [atom.position for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        box_lengths = cell.get_box_lengths()
+        energy = self.cpp_interface.calculate_energy(
+            num_atoms,
+            positions,
+            self.epsilon,
+            self.sigma,
+            self.cutoff,
+            box_lengths,
+        )
+        return energy

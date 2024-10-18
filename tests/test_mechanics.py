@@ -46,6 +46,8 @@ def test_stress_calculation(single_atom_cell, lj_potential_single):
     )
     # 检查应力张量是否为 3x3 矩阵
     assert stress_tensor.shape == (3, 3)
+    # 由于只有一个原子且无力作用，应力张量应为零
+    np.testing.assert_array_almost_equal(stress_tensor, np.zeros((3, 3)), decimal=6)
 
 
 def test_strain_calculation():
@@ -72,6 +74,6 @@ def test_elastic_constants_solver():
     C = solver.solve(strains, stresses)
     # 检查 C 是否为 6x6 矩阵
     assert C.shape == (6, 6)
-    # 由于输入为线性关系，C 应接近单位矩阵乘以某常数
+    # 由于输入为线性关系，C 应接近通过最小二乘法求得的矩阵
     expected_C = np.linalg.lstsq(strains, stresses, rcond=None)[0]
     np.testing.assert_array_almost_equal(C, expected_C, decimal=6)

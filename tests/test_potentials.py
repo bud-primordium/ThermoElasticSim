@@ -42,3 +42,21 @@ def test_force_calculation(lj_potential, two_atom_cell):
     force2 = two_atom_cell.atoms[1].force
     np.testing.assert_array_almost_equal(force1, -force2, decimal=10)
     assert not np.allclose(force1, 0)
+
+
+def test_energy_calculation(lj_potential, two_atom_cell):
+    """
+    @brief 测试 Lennard-Jones 势的能量计算功能
+    """
+    energy = lj_potential.calculate_energy(two_atom_cell)
+    # 由于只有两个原子且对称位置，能量应等于 4 * epsilon * ( (sigma/r)^12 - (sigma/r)^6 )
+    r = np.linalg.norm(
+        two_atom_cell.atoms[1].position - two_atom_cell.atoms[0].position
+    )
+    expected_energy = (
+        4.0
+        * lj_potential.epsilon
+        * ((lj_potential.sigma / r) ** 12 - (lj_potential.sigma / r) ** 6)
+    )
+    # 由于能量计算可能包括截断修正，此处仅为基本验证
+    np.testing.assert_almost_equal(energy, expected_energy, decimal=6)

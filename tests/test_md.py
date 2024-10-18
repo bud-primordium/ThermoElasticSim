@@ -14,7 +14,7 @@ def simple_cell(pbc_enabled=True):
     @fixture 创建一个简单的晶胞，包含两个原子
     """
     lattice_vectors = np.eye(3) * 6.0 if pbc_enabled else np.eye(3) * 1e8  # Å
-    mass = 2816.78346  # eV·fs²/Å²
+    mass = 26.9815  # amu (Aluminum)
     position1 = np.array([0.0, 0.0, 0.0])
     position2 = np.array([2.55, 0.0, 0.0])  # 与原子 1 相距 σ = 2.55 Å
     atom1 = Atom(id=0, symbol="Al", mass=mass, position=position1)
@@ -55,9 +55,9 @@ def test_md_simulation(simple_cell, lj_potential, integrator):
     @brief 测试分子动力学模拟器的运行
     """
     md_simulator = MDSimulator(
-        simple_cell,
-        lj_potential,
-        integrator,
+        cell=simple_cell,
+        potential=lj_potential,
+        integrator=integrator,
         thermostat=None,  # 先不加恒温器！！！
     )
     md_simulator.run(steps=10, dt=1.0)  # dt 单位为 fs
@@ -78,9 +78,9 @@ def test_md_simulation_with_thermostat(
     @brief 测试分子动力学模拟器的运行，带恒温器
     """
     md_simulator = MDSimulator(
-        simple_cell,
-        lj_potential,
-        integrator,
+        cell=simple_cell,
+        potential=lj_potential,
+        integrator=integrator,
         thermostat=thermostat,
     )
     md_simulator.run(steps=10, dt=1.0)  # dt 单位为 fs

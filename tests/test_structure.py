@@ -56,8 +56,11 @@ def test_apply_periodic_boundary(cell):
     """
     @brief 测试周期性边界条件的应用
     """
-    position = np.array([5.0, -1.0, 4.0])  # 超出晶胞范围的坐标
+    lattice_constant = cell.lattice_vectors[0, 0]  # 假设晶格为立方
+    position = np.array(
+        [lattice_constant + 1.0, -1.0, lattice_constant + 1.0]
+    )  # 超出晶胞范围的坐标
     new_position = cell.apply_periodic_boundary(position)
     # 检查新位置是否在 [0, lattice_constant) 范围内
     assert np.all(new_position >= 0)
-    assert np.all(new_position < 4.05)
+    assert np.all(new_position < lattice_constant)
