@@ -23,7 +23,7 @@ def two_atom_cell():
     @fixture 创建一个简单的系统，包含两个原子
     """
     lattice_vectors = np.eye(3) * 4.05  # Å
-    mass_amu_amu = 26.9815  # amu
+    mass_amu = 26.9815  # amu
     position1 = np.array([0.0, 0.0, 0.0])
     position2 = np.array([2.025, 0.0, 0.0])  # 2.025 Å
     atom1 = Atom(id=0, symbol="Al", mass_amu=mass_amu, position=position1)

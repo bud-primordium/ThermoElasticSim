@@ -17,7 +17,7 @@ def simple_cell(pbc_enabled=True):
     @fixture 创建一个简单的晶胞，包含两个原子。
     """
     lattice_vectors = np.eye(3) * 6.0 if pbc_enabled else np.eye(3) * 1e8  # Å
-    mass_amu_amu = 26.9815  # amu (Aluminum)
+    mass_amu = 26.9815  # amu (Aluminum)
     position1 = np.array([0.0, 0.0, 0.0])
     position2 = np.array([2.55, 0.0, 0.0])  # 与原子1相距 σ = 2.55 Å
     atom1 = Atom(id=0, symbol="Al", mass_amu=mass_amu, position=position1)

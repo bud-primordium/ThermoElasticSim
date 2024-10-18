@@ -3,6 +3,7 @@
 import numpy as np
 from .interfaces.cpp_interface import CppInterface
 from .mechanics import StressCalculatorLJ
+from .structure import Cell
 
 
 class Barostat:

@@ -20,7 +20,7 @@ src/
         md_simulator.py
         mechanics.py
         optimizers.py
-        ploy_test.py
+        ploy_lj.py
         potentials.py
         structure.py
         thermostats.py
@@ -1019,6 +1019,7 @@ class StrainCalculator:
 
 import numpy as np
 from scipy.optimize import minimize
+import logging
 
 
 class Optimizer:
@@ -1037,33 +1038,45 @@ class GradientDescentOptimizer(Optimizer):
     @brief 梯度下降优化器
     """
 
-    def __init__(self, max_steps=1000, tol=1e-6, step_size=1e-3):
+    def __init__(self, max_steps=10000, tol=1e-6, step_size=1e-43):
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
         self.converged = False  # 添加收敛标志
 
     def optimize(self, cell, potential):
+        logger = logging.getLogger(__name__)
         atoms = cell.atoms
         potential.calculate_forces(cell)
         for step in range(self.max_steps):
             # 计算最大力
             max_force = max(np.linalg.norm(atom.force) for atom in atoms)
-            # print(f"Step {step}: Max force = {max_force}")
+            kinetic_energy = sum(
+                0.5 * atom.mass * np.linalg.norm(atom.velocity) ** 2 for atom in atoms
+            )
+            potential_energy = potential.calculate_energy(cell)
+            total_energy = kinetic_energy + potential_energy
+
+            logger.debug(
+                f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV"
+            )
+
             if max_force < self.tol:
-                print(f"Converged after {step} steps")
+                logger.info(f"Gradient Descent converged after {step} steps.")
                 self.converged = True
                 break
             # 更新 position
             for atom in atoms:
                 displacement = self.step_size * atom.force
-                atom.position += displacement
+                atom.position -= displacement
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
             # 重新计算力
             potential.calculate_forces(cell)
         else:
-            print("Optimization did not converge within the maximum number of steps.")
+            logger.warning(
+                "Gradient Descent Optimization did not converge within the maximum number of steps."
+            )
             self.converged = False
 
 
@@ -1078,6 +1091,7 @@ class BFGSOptimizer(Optimizer):
         self.converged = False  # 添加收敛标志
 
     def optimize(self, cell, potential):
+        logger = logging.getLogger(__name__)
         num_atoms = cell.num_atoms
         initial_positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
@@ -1101,12 +1115,24 @@ class BFGSOptimizer(Optimizer):
             grad = -np.array([atom.force for atom in cell.atoms]).flatten()
             return grad
 
+        iteration = [0]  # 使用列表以便在回调中修改
+
+        def callback(xk):
+            iteration[0] += 1
+            energy = objective(xk)
+            grad = gradient(xk)
+            grad_norm = np.linalg.norm(grad)
+            logger.debug(
+                f"BFGS Iteration {iteration[0]}: Energy = {energy:.6f} eV, Gradient Norm = {grad_norm:.6f} eV/Å"
+            )
+
         result = minimize(
             objective,
             initial_positions,
             method="BFGS",
             jac=gradient,
-            options={"gtol": self.tol, "disp": True},
+            callback=callback,
+            options={"gtol": self.tol, "disp": False},  # 关闭内部显示
         )
 
         # Update positions after optimization
@@ -1115,6 +1141,11 @@ class BFGSOptimizer(Optimizer):
             atom.position = optimized_positions[3 * i : 3 * i + 3]
         # Recalculate forces
         potential.calculate_forces(cell)
+
+        if result.success:
+            logger.info(f"BFGS Optimization converged after {iteration[0]} iterations.")
+        else:
+            logger.warning(f"BFGS Optimization did not converge: {result.message}")
 
         self.converged = result.success
 
@@ -1132,8 +1163,8 @@ lj_potential = LennardJonesPotential(epsilon, sigma, cutoff)
 
 # 创建模拟单元格
 atoms = [
-    Atom(id=0, symbol="Al", mass=26.9815, position=np.array([0.0, 0.0, 0.0])),
-    Atom(id=1, symbol="Al", mass=26.9815, position=np.array([2.5, 0.0, 0.0])),
+    Atom(id=0, symbol="Al", mass_amu=26.9815, position=np.array([0.0, 0.0, 0.0])),
+    Atom(id=1, symbol="Al", mass_amu=26.9815, position=np.array([2.5, 0.0, 0.0])),
 ]
 box_lengths = np.array([30.0, 30.0, 30.0])  # 立方体盒子
 
@@ -1255,6 +1286,7 @@ class LennardJonesPotential(Potential):
 # src/python/structure.py
 
 import numpy as np
+from .utils import AMU_TO_EVFSA2
 
 
 class Atom:
@@ -1263,10 +1295,10 @@ class Atom:
     @brief 原子类，包含原子的信息和属性。
     """
 
-    def __init__(self, id, symbol, mass, position, velocity=None):
+    def __init__(self, id, symbol, mass_amu, position, velocity=None):
         self.id = id
         self.symbol = symbol
-        self.mass = mass
+        self.mass = mass_amu * AMU_TO_EVFSA2  # 质量转换为 eV/fs^2
         self.position = np.array(position, dtype=np.float64)
         self.velocity = (
             np.zeros(3, dtype=np.float64)
@@ -1332,7 +1364,7 @@ class Cell:
             Atom(
                 atom.id,
                 atom.symbol,
-                atom.mass,
+                atom.mass_amu,
                 atom.position.copy(),
                 atom.velocity.copy(),
             )

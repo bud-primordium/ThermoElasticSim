@@ -20,12 +20,12 @@ class NoseHooverThermostat(Thermostat):
     @brief Nose-Hoover 恒温器的实现
     """
 
-    def __init__(self, target_temperature, time_constant):
+    def __init__(self, target_temperature, time_constant, Q=10.0):
         self.target_temperature = target_temperature
         self.time_constant = time_constant
         self.cpp_interface = CppInterface("nose_hoover")
         self.xi = np.array([0.0], dtype=np.float64)  # 初始热浴变量，改为 NumPy 数组
-        self.Q = 10.0  # 热浴质量参数，可根据需要调整
+        self.Q = Q
 
     def apply(self, atoms, dt):
         num_atoms = len(atoms)
