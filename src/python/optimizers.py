@@ -24,6 +24,7 @@ class GradientDescentOptimizer(Optimizer):
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
+        self.converged = False  # 添加收敛标志
 
     def optimize(self, cell, potential):
         atoms = cell.atoms
@@ -34,6 +35,7 @@ class GradientDescentOptimizer(Optimizer):
             print(f"Step {step}: Max force = {max_force}")
             if max_force < self.tol:
                 print(f"Converged after {step} steps")
+                self.converged = True
                 break
             # 更新 position
             for atom in atoms:
@@ -45,6 +47,7 @@ class GradientDescentOptimizer(Optimizer):
             potential.calculate_forces(cell)
         else:
             print("Optimization did not converge within the maximum number of steps.")
+            self.converged = False
 
 
 class BFGSOptimizer(Optimizer):
@@ -55,10 +58,13 @@ class BFGSOptimizer(Optimizer):
 
     def __init__(self, tol=1e-6):
         self.tol = tol
+        self.converged = False  # 添加收敛标志
 
     def optimize(self, cell, potential):
-        num_atoms = len(cell.atoms)
-        initial_positions = np.array([atom.position for atom in cell.atoms]).flatten()
+        num_atoms = cell.num_atoms
+        initial_positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
 
         def objective(x):
             # Set positions
@@ -92,3 +98,5 @@ class BFGSOptimizer(Optimizer):
             atom.position = optimized_positions[3 * i : 3 * i + 3]
         # Recalculate forces
         potential.calculate_forces(cell)
+
+        self.converged = result.success

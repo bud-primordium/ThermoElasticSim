@@ -2,13 +2,9 @@
 
 import pytest
 import numpy as np
-from python.elasticity import ElasticConstantsCalculator
-from python.mechanics import StressCalculatorLJ, StrainCalculator
-from python.deformation import Deformer
-from python.optimizers import BFGSOptimizer
-from python.structure import Cell, Atom
-from python.potentials import LennardJonesPotential
-from python.utils import TensorConverter
+from src.python.structure import Atom, Cell
+from src.python.potentials import LennardJonesPotential
+from src.python.elasticity import ElasticConstantsSolver, ElasticConstantsCalculator
 
 
 def test_elastic_constants_calculator():
@@ -41,7 +37,7 @@ def test_elastic_constants_calculator():
     # 假设单位转换正确，此处示例可能需要根据实际单位调整
     C_in_GPa = C * 160.21766208
 
-    # 预期弹性常数矩阵（根据您的测试数据）
+    # 预期弹性常数矩阵（根据你的测试数据调整）
     expected_C = np.array(
         [
             [69.0, 0.0, 0.0, 0.0, 0.0, 0.0],

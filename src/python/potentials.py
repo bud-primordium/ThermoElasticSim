@@ -1,7 +1,7 @@
 # src/python/potentials.py
 
 import numpy as np
-from python.interfaces.cpp_interface import CppInterface
+from .interfaces.cpp_interface import CppInterface
 
 
 class Potential:
@@ -39,12 +39,13 @@ class LennardJonesPotential(Potential):
         self.cpp_interface = CppInterface("lennard_jones")
 
     def calculate_forces(self, cell):
-        num_atoms = len(cell.atoms)
-        positions = np.array(
-            [atom.position for atom in cell.atoms], dtype=np.float64
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
         ).flatten()
-        forces = np.zeros_like(positions)
-        box_lengths = cell.get_box_lengths()
+        forces = np.zeros_like(positions, dtype=np.float64)
+        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+
         self.cpp_interface.calculate_forces(
             num_atoms,
             positions,
@@ -55,15 +56,17 @@ class LennardJonesPotential(Potential):
             box_lengths,
         )
         # 更新原子力
+        forces = forces.reshape((num_atoms, 3))
         for i, atom in enumerate(cell.atoms):
-            atom.force = forces[3 * i : 3 * i + 3]
+            atom.force = forces[i]
 
     def calculate_energy(self, cell):
-        num_atoms = len(cell.atoms)
-        positions = np.array(
-            [atom.position for atom in cell.atoms], dtype=np.float64
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
         ).flatten()
-        box_lengths = cell.get_box_lengths()
+        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+
         energy = self.cpp_interface.calculate_energy(
             num_atoms,
             positions,

@@ -13,9 +13,13 @@ class Atom:
         self.id = id
         self.symbol = symbol
         self.mass = mass
-        self.position = np.array(position)
-        self.velocity = np.zeros(3) if velocity is None else np.array(velocity)
-        self.force = np.zeros(3)
+        self.position = np.array(position, dtype=np.float64)
+        self.velocity = (
+            np.zeros(3, dtype=np.float64)
+            if velocity is None
+            else np.array(velocity, dtype=np.float64)
+        )
+        self.force = np.zeros(3, dtype=np.float64)
 
     def update_position(self, delta_r):
         self.position += delta_r
@@ -31,7 +35,7 @@ class Cell:
     """
 
     def __init__(self, lattice_vectors, atoms, pbc_enabled=True):
-        self.lattice_vectors = np.array(lattice_vectors)
+        self.lattice_vectors = np.array(lattice_vectors, dtype=np.float64)
         self.atoms = atoms  # 原子列表
         self.volume = self.calculate_volume()
         self.pbc_enabled = pbc_enabled
@@ -81,3 +85,35 @@ class Cell:
             for atom in self.atoms
         ]
         return Cell(self.lattice_vectors.copy(), atoms_copy, self.pbc_enabled)
+
+    @property
+    def num_atoms(self):
+        """
+        @property num_atoms
+        @brief 返回原子数量。
+        """
+        return len(self.atoms)
+
+    def get_positions(self):
+        """
+        @brief 获取所有原子的位置信息。
+
+        @return numpy.ndarray, 形状为 (num_atoms, 3)
+        """
+        return np.array([atom.position for atom in self.atoms], dtype=np.float64)
+
+    def get_velocities(self):
+        """
+        @brief 获取所有原子的速度信息。
+
+        @return numpy.ndarray, 形状为 (num_atoms, 3)
+        """
+        return np.array([atom.velocity for atom in self.atoms], dtype=np.float64)
+
+    def get_forces(self):
+        """
+        @brief 获取所有原子的力信息。
+
+        @return numpy.ndarray, 形状为 (num_atoms, 3)
+        """
+        return np.array([atom.force for atom in self.atoms], dtype=np.float64)

@@ -34,7 +34,7 @@ class ElasticConstantsSolver:
 
         # 使用最小二乘法求解 C * strains.T = stresses.T
         # 这里 C 是一个 6x6 矩阵，每一行对应一个应力分量的线性组合
-        C = np.linalg.lstsq(strains, stresses, rcond=None)[0]
+        C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
         return C
 
 
@@ -83,9 +83,8 @@ class ElasticConstantsCalculator:
             deformed_cell.apply_deformation(F)
             # 优化结构
             self.optimizer.optimize(deformed_cell, self.potential)
-            # 计算力
-            self.potential.calculate_forces(deformed_cell)
             # 计算应力
+            self.potential.calculate_forces(deformed_cell)
             stress_tensor = self.stress_calculator.compute_stress(
                 deformed_cell, self.potential
             )

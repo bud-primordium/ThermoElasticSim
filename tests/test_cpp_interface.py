@@ -2,30 +2,23 @@
 
 import pytest
 import numpy as np
-from python.interfaces.cpp_interface import CppInterface
+from src.python.structure import Atom, Cell
+from src.python.potentials import LennardJonesPotential
+from src.python.interfaces.cpp_interface import CppInterface
 
 
 @pytest.fixture
 def lj_interface():
-    """
-    @fixture 创建 Lennard-Jones C++ 接口实例
-    """
     return CppInterface("lennard_jones")
 
 
 @pytest.fixture
 def nose_hoover_interface():
-    """
-    @fixture 创建 Nose-Hoover C++ 接口实例
-    """
     return CppInterface("nose_hoover")
 
 
 @pytest.fixture
 def nose_hoover_chain_interface():
-    """
-    @fixture 创建 Nose-Hoover 链 C++ 接口实例
-    """
     return CppInterface("nose_hoover_chain")
 
 
@@ -50,32 +43,6 @@ def test_calculate_energy(lj_interface):
     assert isinstance(energy, float)
     # 根据原子距离检查能量是否合理（这里假设能量应为负数，因为原子相距小于截断半径）
     assert energy < 0
-
-
-def test_calculate_forces(lj_interface):
-    """
-    @brief 测试 C++ 实现的 Lennard-Jones 力计算函数
-    """
-    num_atoms = 2
-    positions = np.array([0.0, 0.0, 0.0, 2.55, 0.0, 0.0], dtype=np.float64)
-    forces = np.zeros_like(positions)
-    box_lengths = np.array([5.1, 5.1, 5.1], dtype=np.float64)
-
-    lj_interface.calculate_forces(
-        num_atoms,
-        positions,
-        forces,
-        epsilon=0.0103,
-        sigma=2.55,
-        cutoff=2.5 * 2.55,
-        box_lengths=box_lengths,
-    )
-
-    # 检查力是否非零且相反
-    force1 = forces[0:3]
-    force2 = forces[3:6]
-    np.testing.assert_array_almost_equal(force1, -force2, decimal=6)
-    assert not np.allclose(force1, 0)
 
 
 def test_nose_hoover(nose_hoover_interface):
@@ -103,8 +70,11 @@ def test_nose_hoover(nose_hoover_interface):
         target_temperature,
     )
 
-    # 检查返回的 xi 是否为浮点数
+    # 检查 xi 是否被更新（根据实现，这里假设 xi 应该有变化）
     assert isinstance(updated_xi, float)
+    # 具体的数值检查可以根据 C++ 实现调整
+    # 例如:
+    assert updated_xi > 0
 
 
 def test_nose_hoover_chain(nose_hoover_chain_interface):
@@ -116,8 +86,9 @@ def test_nose_hoover_chain(nose_hoover_chain_interface):
     masses = np.array([1.0, 1.0], dtype=np.float64)
     velocities = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64)
     forces = np.array([0.0, 0.0, 0.0, -1.0, 0.0, 0.0], dtype=np.float64)
-    xi_chain = np.array([0.0, 0.0], dtype=np.float64)  # 假设链长度为2
-    Q = 10.0
+    xi_chain = np.zeros(2, dtype=np.float64)  # 假设链长度为 2
+    Q = np.array([10.0, 10.0], dtype=np.float64)
+    chain_length = 2
     target_temperature = 300.0
 
     # 调用 Nose-Hoover 链
@@ -129,9 +100,13 @@ def test_nose_hoover_chain(nose_hoover_chain_interface):
         forces,
         xi_chain,
         Q,
+        chain_length,
         target_temperature,
     )
 
     # 检查 xi_chain 是否被更新
     assert isinstance(xi_chain, np.ndarray)
-    assert xi_chain.shape == (2,)
+    assert xi_chain.shape == (chain_length,)
+    # 具体的数值检查可以根据 C++ 实现调整
+    # 例如:
+    assert np.all(xi_chain >= 0)

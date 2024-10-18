@@ -4,7 +4,7 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
-from python.utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
+from ..utils import AMU_TO_EVFSA2  # 确保正确导入单位转换常量
 
 
 class CppInterface:
@@ -83,11 +83,11 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ctypes.c_double,  # xi
+                ctypes.POINTER(ctypes.c_double),  # xi (input/output)
                 ctypes.c_double,  # Q
                 ctypes.c_double,  # target_temperature
             ]
-            self.lib.nose_hoover.restype = ctypes.c_double
+            self.lib.nose_hoover.restype = None
 
         elif lib_name == "nose_hoover_chain":
             self.lib.nose_hoover_chain.argtypes = [
@@ -97,7 +97,8 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi_chain
-                ctypes.c_double,  # Q
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
+                ctypes.c_int,  # chain_length
                 ctypes.c_double,  # target_temperature
             ]
             self.lib.nose_hoover_chain.restype = None
@@ -189,17 +190,19 @@ class CppInterface:
         """
         实现 Nose-Hoover 恒温器算法
         """
-        updated_xi = self.lib.nose_hoover(
+        # 创建指向 xi 的指针
+        xi_ptr = ctypes.c_double(xi)
+        self.lib.nose_hoover(
             dt,
             num_atoms,
             masses,
             velocities,
             forces,
-            xi,
+            ctypes.byref(xi_ptr),
             Q,
             target_temperature,
         )
-        return updated_xi
+        return xi_ptr.value
 
     def nose_hoover_chain(
         self,
@@ -210,6 +213,7 @@ class CppInterface:
         forces,
         xi_chain,
         Q,
+        chain_length,
         target_temperature,
     ):
         """
@@ -223,5 +227,6 @@ class CppInterface:
             forces,
             xi_chain,
             Q,
+            chain_length,
             target_temperature,
         )

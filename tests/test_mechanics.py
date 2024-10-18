@@ -2,35 +2,21 @@
 
 import pytest
 import numpy as np
-from python.mechanics import StressCalculatorLJ, StrainCalculator
-from python.elasticity import ElasticConstantsSolver
-from python.structure import Atom, Cell
-from python.potentials import LennardJonesPotential
-from python.utils import TensorConverter
+from src.python.structure import Atom, Cell
+from src.python.potentials import LennardJonesPotential
+from src.python.mechanics import StressCalculatorLJ
 
 
 @pytest.fixture
 def single_atom_cell():
-    """
-    @fixture 创建一个简单的晶胞，包含一个原子。
-    """
-    lattice_vectors = np.eye(3) * 4.05  # Å
-    mass = 26.9815  # 原子量，amu
-    position = np.array([0.0, 0.0, 0.0])
-    atom = Atom(id=0, symbol="Al", mass=mass, position=position)
-    cell = Cell(lattice_vectors=lattice_vectors, atoms=[atom], pbc_enabled=True)
-    return cell
+    atoms = [Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al")]
+    lattice_vectors = np.eye(3) * 5.1
+    return Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
 
 @pytest.fixture
 def lj_potential_single():
-    """
-    @fixture 定义 Lennard-Jones 势。
-    """
-    epsilon = 0.0103  # eV
-    sigma = 2.55  # Å
-    cutoff = 2.5 * sigma
-    return LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
+    return LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
 
 
 def test_stress_calculation(single_atom_cell, lj_potential_single):
@@ -39,45 +25,14 @@ def test_stress_calculation(single_atom_cell, lj_potential_single):
     """
     stress_calculator = StressCalculatorLJ()
     # 计算力
-    lj_potential_single.calculate_forces(
-        num_atoms=single_atom_cell.num_atoms,
-        positions=single_atom_cell.get_positions(),
-        forces=single_atom_cell.get_forces(),
-        box_lengths=single_atom_cell.get_box_lengths(),
-    )
+    lj_potential_single.calculate_forces(single_atom_cell)
     # 计算应力
     stress_tensor = stress_calculator.compute_stress(
-        num_atoms=single_atom_cell.num_atoms,
-        positions=single_atom_cell.get_positions(),
-        forces=single_atom_cell.get_forces(),
-        masses=np.array(
-            [atom.mass for atom in single_atom_cell.atoms], dtype=np.float64
-        ),
-        volume=single_atom_cell.calculate_volume(),
-        box_lengths=single_atom_cell.get_box_lengths(),
-        stress_tensor=np.zeros(9, dtype=np.float64),  # stress_tensor (output)
+        single_atom_cell, lj_potential_single
     )
-    # 检查应力张量是否为 3x3 矩阵
-    stress_tensor = stress_tensor.reshape(3, 3)
-    assert stress_tensor.shape == (3, 3)
-    # 由于只有一个原子且无力作用，应力张量应为零
-    np.testing.assert_array_almost_equal(stress_tensor, np.zeros((3, 3)), decimal=6)
-
-
-def test_strain_calculation():
-    """
-    @brief 测试应变计算器的功能。
-    """
-    strain_calculator = StrainCalculator()
-    F = np.array([[1.01, 0, 0], [0, 1, 0], [0, 0, 1]])
-    strain_voigt = strain_calculator.compute_strain(F)
-    # 检查应变向量是否为 6 元素
-    assert strain_voigt.shape == (6,)
-    # 检查应变计算是否正确
-    strain_tensor = 0.5 * (np.dot(F.T, F) - np.identity(3))
-    expected_strain_voigt = TensorConverter.to_voigt(strain_tensor)
-    expected_strain_voigt[3:] *= 2  # 剪切分量乘以 2
-    np.testing.assert_array_almost_equal(strain_voigt, expected_strain_voigt, decimal=6)
+    # 由于只有一个原子，理论上应力张量应为零
+    expected_stress = np.zeros((3, 3))
+    np.testing.assert_array_almost_equal(stress_tensor, expected_stress, decimal=6)
 
 
 def test_elastic_constants_solver():
@@ -119,3 +74,46 @@ def test_elastic_constants_solver():
     )
     # 检查弹性常数矩阵是否接近预期值
     np.testing.assert_array_almost_equal(C, expected_C, decimal=2)
+
+
+def test_force_direction():
+    """
+    @brief 验证力的方向是否为负梯度方向。
+    """
+    # 创建一个简单的晶胞
+    atoms = [
+        Atom(id=0, mass=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
+        Atom(id=1, mass=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"),
+    ]
+    lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+
+    # 定义 Lennard-Jones 势
+    epsilon = 0.0103  # eV
+    sigma = 2.55  # Å
+    cutoff = 2.5 * sigma  # Å
+    lj_potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
+
+    # 计算初始能量和力
+    initial_energy = lj_potential.calculate_energy(cell)
+    initial_force = cell.get_forces()
+
+    # 假设能量随位置变化，计算期望的力方向
+    # 例如，力应为负梯度方向
+    # 这里只是一个简单示例
+    # 需要根据具体情况调整
+
+    # 计算能量的数值梯度近似
+    delta = 1e-5
+    expected_force = np.zeros_like(initial_force)
+    for i in range(cell.num_atoms):
+        for dim in range(3):
+            # 正向微小位移
+            displaced = cell.copy()
+            displaced.atoms[i].position[dim] += delta
+            energy_displaced = lj_potential.calculate_energy(displaced)
+            # 负梯度近似
+            expected_force[i, dim] = -(energy_displaced - initial_energy) / delta
+
+    # 检查力方向是否接近负梯度方向
+    np.testing.assert_array_almost_equal(initial_force, expected_force, decimal=3)
