@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from matplotlib.animation import FuncAnimation
+from simplify import find_latest_log, preprocess_log
 
 
 def extract_data_from_simplified_log(log_file):
@@ -188,6 +189,15 @@ def animate_positions(data):
 
 
 if __name__ == "__main__":
-    log_file_path = "simplified_log_with_energy.log"  # 替换为你的精简日志文件路径
+    # 找到最新的日志文件
+    directory = "."  # 日志文件所在的目录
+    input_log_path = find_latest_log(directory)
+
+    # 生成的精简日志文件路径
+    output_log_path = "simplified_log_with_energy.log"
+
+    preprocess_log(input_log_path, output_log_path)
+    print(f"精简日志已生成: {output_log_path}")
+    log_file_path = "simplified_log_with_energy.log"
     data = extract_data_from_simplified_log(log_file_path)
     animate_positions(data)

@@ -54,57 +54,72 @@ def lj_potential_optim():
     """
     创建一个 Lennard-Jones 势能对象，用于优化测试。
     """
-    return LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
+    return LennardJonesPotential(
+        epsilon=0.0103, sigma=2.55, cutoff=6.375
+    )  # cutoff=2.5*sigma
 
 
 @pytest.fixture
-def cell_with_multiple_atoms():
+def cell_with_fcc_structure():
     """
-    创建一个包含多个原子的晶胞，模拟更复杂的系统（8个原子）。
+    创建一个包含多个原子的面心立方（FCC）晶胞，模拟更复杂的系统（32个原子）。
     """
     sigma = 2.55
-    r_m = 2 ** (1 / 6) * sigma  # 约为2.04 Å
-    delta = 0.1  # Å
+    lattice_constant = 5.1  # Å, 选择足够大的晶胞以满足截断半径要求
+    num_repetitions = 2  # 在每个方向上复制单位晶胞，生成2x2x2=8单位晶胞，共32个原子
+    total_atoms = 4 * num_repetitions**3  # FCC单位晶胞4个原子
 
-    num_repetitions = 1  # 1x1x1 单位晶胞，共8个原子（假设每个单位晶胞8个原子）
-    lattice_constant = 5.1  # Å
-    atoms = []
-    positions = [
+    # 定义单位FCC晶胞的原子位置（基于单位晶胞）
+    unit_cell_atoms = [
         [0.0, 0.0, 0.0],
         [0.5, 0.5, 0.0],
         [0.5, 0.0, 0.5],
         [0.0, 0.5, 0.5],
-        [0.5, 0.0, 0.0],
-        [0.0, 0.5, 0.0],
-        [0.0, 0.0, 0.5],
-        [0.5, 0.5, 0.5],
-    ]  # 简单立方晶胞的8个原子位置
+    ]
 
-    for pos in positions:
-        atoms.append(
-            Atom(
-                id=len(atoms),
-                symbol="Al",
-                mass_amu=26.9815,
-                position=np.array(pos) * lattice_constant,
-                velocity=None,
-            )
-        )
+    atoms = []
+    for i in range(num_repetitions):
+        for j in range(num_repetitions):
+            for k in range(num_repetitions):
+                for atom_pos in unit_cell_atoms:
+                    pos = np.array(
+                        [
+                            (i + atom_pos[0]) * lattice_constant,
+                            (j + atom_pos[1]) * lattice_constant,
+                            (k + atom_pos[2]) * lattice_constant,
+                        ]
+                    )
+                    # 添加微小扰动以打破完美对称性
+                    perturbation = np.random.uniform(
+                        -0.01, 0.01, size=3
+                    )  # 0.01 Å的随机扰动
+                    pos += perturbation
+                    atoms.append(
+                        Atom(
+                            id=len(atoms),
+                            symbol="Al",
+                            mass_amu=26.9815,
+                            position=pos,
+                            velocity=None,
+                        )
+                    )
 
-    lattice_vectors = np.eye(3) * lattice_constant  # 单位晶胞大小
+    # 定义晶格矢量
+    lattice_vectors = np.eye(3) * lattice_constant * num_repetitions
+
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     return cell
 
 
-def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms):
+def test_gradient_descent_optimizer(lj_potential_optim, cell_with_fcc_structure):
     """
-    测试梯度下降优化器，使用8个原子，无周期性边界条件。
+    测试梯度下降优化器，使用32个原子，面心立方结构。
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
         max_steps=20000, tol=1e-3, step_size=1e-3, energy_tol=1e-4
     )
-    cell = cell_with_multiple_atoms
+    cell = cell_with_fcc_structure
 
     optimizer.optimize(cell, lj_potential_optim)
 
@@ -122,13 +137,13 @@ def test_gradient_descent_optimizer(lj_potential_optim, cell_with_multiple_atoms
     ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
 
 
-def test_bfgs_optimizer(lj_potential_optim, cell_with_multiple_atoms):
+def test_bfgs_optimizer(lj_potential_optim, cell_with_fcc_structure):
     """
-    测试 BFGS 优化器，使用8个原子，无周期性边界条件。
+    测试 BFGS 优化器，使用32个原子，面心立方结构。
     """
     logger = logging.getLogger(__name__)
     optimizer = BFGSOptimizer(tol=1e-4, maxiter=20000)
-    cell = cell_with_multiple_atoms
+    cell = cell_with_fcc_structure
 
     optimizer.optimize(cell, lj_potential_optim)
 
