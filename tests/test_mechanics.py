@@ -9,12 +9,6 @@ from python.elasticity import (
     StrainCalculator,
 )  # 确保导入 StrainCalculator
 from python.mechanics import StressCalculatorLJ
-from python.utils import TensorConverter, AMU_TO_EVFSA2
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -22,7 +16,7 @@ def single_atom_cell():
     atoms = [
         Atom(
             id=0,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([0.0, 0.0, 0.0]),
             symbol="Al",
         )
@@ -147,9 +141,6 @@ def test_strain_calculation():
 
     # 计算应变
     strain_voigt = strain_calculator.compute_strain(F)
-
-    logger.debug(f"Computed strain (Voigt): {strain_voigt}")
-    logger.debug(f"Expected strain (Voigt): {expected_strain}")
 
     # 检查计算的应变是否为 NumPy 数组
     assert isinstance(strain_voigt, np.ndarray), "应变向量应为 NumPy 数组。"

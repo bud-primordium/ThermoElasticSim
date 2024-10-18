@@ -12,7 +12,7 @@ def main():
     lattice_vectors = np.array(
         [[lattice_constant, 0, 0], [0, lattice_constant, 0], [0, 0, lattice_constant]]
     )
-    mass = 26.9815  # amu
+    mass_amu = 26.9815  # amu
     # 构建面心立方（FCC）结构的原子位置
     positions = [
         [0, 0, 0],
@@ -21,7 +21,7 @@ def main():
         [0, 0.5 * lattice_constant, 0.5 * lattice_constant],
     ]
     atoms = [
-        Atom(id=i, symbol="Al", mass=mass, position=pos)
+        Atom(id=i, symbol="Al", mass_amu=mass_amu, position=pos)
         for i, pos in enumerate(positions)
     ]
     cell = Cell(lattice_vectors, atoms)

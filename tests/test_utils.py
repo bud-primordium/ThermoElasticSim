@@ -22,9 +22,9 @@ def cell_fixture():
     @fixture 创建一个简单的晶胞，用于数据收集测试
     """
     lattice_vectors = np.eye(3) * 4.05  # Å
-    mass = 26.9815  # amu
+    mass_amu = 26.9815  # amu
     position = np.array([0.0, 0.0, 0.0])
-    atom = Atom(id=0, symbol="Al", mass=mass, position=position)
+    atom = Atom(id=0, symbol="Al", mass_amu=mass_amu, position=position)
     cell = Cell(lattice_vectors, [atom], pbc_enabled=True)
     return cell
 

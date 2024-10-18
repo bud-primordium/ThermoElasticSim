@@ -25,13 +25,13 @@ def test_gradient_descent_optimizer(lj_potential_optim):
     atoms = [
         Atom(
             id=0,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([0.0, 0.0, 0.0]),
             symbol="Al",
         ),
         Atom(
             id=1,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([2.55, 0.0, 0.0]),
             symbol="Al",
         ),
@@ -59,13 +59,13 @@ def test_bfgs_optimizer(lj_potential_optim):
     atoms = [
         Atom(
             id=0,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([0.0, 0.0, 0.0]),
             symbol="Al",
         ),
         Atom(
             id=1,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([2.55, 0.0, 0.0]),
             symbol="Al",
         ),
@@ -92,13 +92,13 @@ def test_optimizer_convergence():
     atoms = [
         Atom(
             id=0,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([0.0, 0.0, 0.0]),
             symbol="Al",
         ),
         Atom(
             id=1,
-            mass=26.9815 * AMU_TO_EVFSA2,
+            mass_amu=26.9815,
             position=np.array([2.55, 0.0, 0.0]),
             symbol="Al",
         ),

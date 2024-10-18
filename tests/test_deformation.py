@@ -65,9 +65,9 @@ def cell_fixture():
     """
     from python.structure import Atom, Cell
 
-    mass = 26.9815  # amu
+    mass_amu = 26.9815  # amu
     position = np.array([0.0, 0.0, 0.0])
-    atom = Atom(id=0, symbol="Al", mass=mass, position=position)
+    atom = Atom(id=0, symbol="Al", mass_amu=mass_amu, position=position)
     lattice_vectors = np.eye(3) * 4.05  # Å
     cell = Cell(lattice_vectors, [atom], pbc_enabled=True)
     return cell

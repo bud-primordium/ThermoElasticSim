@@ -11,8 +11,8 @@ def atom():
     @fixture 创建一个原子实例
     """
     position = np.array([0.0, 0.0, 0.0])
-    mass = 26.9815  # amu
-    return Atom(id=0, symbol="Al", mass=mass, position=position)
+    mass_amu = 26.9815  # amu
+    return Atom(id=0, symbol="Al", mass_amu=mass_amu, position=position)
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def test_atom_creation(atom):
     assert atom.id == 0
     assert atom.symbol == "Al"
     np.testing.assert_array_equal(atom.position, np.array([0.0, 0.0, 0.0]))
-    assert atom.mass == 26.9815
+    assert atom.mass_amu == 26.9815
 
 
 def test_cell_creation(cell, atom):

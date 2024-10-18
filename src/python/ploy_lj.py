@@ -11,8 +11,8 @@ lj_potential = LennardJonesPotential(epsilon, sigma, cutoff)
 
 # 创建模拟单元格
 atoms = [
-    Atom(id=0, symbol="Al", mass=26.9815, position=np.array([0.0, 0.0, 0.0])),
-    Atom(id=1, symbol="Al", mass=26.9815, position=np.array([2.5, 0.0, 0.0])),
+    Atom(id=0, symbol="Al", mass_amu=26.9815, position=np.array([0.0, 0.0, 0.0])),
+    Atom(id=1, symbol="Al", mass_amu=26.9815, position=np.array([2.5, 0.0, 0.0])),
 ]
 box_lengths = np.array([30.0, 30.0, 30.0])  # 立方体盒子
 

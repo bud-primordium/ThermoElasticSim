@@ -24,14 +24,14 @@ def test_nose_hoover_apply(nose_hoover_thermostat):
         Atom(
             id=0,
             symbol="Al",
-            mass=26.9815 * AMU_TO_EVFSA2,  # 转换为 eV/fs^2
+            mass_amu=26.9815,  # 转换为 eV/fs^2
             position=np.array([0.0, 0.0, 0.0]),
             velocity=np.array([1.0, 0.0, 0.0]),
         ),
         Atom(
             id=1,
             symbol="Al",
-            mass=26.9815 * AMU_TO_EVFSA2,  # 转换为 eV/fs^2
+            mass_amu=26.9815,  # 转换为 eV/fs^2
             position=np.array([2.55, 0.0, 0.0]),
             velocity=np.array([-1.0, 0.0, 0.0]),
         ),

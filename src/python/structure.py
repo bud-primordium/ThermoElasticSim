@@ -1,6 +1,7 @@
 # src/python/structure.py
 
 import numpy as np
+from .utils import AMU_TO_EVFSA2
 
 
 class Atom:
@@ -9,10 +10,10 @@ class Atom:
     @brief 原子类，包含原子的信息和属性。
     """
 
-    def __init__(self, id, symbol, mass, position, velocity=None):
+    def __init__(self, id, symbol, mass_amu, position, velocity=None):
         self.id = id
         self.symbol = symbol
-        self.mass = mass
+        self.mass = mass_amu * AMU_TO_EVFSA2  # 质量转换为 eV/fs^2
         self.position = np.array(position, dtype=np.float64)
         self.velocity = (
             np.zeros(3, dtype=np.float64)
@@ -78,7 +79,7 @@ class Cell:
             Atom(
                 atom.id,
                 atom.symbol,
-                atom.mass,
+                atom.mass_amu,
                 atom.position.copy(),
                 atom.velocity.copy(),
             )

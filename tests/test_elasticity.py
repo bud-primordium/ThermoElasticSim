@@ -33,7 +33,7 @@ def test_elastic_constants_calculator():
                 ]
                 for pos in positions:
                     atoms.append(
-                        Atom(id=len(atoms), mass=26.9815, position=pos, symbol="Al")
+                        Atom(id=len(atoms), mass_amu=26.9815, position=pos, symbol="Al")
                     )
 
     lattice_vectors = (
