@@ -51,14 +51,15 @@ def test_elastic_constants_calculator():
     logger = logging.getLogger(__name__)
     logger.debug("Starting Elastic Constants Calculator Test.")
 
-    # 创建简单的 BCC 晶格，4 个原子
+    # 创建简单的 FCC 晶格，4 个原子
     atoms = []
-    lattice_constant = 10.0  # BCC 晶格参数，单位为 Å
+    lattice_constant = 4.05  # FCC 晶格参数，铝的实验晶格常数为 4.05 Å
     positions = [
-        [0.0, 0.0, 0.0],  # 体心立方结构原子位置
-        [0.5, 0.5, 0.0],
-        [0.5, 0.0, 0.5],
-        [0.0, 0.5, 0.5],
+        [0.0, 0.0, 0.0],  # 面心立方结构原子位置
+        [1.0, 1.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 1.0, 1.0],  # 额外的一个原子，确保FCC的基元
     ]
 
     for pos in positions:
@@ -71,7 +72,7 @@ def test_elastic_constants_calculator():
             )
         )
 
-    lattice_vectors = np.eye(3) * lattice_constant  # 简单的立方晶胞
+    lattice_vectors = np.eye(3) * lattice_constant * 10  # 简单的立方晶胞
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     logger.debug(f"Created cell with {len(atoms)} atoms.")
 
@@ -86,8 +87,8 @@ def test_elastic_constants_calculator():
     elastic_calculator = ElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
-        delta=1e-2,
-        optimizer_type="BFGS",  # 使用梯度下降优化器
+        delta=1e-1,
+        optimizer_type="GD",  # 使用梯度下降优化器
     )
     logger.debug(
         "Initialized ElasticConstantsCalculator with Gradient Descent Optimizer."

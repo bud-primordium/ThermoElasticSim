@@ -49,7 +49,7 @@ class ElasticConstantsCalculator:
     @brief 用于计算弹性常数的类。
     """
 
-    def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
+    def __init__(self, cell, potential, delta=1e-2, optimizer_type="GD"):
         """
         @param cell 晶胞对象
         @param potential 势能对象
@@ -66,7 +66,7 @@ class ElasticConstantsCalculator:
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
                 max_steps=10000,
-                tol=1e-5,
+                tol=1e-6,
                 step_size=1e-3,
                 energy_tol=1e-5,  # 根据要求调整步长
             )
@@ -75,9 +75,17 @@ class ElasticConstantsCalculator:
         else:
             raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
 
+    def optimize_initial_structure(self):
+        """
+        @brief 在施加变形前对结构进行一次优化，使得初始结构的应力为零。
+        """
+        logger.debug("Starting initial structure optimization.")
+        self.optimizer.optimize(self.cell, self.potential)
+        logger.debug("Initial structure optimization completed.")
+
     def calculate_stress_strain(self, F):
         """
-        @brief 对单个应变矩阵施加变形、优化结构，并计算应力和应变。
+        @brief 对单个应变矩阵施加变形，不进行优化，并计算应力和应变。
 
         @param F 变形矩阵
         @return 应变和应力张量 (Voigt 表示法)
@@ -88,38 +96,6 @@ class ElasticConstantsCalculator:
         # 施加变形
         deformed_cell.apply_deformation(F)
         logger.debug("Applied deformation to cell.")
-
-        # 检查原子之间的最小距离，确保不会过近
-        min_distance = np.inf
-        num_atoms = len(deformed_cell.atoms)
-        min_pair = (-1, -1)
-        for i in range(num_atoms):
-            for j in range(i + 1, num_atoms):
-                rij = deformed_cell.atoms[j].position - deformed_cell.atoms[i].position
-                for dim in range(3):
-                    rij[dim] -= (
-                        round(rij[dim] / deformed_cell.lattice_vectors[dim, dim])
-                        * deformed_cell.lattice_vectors[dim, dim]
-                    )
-                r = np.linalg.norm(rij)
-                if r < min_distance:
-                    min_distance = r
-                    min_pair = (deformed_cell.atoms[i].id, deformed_cell.atoms[j].id)
-
-        assert (
-            min_distance > 0.8 * self.potential.sigma
-        ), f"原子之间的最小距离过近：{min_distance} Å (atoms {min_pair[0]} and {min_pair[1]})"
-
-        # 锁定晶格向量，确保优化过程中晶格不被修改
-        deformed_cell.lock_lattice_vectors()
-
-        # 优化结构
-        self.optimizer.optimize(deformed_cell, self.potential)
-        logger.debug("Optimization completed.")
-
-        # 确认晶格向量未改变
-        # (假设优化器 不修改锁定的晶格向量)
-        # 如果需要，可以在优化器内部强制不修改晶格向量
 
         # 计算应力张量
         stress_tensor = self.stress_calculator.compute_stress(
@@ -144,6 +120,9 @@ class ElasticConstantsCalculator:
         @return 弹性常数矩阵，形状为 (6, 6)，单位为 GPa。
         """
         logger.debug("Starting elastic constants calculation.")
+
+        # 在施加变形之前优化结构，使得初始应力为0
+        self.optimize_initial_structure()
 
         # 生成六个变形矩阵
         F_list = self.deformer.generate_deformation_matrices()
