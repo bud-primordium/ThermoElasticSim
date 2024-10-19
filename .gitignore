@@ -39,3 +39,12 @@ Thumbs.db
 all.txt
 src.txt
 tests.txt
+
+# 忽略编译生成的库文件
+src/lib/*.dll
+src/lib/*.so
+src/lib/*.dylib
+
+# 忽略文档生成的输出
+build/
+
