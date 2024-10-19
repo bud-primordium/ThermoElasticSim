@@ -1,3 +1,5 @@
+#请在项目根目录运行 doxygen docs/Doxyfile , 生成的文档在 docs/xml 目录下
+
 # 项目名称
 PROJECT_NAME           = "ThermoElasticSim"
 
