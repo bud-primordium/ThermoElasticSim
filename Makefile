@@ -57,6 +57,6 @@ test:
 clean:
 	@echo "清理生成的文件..."
 	rm -rf $(BUILDDIR)/*.html $(BUILDDIR)/doctrees
-	rm -f docs/xml
+	rm -rf docs/xml
 	rm -rf src/lib/*.dll src/lib/*.so src/lib/*.dylib
 	@echo "清理完成。"
