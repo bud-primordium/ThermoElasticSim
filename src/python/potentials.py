@@ -1,6 +1,6 @@
 # 文件名: potentials.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-19
+# 修改日期: 2024-10-20
 # 文件描述: 实现 Lennard-Jones 势能及其相关方法。
 
 """

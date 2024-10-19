@@ -6,7 +6,7 @@
     <includes local="no">vector</includes>
     <incdepgraph>
       <node id="1">
-        <label>D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp</label>
+        <label>src/cpp/nose_hoover.cpp</label>
         <link refid="nose__hoover_8cpp"/>
         <childnode refid="2" relation="include">
         </childnode>
@@ -131,7 +131,7 @@
         </detaileddescription>
         <inbodydescription>
         </inbodydescription>
-        <location file="D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp" line="29" column="10" bodyfile="D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp" bodystart="29" bodyend="90"/>
+        <location file="src/cpp/nose_hoover.cpp" line="29" column="10" bodyfile="src/cpp/nose_hoover.cpp" bodystart="29" bodyend="90"/>
       </memberdef>
     </sectiondef>
     <briefdescription>
@@ -141,7 +141,7 @@
 <para>该文件包含 Nose-Hoover 恒温器的实现，主要用于分子动力学模拟中的温度控制。 它通过引入单个热浴变量，遵循拓展哈密顿量，更新系统的速度和热浴变量，从而实现温度调节。</para>
 <para><simplesect kind="author"><para>Gilbert Young </para>
 </simplesect>
-<simplesect kind="date"><para>2024-10-19 </para>
+<simplesect kind="date"><para>2024-10-20 </para>
 </simplesect>
 </para>
     </detaileddescription>
@@ -216,6 +216,6 @@
 <codeline lineno="90"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
 <codeline lineno="91"><highlight class="normal">}</highlight></codeline>
     </programlisting>
-    <location file="D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp"/>
+    <location file="src/cpp/nose_hoover.cpp"/>
   </compounddef>
 </doxygen>

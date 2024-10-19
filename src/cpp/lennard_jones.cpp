@@ -5,7 +5,7 @@
  * 该文件包含用于 Lennard-Jones 势力和能量计算的函数，包括处理周期性边界条件和截断修正。
  *
  * @author Gilbert Young
- * @date 2024-10-19
+ * @date 2024-10-20
  */
 
 #include <cmath>

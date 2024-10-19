@@ -6,7 +6,7 @@
  * 包括原子速度和位置的贡献，以及通过力和位置的计算。
  *
  * @author Gilbert Young
- * @date 2024-10-19
+ * @date 2024-10-20
  */
 
 #include <cmath>

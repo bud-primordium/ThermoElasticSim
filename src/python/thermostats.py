@@ -1,6 +1,6 @@
 # 文件名: thermostats.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-19
+# 修改日期: 2024-10-20
 # 文件描述: 实现分子动力学模拟中的 Nose-Hoover 和 Nose-Hoover 链恒温器。
 
 """

@@ -6,7 +6,7 @@
   <option  id='PROJECT_BRIEF' default='yes' type='string'><value><![CDATA[]]></value></option>
   <option  id='PROJECT_LOGO' default='yes' type='string'><value><![CDATA[]]></value></option>
   <option  id='PROJECT_ICON' default='yes' type='string'><value><![CDATA[]]></value></option>
-  <option  id='OUTPUT_DIRECTORY' default='no' type='string'><value><![CDATA[../docs]]></value></option>
+  <option  id='OUTPUT_DIRECTORY' default='no' type='string'><value><![CDATA[docs/]]></value></option>
   <option  id='CREATE_SUBDIRS' default='yes' type='bool'><value>NO</value></option>
   <option  id='CREATE_SUBDIRS_LEVEL' default='yes' type='int'><value>8</value></option>
   <option  id='ALLOW_UNICODE_NAMES' default='yes' type='bool'><value>NO</value></option>
@@ -124,7 +124,7 @@
   <option  id='WARN_LINE_FORMAT' default='yes' type='string'><value><![CDATA["at line $line of file $file"]]></value></option>
   <option  id='WARN_LOGFILE' default='yes' type='string'><value><![CDATA[]]></value></option>
   <option  id='INPUT' default='no' type='stringlist'>
-    <value><![CDATA[../cpp]]></value>
+    <value><![CDATA[src/cpp]]></value>
   </option>
   <option  id='INPUT_ENCODING' default='yes' type='string'><value><![CDATA[UTF-8]]></value></option>
   <option  id='INPUT_FILE_ENCODING' default='yes' type='stringlist'>

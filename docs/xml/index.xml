@@ -17,6 +17,8 @@
   <compound refid="stress__calculator_8cpp" kind="file"><name>stress_calculator.cpp</name>
     <member refid="stress__calculator_8cpp_1a0c26123d94a147302f91fadf96f425d4" kind="function"><name>compute_stress</name></member>
   </compound>
-  <compound refid="dir_df511e5bd85cec96854b39d5e1c27aa8" kind="dir"><name>D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp</name>
+  <compound refid="dir_dfdbda394c3f7a3aa55229f33a559c41" kind="dir"><name>src/cpp</name>
+  </compound>
+  <compound refid="dir_68267d1309a1af8e8297ef4c3efbcdba" kind="dir"><name>src</name>
   </compound>
 </doxygenindex>

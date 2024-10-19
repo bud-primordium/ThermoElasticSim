@@ -6,7 +6,7 @@
  * 它通过引入多个热浴变量，递推更新系统的速度和热浴变量，从而实现温度调节。
  *
  * @author Gilbert Young
- * @date 2024-10-19
+ * @date 2024-10-20
  */
 
 #include <cmath>

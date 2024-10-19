@@ -26,7 +26,7 @@ def configure_logging():
     logger.addHandler(ch)
 
     # 创建文件处理器
-    fh = logging.FileHandler("test_potential.log", encoding="utf-8")
+    fh = logging.FileHandler("logs/potential/test_potential.log", encoding="utf-8")
     fh.setLevel(logging.DEBUG)  # 文件日志级别
     fh.setFormatter(formatter)
     logger.addHandler(fh)

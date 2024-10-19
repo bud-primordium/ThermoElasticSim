@@ -6,7 +6,7 @@
  * 通过更新晶格矢量和原子速度，实现对系统压力的调节。
  *
  * @author Gilbert Young
- * @date 2024-10-19
+ * @date 2024-10-20
  */
 
 #include <cmath>
