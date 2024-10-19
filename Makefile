@@ -50,7 +50,7 @@ html: doxygen
 # 运行测试
 test:
 	@echo "运行测试..."
-	pytest tests/
+	pytest --confcutdir=config
 	@echo "测试完成。"
 
 # 清理生成的文件

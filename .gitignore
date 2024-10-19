@@ -1,4 +1,4 @@
-# Python
+# Python 缓存与编译文件
 __pycache__/
 *.py[cod]
 *.egg
@@ -8,43 +8,45 @@ build/
 *.so
 .pytest_cache/
 
-# Virtual Environment
+# 虚拟环境文件
 venv/
 ENV/
 env/
 env.bak/
 venv.bak/
 
-# Fortran
+# Fortran 编译文件
 *.o
 *.mod
 *.so
 
-# Doxygen
+# Doxygen 生成的文档
 docs/html/
 docs/xml/
 
-# IDEs
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# dirs
-.lectures/
-.notes/
-*.log
-all.txt
-src.txt
-tests.txt
-
-# 忽略编译生成的库文件
+# C++ 编译生成的库文件
 src/lib/*.dll
 src/lib/*.so
 src/lib/*.dylib
 
-# 忽略文档生成的输出
+# 日志文件
+*.log
+logs/
+all.txt
+src.txt
+tests.txt
+
+# IDE 配置文件
+.vscode/
+.idea/
+
+# 操作系统自动生成文件
+.DS_Store
+Thumbs.db
+
+# 自动生成的 Sphinx 文档
 build/
 
+# 特殊文件夹（如讲义和笔记）
+.lectures/
+.notes/
