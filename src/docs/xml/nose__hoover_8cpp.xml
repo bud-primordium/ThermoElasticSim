@@ -1,0 +1,221 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.12.0" xml:lang="zh">
+  <compounddef id="nose__hoover_8cpp" kind="file" language="C++">
+    <compoundname>nose_hoover.cpp</compoundname>
+    <includes local="no">cmath</includes>
+    <includes local="no">vector</includes>
+    <incdepgraph>
+      <node id="1">
+        <label>D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp</label>
+        <link refid="nose__hoover_8cpp"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>cmath</label>
+      </node>
+      <node id="3">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="nose__hoover_8cpp_1ab1949131c763d0ec6eb57d50e009f14f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void nose_hoover</definition>
+        <argsstring>(double dt, int num_atoms, const double *masses, double *velocities, const double *forces, double *xi, double Q, double target_temperature)</argsstring>
+        <name>nose_hoover</name>
+        <param>
+          <type>double</type>
+          <declname>dt</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>num_atoms</declname>
+        </param>
+        <param>
+          <type>const double *</type>
+          <declname>masses</declname>
+        </param>
+        <param>
+          <type>double *</type>
+          <declname>velocities</declname>
+        </param>
+        <param>
+          <type>const double *</type>
+          <declname>forces</declname>
+        </param>
+        <param>
+          <type>double *</type>
+          <declname>xi</declname>
+        </param>
+        <param>
+          <type>double</type>
+          <declname>Q</declname>
+        </param>
+        <param>
+          <type>double</type>
+          <declname>target_temperature</declname>
+        </param>
+        <briefdescription>
+<para>应用 Nose-Hoover 恒温器 </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>dt</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>时间步长 </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>num_atoms</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>原子数量 </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>masses</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>原子质量数组（长度为 num_atoms） </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>velocities</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>原子速度数组（长度为 3*num_atoms） </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>forces</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>原子力数组（长度为 3*num_atoms） </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>xi</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>热浴变量 </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>Q</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>热浴质量参数 </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>target_temperature</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>目标温度 </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp" line="29" column="10" bodyfile="D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp" bodystart="29" bodyend="90"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Nose-Hoover 恒温器的实现 </para>
+    </briefdescription>
+    <detaileddescription>
+<para>该文件包含 Nose-Hoover 恒温器的实现，主要用于分子动力学模拟中的温度控制。 它通过引入单个热浴变量，遵循拓展哈密顿量，更新系统的速度和热浴变量，从而实现温度调节。</para>
+<para><simplesect kind="author"><para>Gilbert Young </para>
+</simplesect>
+<simplesect kind="date"><para>2024-10-19 </para>
+</simplesect>
+</para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;cmath&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;vector&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="stringliteral">&quot;C&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal">{</highlight></codeline>
+<codeline lineno="29" refid="nose__hoover_8cpp_1ab1949131c763d0ec6eb57d50e009f14f" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="nose__hoover_8cpp_1ab1949131c763d0ec6eb57d50e009f14f" kindref="member">nose_hoover</ref>(</highlight></codeline>
+<codeline lineno="30"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>dt,</highlight></codeline>
+<codeline lineno="31"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>num_atoms,</highlight></codeline>
+<codeline lineno="32"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>*masses,</highlight></codeline>
+<codeline lineno="33"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>*velocities,</highlight></codeline>
+<codeline lineno="34"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>*forces,</highlight></codeline>
+<codeline lineno="35"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>*xi,</highlight></codeline>
+<codeline lineno="36"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>Q,</highlight></codeline>
+<codeline lineno="37"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>target_temperature)</highlight></codeline>
+<codeline lineno="38"><highlight class="normal"><sp/><sp/><sp/><sp/>{</highlight></codeline>
+<codeline lineno="39"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>dt_half<sp/>=<sp/>dt<sp/>*<sp/>0.5;</highlight></codeline>
+<codeline lineno="40"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>kB<sp/>=<sp/>8.617333262e-5;<sp/></highlight><highlight class="comment">//<sp/>玻尔兹曼常数，单位<sp/>eV/K</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="41"><highlight class="normal"></highlight></codeline>
+<codeline lineno="42"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>第一半步：更新速度，考虑力</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="43"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>i<sp/>=<sp/>0;<sp/>i<sp/>&lt;<sp/>num_atoms;<sp/>++i)</highlight></codeline>
+<codeline lineno="44"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{</highlight></codeline>
+<codeline lineno="45"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i]<sp/>+=<sp/>dt_half<sp/>*<sp/>forces[3<sp/>*<sp/>i]<sp/>/<sp/>masses[i];</highlight></codeline>
+<codeline lineno="46"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>1]<sp/>+=<sp/>dt_half<sp/>*<sp/>forces[3<sp/>*<sp/>i<sp/>+<sp/>1]<sp/>/<sp/>masses[i];</highlight></codeline>
+<codeline lineno="47"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>2]<sp/>+=<sp/>dt_half<sp/>*<sp/>forces[3<sp/>*<sp/>i<sp/>+<sp/>2]<sp/>/<sp/>masses[i];</highlight></codeline>
+<codeline lineno="48"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="49"><highlight class="normal"></highlight></codeline>
+<codeline lineno="50"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>更新<sp/>xi（热浴变量）<sp/>-<sp/>第一半步</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="51"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>kinetic_energy<sp/>=<sp/>0.0;</highlight></codeline>
+<codeline lineno="52"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>i<sp/>=<sp/>0;<sp/>i<sp/>&lt;<sp/>num_atoms;<sp/>++i)</highlight></codeline>
+<codeline lineno="53"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{</highlight></codeline>
+<codeline lineno="54"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>vx<sp/>=<sp/>velocities[3<sp/>*<sp/>i];</highlight></codeline>
+<codeline lineno="55"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>vy<sp/>=<sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>1];</highlight></codeline>
+<codeline lineno="56"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>vz<sp/>=<sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>2];</highlight></codeline>
+<codeline lineno="57"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>kinetic_energy<sp/>+=<sp/>0.5<sp/>*<sp/>masses[i]<sp/>*<sp/>(vx<sp/>*<sp/>vx<sp/>+<sp/>vy<sp/>*<sp/>vy<sp/>+<sp/>vz<sp/>*<sp/>vz);</highlight></codeline>
+<codeline lineno="58"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="59"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>G_xi<sp/>=<sp/>(2.0<sp/>*<sp/>kinetic_energy<sp/>-<sp/>3.0<sp/>*<sp/>num_atoms<sp/>*<sp/>kB<sp/>*<sp/>target_temperature)<sp/>/<sp/>Q;</highlight></codeline>
+<codeline lineno="60"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>*xi<sp/>+=<sp/>dt_half<sp/>*<sp/>G_xi;</highlight></codeline>
+<codeline lineno="61"><highlight class="normal"></highlight></codeline>
+<codeline lineno="62"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>缩放速度</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="63"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>scale<sp/>=<sp/>exp(-(*xi)<sp/>*<sp/>dt);</highlight></codeline>
+<codeline lineno="64"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>i<sp/>=<sp/>0;<sp/>i<sp/>&lt;<sp/>num_atoms;<sp/>++i)</highlight></codeline>
+<codeline lineno="65"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{</highlight></codeline>
+<codeline lineno="66"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i]<sp/>*=<sp/>scale;</highlight></codeline>
+<codeline lineno="67"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>1]<sp/>*=<sp/>scale;</highlight></codeline>
+<codeline lineno="68"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>2]<sp/>*=<sp/>scale;</highlight></codeline>
+<codeline lineno="69"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="70"><highlight class="normal"></highlight></codeline>
+<codeline lineno="71"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>更新<sp/>xi（热浴变量）<sp/>-<sp/>第二半步</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="72"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>kinetic_energy<sp/>=<sp/>0.0;</highlight></codeline>
+<codeline lineno="73"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>i<sp/>=<sp/>0;<sp/>i<sp/>&lt;<sp/>num_atoms;<sp/>++i)</highlight></codeline>
+<codeline lineno="74"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{</highlight></codeline>
+<codeline lineno="75"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>vx<sp/>=<sp/>velocities[3<sp/>*<sp/>i];</highlight></codeline>
+<codeline lineno="76"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>vy<sp/>=<sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>1];</highlight></codeline>
+<codeline lineno="77"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>vz<sp/>=<sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>2];</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>kinetic_energy<sp/>+=<sp/>0.5<sp/>*<sp/>masses[i]<sp/>*<sp/>(vx<sp/>*<sp/>vx<sp/>+<sp/>vy<sp/>*<sp/>vy<sp/>+<sp/>vz<sp/>*<sp/>vz);</highlight></codeline>
+<codeline lineno="79"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="80"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>G_xi<sp/>=<sp/>(2.0<sp/>*<sp/>kinetic_energy<sp/>-<sp/>3.0<sp/>*<sp/>num_atoms<sp/>*<sp/>kB<sp/>*<sp/>target_temperature)<sp/>/<sp/>Q;</highlight></codeline>
+<codeline lineno="81"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>*xi<sp/>+=<sp/>dt_half<sp/>*<sp/>G_xi;</highlight></codeline>
+<codeline lineno="82"><highlight class="normal"></highlight></codeline>
+<codeline lineno="83"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>第二半步：更新速度，考虑力</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="84"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>i<sp/>=<sp/>0;<sp/>i<sp/>&lt;<sp/>num_atoms;<sp/>++i)</highlight></codeline>
+<codeline lineno="85"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{</highlight></codeline>
+<codeline lineno="86"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i]<sp/>+=<sp/>dt_half<sp/>*<sp/>forces[3<sp/>*<sp/>i]<sp/>/<sp/>masses[i];</highlight></codeline>
+<codeline lineno="87"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>1]<sp/>+=<sp/>dt_half<sp/>*<sp/>forces[3<sp/>*<sp/>i<sp/>+<sp/>1]<sp/>/<sp/>masses[i];</highlight></codeline>
+<codeline lineno="88"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>velocities[3<sp/>*<sp/>i<sp/>+<sp/>2]<sp/>+=<sp/>dt_half<sp/>*<sp/>forces[3<sp/>*<sp/>i<sp/>+<sp/>2]<sp/>/<sp/>masses[i];</highlight></codeline>
+<codeline lineno="89"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="90"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="91"><highlight class="normal">}</highlight></codeline>
+    </programlisting>
+    <location file="D:/BaiduSyncdisk/Work/Courses/Junior Fall/ThermoElasticSim/src/cpp/nose_hoover.cpp"/>
+  </compounddef>
+</doxygen>

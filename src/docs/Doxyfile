@@ -19,8 +19,8 @@ FILE_PATTERNS          = *.cpp
 # 输入编码
 INPUT_ENCODING         = UTF-8
 
-# 语言设置为中文
-PROJECT_LANGUAGE       = Chinese
+# 输出语言
+OUTPUT_LANGUAGE        = Chinese
 
 # 只生成 XML，不生成 HTML
 GENERATE_HTML          = NO
