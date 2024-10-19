@@ -32,7 +32,7 @@ language = "zh_CN"
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("src/python"))
+sys.path.insert(0, os.path.abspath("../src/python"))
 
 # -- Options for autodoc -----------------------------------------------------
 autosummary_generate = True

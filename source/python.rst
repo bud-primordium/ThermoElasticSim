@@ -1,37 +1,40 @@
 Python 包文档
 =============
 
+子模块
+------
+
 .. autosummary::
     :toctree: generated/
     :recursive:
 
-    barostats.Barostat
-    barostats.ParrinelloRahmanHooverBarostat
-    config.ConfigManager
-    deformation.Deformer
-    elasticity.ElasticConstantsCalculator
-    elasticity.ElasticConstantsSolver
-    integrators.Integrator
-    integrators.RK4Integrator
-    integrators.VelocityVerletIntegrator
-    md_simulator.MDSimulator
-    mechanics.StrainCalculator
-    mechanics.StressCalculator
-    mechanics.StressCalculatorLJ
-    optimizers.BFGSOptimizer
-    optimizers.GradientDescentOptimizer
-    optimizers.Optimizer
-    potentials.LennardJonesPotential
-    potentials.Potential
-    structure.Atom
-    structure.Cell
-    thermostats.NoseHooverChainThermostat
-    thermostats.NoseHooverThermostat
-    thermostats.Thermostat
-    utils.DataCollector
-    utils.TensorConverter
-    visualization.Visualizer
-    interfaces.cpp_interface.CppInterface
+    python.barostats.Barostat
+    python.barostats.ParrinelloRahmanHooverBarostat
+    python.config.ConfigManager
+    python.deformation.Deformer
+    python.elasticity.ElasticConstantsCalculator
+    python.elasticity.ElasticConstantsSolver
+    python.integrators.Integrator
+    python.integrators.RK4Integrator
+    python.integrators.VelocityVerletIntegrator
+    python.md_simulator.MDSimulator
+    python.mechanics.StrainCalculator
+    python.mechanics.StressCalculator
+    python.mechanics.StressCalculatorLJ
+    python.optimizers.BFGSOptimizer
+    python.optimizers.GradientDescentOptimizer
+    python.optimizers.Optimizer
+    python.potentials.LennardJonesPotential
+    python.potentials.Potential
+    python.structure.Atom
+    python.structure.Cell
+    python.thermostats.NoseHooverChainThermostat
+    python.thermostats.NoseHooverThermostat
+    python.thermostats.Thermostat
+    python.utils.DataCollector
+    python.utils.TensorConverter
+    python.visualization.Visualizer
+    python.interfaces.cpp_interface.CppInterface
 
 索引内容
 --------
@@ -40,30 +43,30 @@ Python 包文档
     :maxdepth: 4
     :caption: 模块内容
 
-    generated/barostats.Barostat
-    generated/barostats.ParrinelloRahmanHooverBarostat
-    generated/config.ConfigManager
-    generated/deformation.Deformer
-    generated/elasticity.ElasticConstantsCalculator
-    generated/elasticity.ElasticConstantsSolver
-    generated/integrators.Integrator
-    generated/integrators.RK4Integrator
-    generated/integrators/VelocityVerletIntegrator
-    generated/md_simulator.MDSimulator
-    generated/mechanics.StrainCalculator
-    generated/mechanics.StressCalculator
-    generated/mechanics.StressCalculatorLJ
-    generated/optimizers.BFGSOptimizer
-    generated/optimizers.GradientDescentOptimizer
-    generated/optimizers.Optimizer
-    generated/potentials.LennardJonesPotential
-    generated/potentials.Potential
-    generated/structure.Atom
-    generated/structure.Cell
-    generated/thermostats.NoseHooverChainThermostat
-    generated/thermostats.NoseHooverThermostat
-    generated/thermostats.Thermostat
-    generated/utils.DataCollector
-    generated/utils.TensorConverter
-    generated/visualization.Visualizer
-    generated/interfaces.cpp_interface.CppInterface
+    generated/python.barostats.Barostat
+    generated/python.barostats.ParrinelloRahmanHooverBarostat
+    generated/python.config.ConfigManager
+    generated/python.deformation.Deformer
+    generated/python.elasticity.ElasticConstantsCalculator
+    generated/python.elasticity.ElasticConstantsSolver
+    generated/python.integrators.Integrator
+    generated/python.integrators.RK4Integrator
+    generated/python.integrators.VelocityVerletIntegrator
+    generated/python.md_simulator.MDSimulator
+    generated/python.mechanics.StrainCalculator
+    generated/python.mechanics.StressCalculator
+    generated/python.mechanics.StressCalculatorLJ
+    generated/python.optimizers.BFGSOptimizer
+    generated/python.optimizers.GradientDescentOptimizer
+    generated/python.optimizers.Optimizer
+    generated/python.potentials.LennardJonesPotential
+    generated/python.potentials.Potential
+    generated/python.structure.Atom
+    generated/python.structure.Cell
+    generated/python.thermostats.NoseHooverChainThermostat
+    generated/python.thermostats.NoseHooverThermostat
+    generated/python.thermostats.Thermostat
+    generated/python.utils.DataCollector
+    generated/python.utils.TensorConverter
+    generated/python.visualization.Visualizer
+    generated/python.interfaces.cpp_interface.CppInterface
