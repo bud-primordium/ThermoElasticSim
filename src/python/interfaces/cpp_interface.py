@@ -46,7 +46,7 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (amu)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ctypes.c_double,  # volume
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
                 ndpointer(

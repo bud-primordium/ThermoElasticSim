@@ -49,7 +49,7 @@ class ElasticConstantsCalculator:
     @brief 用于计算弹性常数的类。
     """
 
-    def __init__(self, cell, potential, delta=1e-2, optimizer_type="GD"):
+    def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
         """
         @param cell 晶胞对象
         @param potential 势能对象
@@ -66,14 +66,25 @@ class ElasticConstantsCalculator:
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
                 max_steps=10000,
-                tol=1e-6,
+                tol=1e-5,
                 step_size=1e-3,
                 energy_tol=1e-5,  # 根据要求调整步长
             )
         elif optimizer_type == "BFGS":
-            self.optimizer = BFGSOptimizer(tol=1e-6, maxiter=10000)  # 增加 maxiter
+            self.optimizer = BFGSOptimizer(tol=1e-6, maxiter=10000)
         else:
             raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
+
+    def calculate_initial_stress(self):
+        """
+        @brief 计算初始结构的应力，在优化之前验证应力计算是否正确。
+        """
+        logger.debug("Calculating initial stress before optimization.")
+        initial_stress = self.stress_calculator.compute_stress(
+            self.cell, self.potential
+        )
+        logger.debug(f"Initial stress tensor before optimization:\n{initial_stress}")
+        return initial_stress
 
     def optimize_initial_structure(self):
         """
@@ -90,6 +101,9 @@ class ElasticConstantsCalculator:
         @param F 变形矩阵
         @return 应变和应力张量 (Voigt 表示法)
         """
+        # 打印变形矩阵 F
+        logger.debug(f"Deformation matrix F:\n{F}")
+
         # 复制初始晶胞
         deformed_cell = self.cell.copy()
 
@@ -121,7 +135,10 @@ class ElasticConstantsCalculator:
         """
         logger.debug("Starting elastic constants calculation.")
 
-        # 在施加变形之前优化结构，使得初始应力为0
+        # 在优化前计算初始应力
+        self.calculate_initial_stress()
+
+        # 优化初始结构
         self.optimize_initial_structure()
 
         # 生成六个变形矩阵
@@ -129,7 +146,7 @@ class ElasticConstantsCalculator:
         strains = []
         stresses = []
 
-        # 使用线程池并行化每个应变的处理
+        # 并行计算每个应变的应力和应变
         with ThreadPoolExecutor() as executor:
             results = executor.map(self.calculate_stress_strain, F_list)
 
@@ -137,14 +154,14 @@ class ElasticConstantsCalculator:
             strains.append(strain)
             stresses.append(stress)
 
-        # 使用求解器求解弹性常数
+        # 求解弹性常数矩阵
         logger.debug("Solving for elastic constants.")
         elastic_solver = ElasticConstantsSolver()
         C = elastic_solver.solve(strains, stresses)
         logger.debug(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
 
         # 单位转换为 GPa
-        C_in_GPa = C * EV_TO_GPA  # 使用 utils 中的单位转换因子
+        C_in_GPa = C * EV_TO_GPA
         logger.debug(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
 
         return C_in_GPa
