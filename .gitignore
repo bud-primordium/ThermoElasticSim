@@ -35,3 +35,6 @@ Thumbs.db
 .lectures/
 .notes/
 *.log
+all.txt
+src.txt
+tests.txt
