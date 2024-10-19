@@ -14,7 +14,13 @@ release = "1.0"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["sphinx.ext.autodoc", "numpydoc", "breathe", "sphinx.ext.viewcode"]
+extensions = [
+    "numpydoc",
+    "breathe",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+]
 
 templates_path = ["_templates"]
 exclude_patterns = []
@@ -25,7 +31,9 @@ language = "zh_CN"
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../src/python"))
+sys.path.insert(0, os.path.abspath("src/python"))
+
+autosummary_generate = True
 
 # -- Breathe configuration ---------------------------------------------------
 breathe_projects = {"ThermoElasticSim": "../docs/xml"}

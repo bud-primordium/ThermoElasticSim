@@ -6,35 +6,13 @@ ThermoElasticSim 文档
 目录
 ====
 
-.. toctree::
-   :maxdepth: 2
-   :caption: 主要内容：
-
-   python_modules
-   cpp_modules
-
-
 Python 模块
 ===========
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Python 模块：
+   :maxdepth: 4
 
-   barostats
-   config
-   deformation
-   elasticity
-   integrators
-   md_simulator
-   mechanics
-   optimizers
-   potentials
-   structure
-   thermostats
-   utils
-   visualization
-
+   python
 
 C++ 模块
 ========
