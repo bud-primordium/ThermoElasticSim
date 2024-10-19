@@ -20,6 +20,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx.ext.autosummary",  # 添加 autosummary 扩展
 ]
 
 templates_path = ["_templates"]
@@ -33,7 +34,10 @@ import sys
 
 sys.path.insert(0, os.path.abspath("src/python"))
 
+# -- Options for autodoc -----------------------------------------------------
 autosummary_generate = True
+autosummary_generate_dir = "generated"  # 确保该目录存在或由 Sphinx 自动创建
+
 
 # -- Breathe configuration ---------------------------------------------------
 breathe_projects = {"ThermoElasticSim": "../docs/xml"}
