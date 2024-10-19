@@ -44,8 +44,11 @@ class CppInterface:
             lib_extension = ".so"
             lib_prefix = "lib"
 
+        # 获取当前脚本文件的目录
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # 使用脚本文件目录来构造 lib_path
         lib_path = os.path.join(
-            os.path.abspath("../../lib"), lib_prefix + lib_name + lib_extension
+            script_dir, "../../lib", lib_prefix + lib_name + lib_extension
         )
 
         if not os.path.exists(lib_path):
