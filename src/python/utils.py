@@ -1,30 +1,45 @@
-# src/python/utils.py
+# 文件名: utils.py
+# 作者: Gilbert Young
+# 修改日期: 2024年10月19日
+# 文件描述: 实现张量转换工具类和数据收集类，并定义了一些常用的单位转换常量。
+
+"""
+工具模块。
+
+包含 TensorConverter 类用于张量与 Voigt 表示之间的转换，DataCollector 类用于收集模拟过程中的数据，及一些常用的单位转换常量。
+"""
 
 import numpy as np
 
 
 class TensorConverter:
     """
-    @class TensorConverter
-    @brief 张量转换工具类。
+    张量转换工具类，用于 3x3 张量和 Voigt 表示的 6 元素向量之间的转换。
     """
 
     @staticmethod
     def to_voigt(tensor):
         """
-        @brief 将 3x3 张量转换为 Voigt 表示的 6 元素向量。
+        将 3x3 张量转换为 Voigt 表示的 6 元素向量。
 
-        @param tensor 3x3 numpy 数组
-        @return 6 元素的 numpy 数组
+        Parameters
+        ----------
+        tensor : numpy.ndarray
+            形状为 (3, 3) 的张量。
+
+        Returns
+        -------
+        numpy.ndarray
+            形状为 (6,) 的 Voigt 表示向量。
         """
         voigt = np.array(
             [
-                tensor[0, 0],
-                tensor[1, 1],
-                tensor[2, 2],
-                tensor[1, 2],
-                tensor[0, 2],
-                tensor[0, 1],
+                tensor[0, 0],  # xx
+                tensor[1, 1],  # yy
+                tensor[2, 2],  # zz
+                tensor[1, 2],  # yz
+                tensor[0, 2],  # xz
+                tensor[0, 1],  # xy
             ]
         )
         return voigt
@@ -32,16 +47,23 @@ class TensorConverter:
     @staticmethod
     def from_voigt(voigt):
         """
-        @brief 将 Voigt 表示的 6 元素向量转换为 3x3 张量。
+        将 Voigt 表示的 6 元素向量转换为 3x3 张量。
 
-        @param voigt 6 元素的 numpy 数组
-        @return 3x3 numpy 数组
+        Parameters
+        ----------
+        voigt : numpy.ndarray
+            形状为 (6,) 的 Voigt 表示向量。
+
+        Returns
+        -------
+        numpy.ndarray
+            形状为 (3, 3) 的张量。
         """
         tensor = np.array(
             [
-                [voigt[0], voigt[5], voigt[4]],
-                [voigt[5], voigt[1], voigt[3]],
-                [voigt[4], voigt[3], voigt[2]],
+                [voigt[0], voigt[5], voigt[4]],  # xx, xy, xz
+                [voigt[5], voigt[1], voigt[3]],  # xy, yy, yz
+                [voigt[4], voigt[3], voigt[2]],  # xz, yz, zz
             ]
         )
         return tensor
@@ -49,24 +71,32 @@ class TensorConverter:
 
 class DataCollector:
     """
-    @class DataCollector
-    @brief 数据收集工具类，用于收集模拟过程中的各种数据。
+    数据收集工具类，用于收集模拟过程中的原子位置和速度数据。
     """
 
     def __init__(self):
+        """
+        初始化数据收集器。
+        """
         self.data = []
 
     def collect(self, cell):
         """
-        @brief 收集晶胞中的原子位置和速度。
+        收集晶胞中的原子位置信息和速度信息。
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象。
         """
-        positions = [atom.position.copy() for atom in cell.atoms]
-        velocities = [atom.velocity.copy() for atom in cell.atoms]
+        positions = [atom.position.copy() for atom in cell.atoms]  # 复制原子位置
+        velocities = [atom.velocity.copy() for atom in cell.atoms]  # 复制原子速度
+        # 保存到数据字典
         self.data.append({"positions": positions, "velocities": velocities})
 
 
 # 单位转换常量
-# src/python/utils.py
+# 定义常见单位转换的常量，用于模拟中单位的转换。
 
 # 1 amu = 104.3968445 eV·fs²/Å²
 AMU_TO_EVFSA2 = 104.3968445

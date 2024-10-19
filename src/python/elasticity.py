@@ -1,4 +1,14 @@
-# src/python/elastics.py
+# 文件名: elastics.py
+# 作者: Gilbert Young
+# 修改日期: 2024年10月19日
+# 文件描述: 实现用于计算弹性常数的求解器和计算类。
+
+"""
+弹性常数模块。
+
+包含 ElasticConstantsSolver 和 ElasticConstantsCalculator 类，
+用于通过应力应变数据计算材料的弹性常数。
+"""
 
 import numpy as np
 import logging
@@ -14,17 +24,24 @@ logger = logging.getLogger(__name__)
 
 class ElasticConstantsSolver:
     """
-    @class ElasticConstantsSolver
-    @brief 计算弹性常数的求解器类。
+    计算弹性常数的求解器类。
     """
 
     def solve(self, strains, stresses):
         """
-        @brief 通过最小二乘法求解弹性常数矩阵。
+        通过最小二乘法求解弹性常数矩阵。
 
-        @param strains 应变数据列表，形状为 (N, 6)
-        @param stresses 应力数据列表，形状为 (N, 6)
-        @return 弹性常数矩阵，形状为 (6, 6)
+        Parameters
+        ----------
+        strains : array_like
+            应变数据，形状为 (N, 6)。
+        stresses : array_like
+            应力数据，形状为 (N, 6)。
+
+        Returns
+        -------
+        numpy.ndarray
+            弹性常数矩阵，形状为 (6, 6)。
         """
         strains = np.array(strains)
         stresses = np.array(stresses)
@@ -45,17 +62,21 @@ class ElasticConstantsSolver:
 
 class ElasticConstantsCalculator:
     """
-    @class ElasticConstantsCalculator
-    @brief 用于计算弹性常数的类。
+    计算弹性常数的类。
+
+    Parameters
+    ----------
+    cell : Cell
+        晶胞对象。
+    potential : Potential
+        势能对象。
+    delta : float, optional
+        变形大小，默认为 1e-3。
+    optimizer_type : str, optional
+        优化器类型，支持 'GD'（梯度下降）和 'BFGS'，默认为 'GD'。
     """
 
     def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
-        """
-        @param cell 晶胞对象
-        @param potential 势能对象
-        @param delta 变形大小
-        @param optimizer_type 优化器类型，支持 'GD'（梯度下降）和 'BFGS'
-        """
         self.cell = cell
         self.potential = potential
         self.delta = delta
@@ -65,10 +86,7 @@ class ElasticConstantsCalculator:
 
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
-                max_steps=10000,
-                tol=1e-5,
-                step_size=1e-3,
-                energy_tol=1e-5,  # 根据要求调整步长
+                max_steps=10000, tol=1e-5, step_size=1e-3, energy_tol=1e-5
             )
         elif optimizer_type == "BFGS":
             self.optimizer = BFGSOptimizer(tol=1e-6, maxiter=10000)
@@ -77,7 +95,12 @@ class ElasticConstantsCalculator:
 
     def calculate_initial_stress(self):
         """
-        @brief 计算初始结构的应力，在优化之前验证应力计算是否正确。
+        计算初始结构的应力，在优化之前验证应力计算是否正确。
+
+        Returns
+        -------
+        numpy.ndarray
+            初始应力张量。
         """
         logger.debug("Calculating initial stress before optimization.")
         initial_stress = self.stress_calculator.compute_stress(
@@ -87,21 +110,27 @@ class ElasticConstantsCalculator:
         return initial_stress
 
     def optimize_initial_structure(self):
-        """
-        @brief 在施加变形前对结构进行一次优化，使得初始结构的应力为零。
-        """
+        """在施加变形前对结构进行一次优化，使得初始结构的应力为零。"""
         logger.debug("Starting initial structure optimization.")
         self.optimizer.optimize(self.cell, self.potential)
         logger.debug("Initial structure optimization completed.")
 
     def calculate_stress_strain(self, F):
         """
-        @brief 对单个应变矩阵施加变形，不进行优化，并计算应力和应变。
+        对单个应变矩阵施加变形，计算应力和应变。
 
-        @param F 变形矩阵
-        @return 应变和应力张量 (Voigt 表示法)
+        Parameters
+        ----------
+        F : numpy.ndarray
+            变形矩阵。
+
+        Returns
+        -------
+        strain_voigt : numpy.ndarray
+            应变张量（Voigt 表示法）。
+        stress_voigt : numpy.ndarray
+            应力张量（Voigt 表示法）。
         """
-        # 打印变形矩阵 F
         logger.debug(f"Deformation matrix F:\n{F}")
 
         # 复制初始晶胞
@@ -129,9 +158,12 @@ class ElasticConstantsCalculator:
 
     def calculate_elastic_constants(self):
         """
-        @brief 计算弹性常数矩阵。
+        计算弹性常数矩阵。
 
-        @return 弹性常数矩阵，形状为 (6, 6)，单位为 GPa。
+        Returns
+        -------
+        numpy.ndarray
+            弹性常数矩阵，形状为 (6, 6)，单位为 GPa。
         """
         logger.debug("Starting elastic constants calculation.")
 

@@ -1,25 +1,54 @@
-# src/python/integrators.py
+# 文件名: integrators.py
+# 作者: Gilbert Young
+# 修改日期: 2024年10月19日
+# 文件描述: 实现分子动力学模拟中的积分器，包括速度 Verlet 和四阶 Runge-Kutta 积分器。
+
+"""
+积分器模块。
+
+包含 Integrator 基类及 VelocityVerlet 和四阶 Runge-Kutta (RK4) 积分器的实现。
+"""
 
 import numpy as np
 
 
 class Integrator:
     """
-    @class Integrator
-    @brief 积分器基类
+    积分器基类，定义积分方法的接口。
     """
 
     def integrate(self, cell, potential, dt):
+        """应用积分器，更新晶胞和原子状态。"""
         raise NotImplementedError
 
 
 class VelocityVerletIntegrator(Integrator):
     """
-    @class VelocityVerletIntegrator
-    @brief 速度 Verlet 积分器的实现
+    速度 Verlet 积分器的实现。
+
+    Parameters
+    ----------
+    cell : Cell
+        包含原子的晶胞对象。
+    potential : Potential
+        势能对象，用于计算作用力。
+    dt : float
+        时间步长。
     """
 
     def integrate(self, cell, potential, dt):
+        """
+        使用速度 Verlet 算法进行分子动力学积分。
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象。
+        potential : Potential
+            势能对象，用于计算作用力。
+        dt : float
+            时间步长。
+        """
         atoms = cell.atoms
         # 第一半步：更新位置
         for atom in atoms:
@@ -37,18 +66,41 @@ class VelocityVerletIntegrator(Integrator):
 
 class RK4Integrator(Integrator):
     """
-    @class RK4Integrator
-    @brief 四阶 Runge-Kutta 积分器的实现
+    四阶 Runge-Kutta (RK4) 积分器的实现。
+
+    Parameters
+    ----------
+    cell : Cell
+        包含原子的晶胞对象。
+    potential : Potential
+        势能对象，用于计算作用力。
+    dt : float
+        时间步长。
     """
 
     def integrate(self, cell, potential, dt):
+        """
+        使用四阶 Runge-Kutta (RK4) 算法进行分子动力学积分。
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象。
+        potential : Potential
+            势能对象，用于计算作用力。
+        dt : float
+            时间步长。
+        """
+
         def get_state():
+            """获取当前原子位置和速度的状态。"""
             return np.concatenate(
                 [atom.position for atom in cell.atoms]
                 + [atom.velocity for atom in cell.atoms]
             )
 
         def set_state(state):
+            """根据给定状态更新原子的位置和速度。"""
             num_atoms = len(cell.atoms)
             positions = state[: 3 * num_atoms].reshape((num_atoms, 3))
             velocities = state[3 * num_atoms :].reshape((num_atoms, 3))
@@ -57,16 +109,16 @@ class RK4Integrator(Integrator):
                 atom.velocity = velocities[i]
 
         def compute_derivatives(state):
-            # Set the state
+            """计算位置和速度的导数。"""
             num_atoms = len(cell.atoms)
             positions = state[: 3 * num_atoms].reshape((num_atoms, 3))
             velocities = state[3 * num_atoms :].reshape((num_atoms, 3))
             for i, atom in enumerate(cell.atoms):
                 atom.position = positions[i]
                 atom.velocity = velocities[i]
-            # Compute forces
+            # 计算力
             potential.calculate_forces(cell)
-            # Compute derivatives
+            # 计算导数
             derivatives = np.zeros_like(state)
             for i, atom in enumerate(cell.atoms):
                 derivatives[3 * i : 3 * i + 3] = atom.velocity
