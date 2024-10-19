@@ -19,7 +19,7 @@ extensions = ["sphinx.ext.autodoc", "numpydoc", "breathe", "sphinx.ext.viewcode"
 templates_path = ["_templates"]
 exclude_patterns = []
 
-language = "zh-CN"
+language = "zh_CN"
 
 # -- Python source code path -------------------------------------------------
 import os
