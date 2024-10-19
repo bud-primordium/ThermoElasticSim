@@ -28,7 +28,7 @@ import sys
 sys.path.insert(0, os.path.abspath("../src/python"))
 
 # -- Breathe configuration ---------------------------------------------------
-breathe_projects = {"ThermoElasticSim": "../path/to/doxygen/xml"}
+breathe_projects = {"ThermoElasticSim": "../docs/xml"}
 breathe_default_project = "ThermoElasticSim"
 
 # -- Options for HTML output -------------------------------------------------

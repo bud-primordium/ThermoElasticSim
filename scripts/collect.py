@@ -6,8 +6,8 @@ src_file = "scripts/src.txt"
 tests_file = "scripts/tests.txt"
 
 # 指定要遍历的文件夹路径
-src_folder = "../src"
-tests_folder = "../tests"
+src_folder = "./src"
+tests_folder = "./tests"
 
 # 不需要的文件列表，例如CMake生成的文件
 exclude_files = ["CMakeCXXCompilerId.cpp", "CMakeFiles", "CMakeCache.txt"]

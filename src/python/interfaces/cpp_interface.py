@@ -37,19 +37,17 @@ class CppInterface:
             # 判断是否使用 MinGW 环境
             if "GCC" in sys.version:
                 lib_prefix = "lib"  # MinGW 使用 'lib' 前缀
+        elif sys.platform == "darwin":  # macOS
+            lib_extension = ".dylib"
+            lib_prefix = "lib"
         else:  # Unix/Linux
             lib_extension = ".so"
             lib_prefix = "lib"
 
-        # 获取当前文件所在目录的绝对路径
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # 获取项目根目录的绝对路径
-        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-        # 构建库文件的绝对路径
         lib_path = os.path.join(
-            project_root, "lib", lib_prefix + lib_name + lib_extension
+            os.path.abspath("../../lib"), lib_prefix + lib_name + lib_extension
         )
-        # 检查库文件是否存在
+
         if not os.path.exists(lib_path):
             raise FileNotFoundError(f"无法找到库文件: {lib_path}")
 
