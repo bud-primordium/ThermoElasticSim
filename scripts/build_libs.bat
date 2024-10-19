@@ -27,4 +27,3 @@ echo Compiling parrinello_rahman_hoover.dll ...
 %COMPILER% %SRC_DIR%\parrinello_rahman_hoover.cpp -o %LIB_DIR%\parrinello_rahman_hoover.dll %CFLAGS%
 
 echo All libraries compiled successfully.
-pause
