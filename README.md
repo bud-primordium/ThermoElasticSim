@@ -254,33 +254,3 @@ md_simulation:
 ## 联系方式
 
 如有任何问题或建议，请通过 [issue](https://github.com/bud-primordium/ThermoElasticSim/issues) 与项目维护者联系。
-
----
-
-### 进一步优化建议
-
-1. **文档注释**
-
-   确保所有 C++ 和 Python 代码都有详细的文档注释，以便 Doxygen 和 Sphinx 能够正确生成文档。
-
-2. **持续集成**
-
-   配置 GitHub Actions 或其他 CI 工具，自动运行测试和文档生成。例如，可以创建 `.github/workflows/ci.yml` 文件，设置在每次提交时自动运行 `make test` 和 `make html`。
-
-3. **跨平台支持**
-
-   确保所有脚本和 `Makefile` 在不同操作系统上均可正常运行，必要时添加条件判断。例如，在 `Makefile.libs` 中，区分 Windows 和 Unix 系统的命令。
-
-4. **完善示例**
-
-   随着功能的开发，逐步增加更多的使用示例，帮助用户更好地理解和使用工具。
-
-### 参考资料
-
-- [GNU Make Manual](https://www.gnu.org/software/make/manual/make.html)
-- [CMake Documentation](https://cmake.org/documentation/)
-- [Breathe Documentation](https://breathe.readthedocs.io/en/latest/)
-- [Sphinx Documentation](https://www.sphinx-doc.org/en/master/)
-- [Doxygen Documentation](http://www.doxygen.nl/manual/index.html)
-
-如有进一步的问题或需要更多帮助，请随时提出！
