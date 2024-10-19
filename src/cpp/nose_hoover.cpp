@@ -1,4 +1,13 @@
-// src/cpp/nose_hoover.cpp
+/**
+ * @file nose_hoover.cpp
+ * @brief Nose-Hoover 恒温器的实现
+ *
+ * 该文件包含 Nose-Hoover 恒温器的实现，主要用于分子动力学模拟中的温度控制。
+ * 它通过引入单个热浴变量，遵循拓展哈密顿量，更新系统的速度和热浴变量，从而实现温度调节。
+ *
+ * @author Gilbert Young
+ * @date 2024-10-19
+ */
 
 #include <cmath>
 #include <vector>

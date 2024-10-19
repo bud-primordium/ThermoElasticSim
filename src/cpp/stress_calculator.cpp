@@ -1,4 +1,13 @@
-// src/cpp/stress_calculator.cpp
+/**
+ * @file stress_calculator.cpp
+ * @brief 应力张量计算的实现
+ *
+ * 该文件实现了基于动能和势能贡献的应力张量计算，用于分子动力学模拟。
+ * 包括原子速度和位置的贡献，以及通过力和位置的计算。
+ *
+ * @author Gilbert Young
+ * @date 2024-10-19
+ */
 
 #include <cmath>
 #include <vector>

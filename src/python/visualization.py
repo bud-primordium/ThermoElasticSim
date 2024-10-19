@@ -1,12 +1,12 @@
 # 文件名: visualization.py
 # 作者: Gilbert Young
-# 修改日期: 2024年10月19日
+# 修改日期: 2024-10-19
 # 文件描述: 实现晶体结构和应力-应变关系的可视化工具。
 
 """
-可视化模块。
+可视化模块
 
-包含 Visualizer 类，用于可视化晶胞结构和应力-应变关系。
+包含 Visualizer 类，用于可视化晶胞结构和应力-应变关系
 """
 
 import matplotlib.pyplot as plt
@@ -17,32 +17,32 @@ from .structure import Cell
 
 class Visualizer:
     """
-    可视化类，用于绘制晶体结构和应力-应变关系。
+    可视化类，用于绘制晶体结构和应力-应变关系
     """
 
     def __init__(self):
         """
-        初始化可视化工具类。
+        初始化可视化工具类
         """
         pass
 
     def plot_cell_structure(self, cell_structure: Cell, show=True):
         """
-        绘制晶体结构的 3D 图形。
+        绘制晶体结构的 3D 图形
 
         Parameters
         ----------
         cell_structure : Cell
-            包含原子的 Cell 实例。
+            包含原子的 Cell 实例
         show : bool, optional
-            是否立即显示图形，默认为 True。
+            是否立即显示图形，默认为 True
 
         Returns
         -------
         fig : matplotlib.figure.Figure
-            绘制的图形对象。
+            绘制的图形对象
         ax : matplotlib.axes._subplots.Axes3DSubplot
-            3D 子图对象。
+            3D 子图对象
         """
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
@@ -78,23 +78,23 @@ class Visualizer:
         self, strain_data: np.ndarray, stress_data: np.ndarray, show=True
     ):
         """
-        绘制应力-应变关系图。
+        绘制应力-应变关系图
 
         Parameters
         ----------
         strain_data : numpy.ndarray
-            应变数据，形状为 (N, 6)。
+            应变数据，形状为 (N, 6)
         stress_data : numpy.ndarray
-            应力数据，形状为 (N, 6)。
+            应力数据，形状为 (N, 6)
         show : bool, optional
-            是否立即显示图形，默认为 True。
+            是否立即显示图形，默认为 True
 
         Returns
         -------
         fig : matplotlib.figure.Figure
-            绘制的图形对象。
+            绘制的图形对象
         ax : matplotlib.axes._subplots.AxesSubplot
-            2D 子图对象。
+            2D 子图对象
         """
         fig, ax = plt.subplots(figsize=(10, 6))
 

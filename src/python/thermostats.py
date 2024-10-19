@@ -1,12 +1,12 @@
 # 文件名: thermostats.py
 # 作者: Gilbert Young
-# 修改日期: 2024年10月19日
+# 修改日期: 2024-10-19
 # 文件描述: 实现分子动力学模拟中的 Nose-Hoover 和 Nose-Hoover 链恒温器。
 
 """
-恒温器模块。
+恒温器模块
 
-包含 Thermostat 基类及 Nose-Hoover 和 Nose-Hoover 链恒温器的实现。
+包含 Thermostat 基类及 Nose-Hoover 和 Nose-Hoover 链恒温器的实现
 """
 
 import numpy as np
@@ -15,26 +15,26 @@ from .interfaces.cpp_interface import CppInterface
 
 class Thermostat:
     """
-    恒温器基类，定义恒温器的接口。
+    恒温器基类，定义恒温器的接口
     """
 
     def apply(self, atoms, dt):
-        """应用恒温器，更新原子速度。"""
+        """应用恒温器，更新原子速度"""
         raise NotImplementedError
 
 
 class NoseHooverThermostat(Thermostat):
     """
-    Nose-Hoover 恒温器的实现。
+    Nose-Hoover 恒温器的实现
 
     Parameters
     ----------
     target_temperature : float
-        目标温度。
+        目标温度
     time_constant : float
-        时间常数，控制热浴耦合强度。
+        时间常数，控制热浴耦合强度
     Q : float, optional
-        热浴质量，默认为 10.0。
+        热浴质量，默认为 10.0
     """
 
     def __init__(self, target_temperature, time_constant, Q=10.0):
@@ -46,14 +46,14 @@ class NoseHooverThermostat(Thermostat):
 
     def apply(self, atoms, dt):
         """
-        应用 Nose-Hoover 恒温器，更新原子速度。
+        应用 Nose-Hoover 恒温器，更新原子速度
 
         Parameters
         ----------
         atoms : list of Atom
-            原子对象列表。
+            原子对象列表
         dt : float
-            时间步长。
+            时间步长
         """
         num_atoms = len(atoms)
         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
@@ -86,16 +86,16 @@ class NoseHooverThermostat(Thermostat):
 
 class NoseHooverChainThermostat(Thermostat):
     """
-    Nose-Hoover 链恒温器的实现。
+    Nose-Hoover 链恒温器的实现
 
     Parameters
     ----------
     target_temperature : float
-        目标温度。
+        目标温度
     time_constant : float
-        时间常数。
+        时间常数
     chain_length : int, optional
-        链的长度，默认为 2。
+        链的长度，默认为 2
     """
 
     def __init__(self, target_temperature, time_constant, chain_length=2):
@@ -106,18 +106,18 @@ class NoseHooverChainThermostat(Thermostat):
 
     def apply_thermostat(self, cell, dt, xi_chain, Q):
         """
-        应用 Nose-Hoover 链恒温器，更新原子速度。
+        应用 Nose-Hoover 链恒温器，更新原子速度
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         dt : float
-            时间步长。
+            时间步长
         xi_chain : numpy.ndarray
-            热浴变量链。
+            热浴变量链
         Q : numpy.ndarray
-            热浴质量数组。
+            热浴质量数组
         """
         num_atoms = len(cell.atoms)
         masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)

@@ -1,12 +1,12 @@
 # 文件名: optimizers.py
 # 作者: Gilbert Young
-# 修改日期: 2024年10月19日
+# 修改日期: 2024-10-19
 # 文件描述: 实现梯度下降和 BFGS 优化器。
 
 """
-优化器模块。
+优化器模块
 
-包含 GradientDescentOptimizer 和 BFGSOptimizer，用于分子动力学模拟优化。
+包含 GradientDescentOptimizer 和 BFGSOptimizer，用于分子动力学模拟优化
 """
 
 import numpy as np
@@ -18,32 +18,32 @@ logger = logging.getLogger(__name__)
 
 class Optimizer:
     """
-    优化器基类，定义优化方法的接口。
+    优化器基类，定义优化方法的接口
     """
 
     def optimize(self, cell, potential):
-        """执行优化，需子类实现。"""
+        """执行优化，需子类实现"""
         raise NotImplementedError
 
 
 class GradientDescentOptimizer(Optimizer):
     """
-    梯度下降优化器。
+    梯度下降优化器
 
     Parameters
     ----------
     max_steps : int
-        最大迭代步数。
+        最大迭代步数
     tol : float
-        力的收敛阈值。
+        力的收敛阈值
     step_size : float
-        更新步长。
+        更新步长
     energy_tol : float
-        能量变化的收敛阈值。
+        能量变化的收敛阈值
     """
 
     def __init__(self, max_steps=10000, tol=1e-3, step_size=1e-3, energy_tol=1e-4):
-        """初始化梯度下降优化器。"""
+        """初始化梯度下降优化器"""
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
@@ -52,14 +52,14 @@ class GradientDescentOptimizer(Optimizer):
 
     def optimize(self, cell, potential):
         """
-        执行梯度下降优化。
+        执行梯度下降优化
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         potential : Potential
-            势能对象，用于计算作用力和能量。
+            势能对象，用于计算作用力和能量
         """
         logger = logging.getLogger(__name__)
         atoms = cell.atoms
@@ -161,32 +161,32 @@ class GradientDescentOptimizer(Optimizer):
 
 class BFGSOptimizer(Optimizer):
     """
-    BFGS 优化器，基于 scipy.optimize.minimize。
+    BFGS 优化器，基于 scipy.optimize.minimize
 
     Parameters
     ----------
     tol : float
-        收敛阈值。
+        收敛阈值
     maxiter : int
-        最大迭代步数。
+        最大迭代步数
     """
 
     def __init__(self, tol=1e-6, maxiter=10000):
-        """初始化 BFGS 优化器。"""
+        """初始化 BFGS 优化器"""
         self.tol = tol
         self.maxiter = maxiter
         self.converged = False
 
     def optimize(self, cell, potential):
         """
-        执行 BFGS 优化。
+        执行 BFGS 优化
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         potential : Potential
-            势能对象，用于计算作用力和能量。
+            势能对象，用于计算作用力和能量
         """
         logger = logging.getLogger(__name__)
 

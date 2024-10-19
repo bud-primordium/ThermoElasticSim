@@ -1,4 +1,12 @@
-// src/cpp/lennard_jones.cpp
+/**
+ * @file lennard_jones.cpp
+ * @brief Lennard-Jones 势计算的实现，包括截断区域的多项式处理
+ *
+ * 该文件包含用于 Lennard-Jones 势力和能量计算的函数，包括处理周期性边界条件和截断修正。
+ *
+ * @author Gilbert Young
+ * @date 2024-10-19
+ */
 
 #include <cmath>
 #include <vector>

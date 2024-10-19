@@ -1,4 +1,13 @@
-// src/cpp/parrinello_rahman_hoover.cpp
+/**
+ * @file parrinello_rahman_hoover.cpp
+ * @brief Parrinello-Rahman-Hoover 恒压器的实现
+ *
+ * 该文件实现了 Parrinello-Rahman-Hoover 恒压器，主要用于分子动力学模拟中的压力控制。
+ * 通过更新晶格矢量和原子速度，实现对系统压力的调节。
+ *
+ * @author Gilbert Young
+ * @date 2024-10-19
+ */
 
 #include <cmath>
 #include <vector>

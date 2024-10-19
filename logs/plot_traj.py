@@ -105,7 +105,7 @@ def extract_data_from_simplified_log(log_file):
 
 def update_plot(step, data, scatter, ax):
     """
-    更新动画帧的内容。
+    更新动画帧的内容
     """
     ax.cla()  # 清除当前的绘图内容
     pos = data["positions"][step]
@@ -166,7 +166,7 @@ def update_plot(step, data, scatter, ax):
 
 def animate_positions(data):
     """
-    使用matplotlib的FuncAnimation绘制每100步的轨迹动画。
+    使用matplotlib的FuncAnimation绘制每100步的轨迹动画
     """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")

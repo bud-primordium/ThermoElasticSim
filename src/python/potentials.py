@@ -1,12 +1,12 @@
 # 文件名: potentials.py
 # 作者: Gilbert Young
-# 修改日期: 2024年10月19日
+# 修改日期: 2024-10-19
 # 文件描述: 实现 Lennard-Jones 势能及其相关方法。
 
 """
-势能模块。
+势能模块
 
-包含 Potential 基类和 LennardJonesPotential 类，用于计算原子间的 Lennard-Jones 势能。
+包含 Potential 基类和 LennardJonesPotential 类，用于计算原子间的 Lennard-Jones 势能
 """
 
 import numpy as np
@@ -15,14 +15,14 @@ from .interfaces.cpp_interface import CppInterface
 
 class Potential:
     """
-    势能基类，定义势能计算的接口。
+    势能基类，定义势能计算的接口
 
     Parameters
     ----------
     parameters : dict
-        势能相关的参数。
+        势能相关的参数
     cutoff : float
-        势能的截断距离，单位为 Å。
+        势能的截断距离，单位为 Å
     """
 
     def __init__(self, parameters, cutoff):
@@ -31,50 +31,50 @@ class Potential:
 
     def calculate_potential(self, cell):
         """
-        计算势能，需子类实现。
+        计算势能，需子类实现
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         """
         raise NotImplementedError
 
     def calculate_forces(self, cell):
         """
-        计算作用力，需子类实现。
+        计算作用力，需子类实现
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         """
         raise NotImplementedError
 
     def calculate_energy(self, cell):
         """
-        计算能量，需子类实现。
+        计算能量，需子类实现
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         """
         raise NotImplementedError
 
 
 class LennardJonesPotential(Potential):
     """
-    Lennard-Jones 势的实现。
+    Lennard-Jones 势的实现
 
     Parameters
     ----------
     epsilon : float
-        Lennard-Jones 势深度参数，单位为 eV。
+        Lennard-Jones 势深度参数，单位为 eV
     sigma : float
-        Lennard-Jones 势的零势距，单位为 Å。
+        Lennard-Jones 势的零势距，单位为 Å
     cutoff : float
-        Lennard-Jones 势的截断距离，单位为 Å。
+        Lennard-Jones 势的截断距离，单位为 Å
     """
 
     def __init__(self, epsilon, sigma, cutoff):
@@ -88,12 +88,12 @@ class LennardJonesPotential(Potential):
 
     def calculate_forces(self, cell):
         """
-        计算并更新所有原子的作用力。
+        计算并更新所有原子的作用力
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
         """
         num_atoms = cell.num_atoms
         # 获取所有原子的位置信息并转换为连续的 NumPy 数组
@@ -123,17 +123,17 @@ class LennardJonesPotential(Potential):
 
     def calculate_energy(self, cell):
         """
-        计算系统的总能量。
+        计算系统的总能量
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象。
+            包含原子的晶胞对象
 
         Returns
         -------
         float
-            计算的总势能，单位为 eV。
+            计算的总势能，单位为 eV
         """
         num_atoms = cell.num_atoms
         # 获取所有原子的位置信息并转换为连续的 NumPy 数组

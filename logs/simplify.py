@@ -4,7 +4,7 @@ import os
 
 def find_latest_log(directory, prefix="test_optimizers", extension=".log"):
     """
-    在指定目录中查找最新的日志文件。
+    在指定目录中查找最新的日志文件
 
     参数:
     - directory: 日志文件所在的目录
@@ -20,7 +20,7 @@ def find_latest_log(directory, prefix="test_optimizers", extension=".log"):
         if f.startswith(prefix) and f.endswith(extension)
     ]
     if not log_files:
-        raise FileNotFoundError("没有找到匹配的日志文件。")
+        raise FileNotFoundError("没有找到匹配的日志文件")
 
     # 按照修改时间排序，获取最新的文件
     log_files.sort(

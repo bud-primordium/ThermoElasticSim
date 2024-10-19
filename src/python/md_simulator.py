@@ -1,35 +1,35 @@
 # 文件名: md_simulator.py
 # 作者: Gilbert Young
-# 修改日期: 2024年10月19日
+# 修改日期: 2024-10-19
 # 文件描述: 实现分子动力学模拟器 MDSimulator 类，用于执行分子动力学模拟。
 
 """
-分子动力学模拟器模块。
+分子动力学模拟器模块
 
-包含 MDSimulator 类，用于执行分子动力学模拟，并支持恒温器和压强控制器。
+包含 MDSimulator 类，用于执行分子动力学模拟，并支持恒温器和压强控制器
 """
 
 
 class MDSimulator:
     """
-    分子动力学模拟器类。
+    分子动力学模拟器类
 
     Parameters
     ----------
     cell : Cell
-        包含原子的晶胞对象。
+        包含原子的晶胞对象
     potential : Potential
-        势能对象，用于计算作用力。
+        势能对象，用于计算作用力
     integrator : Integrator
-        积分器对象，用于时间推进模拟。
+        积分器对象，用于时间推进模拟
     thermostat : Thermostat, optional
-        恒温器对象，用于控制温度。
+        恒温器对象，用于控制温度
     barostat : Barostat, optional
-        压强控制器对象，用于控制压强。
+        压强控制器对象，用于控制压强
     """
 
     def __init__(self, cell, potential, integrator, thermostat=None, barostat=None):
-        """初始化 MDSimulator 对象。"""
+        """初始化 MDSimulator 对象"""
         self.cell = cell
         self.potential = potential
         self.integrator = integrator
@@ -38,16 +38,16 @@ class MDSimulator:
 
     def run(self, steps, dt, data_collector=None):
         """
-        运行分子动力学模拟。
+        运行分子动力学模拟
 
         Parameters
         ----------
         steps : int
-            模拟步数。
+            模拟步数
         dt : float
-            时间步长。
+            时间步长
         data_collector : DataCollector, optional
-            数据收集器，用于记录模拟数据。
+            数据收集器，用于记录模拟数据
         """
         # 初始化力
         self.potential.calculate_forces(self.cell)
