@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-**ThermoElasticSim** 是一个用于计算金属铝（Al）和绝缘体金刚石（Diamond）在零温和有限温度下弹性常数的模拟工具。该项目结合了Python的易用性和Fortran的高性能计算能力，通过结构优化和分子动力学（MD）模拟，实现了应力-应变方法和能量-体积（E-V）拟合法，全面研究材料的弹性性质。此外，项目还支持弹性波在不同晶向上的传播特性分析。
+**ThermoElasticSim** 是一个用于计算金属铝（Al）和绝缘体金刚石（Diamond）在零温和有限温度下弹性常数的模拟工具。该项目结合了 Python 的易用性和 C++ 的高性能计算能力，通过结构优化和分子动力学（MD）模拟，采用显式变形法和应力涨落法，全面研究材料的弹性性质。此外，支持弹性波在不同晶向上的传播特性分析。
 
 ## 主要功能
 
@@ -27,46 +27,89 @@
 
 ```plaintext
 ThermoElasticSim/
-├── src/
-│   ├── python/
-│   │   ├── __init__.py
-│   │   ├── structure.py
-│   │   ├── potentials.py
-│   │   ├── optimizers.py
-│   │   ├── deformation.py
-│   │   ├── stress_evaluator.py
-│   │   ├── strain.py
-│   │   ├── solver.py
-│   │   ├── md_simulation.py
-│   │   ├── visualization.py
-│   │   ├── utilities.py
-│   │   └── config.py
-│   ├── fortran/
-│   │   ├── stress_evaluator.f90
-│   │   ├── structure_optimizer.f90
-│   │   └── Makefile
-│   └── docs/
-│       └── Doxyfile
-├── tests/
-│   ├── test_structure.py
-│   ├── test_potentials.py
-│   ├── test_optimizers.py
-│   ├── test_deformation.py
-│   ├── test_stress_evaluator.py
-│   ├── test_strain.py
-│   ├── test_solver.py
-│   ├── test_md_simulation.py
-│   ├── test_visualization.py
-│   ├── test_utilities.py
-│   └── test_config.py
-├── examples/
-│   ├── zero_temperature_elastic_constants.py
-│   ├── finite_temperature_elastic_constants.py
-│   └── wave_propagation_simulation.py
-├── README.md
 ├── LICENSE
-├── requirements.txt
-└── .gitignore
+├── Makefile
+├── Makefile.libs
+├── README.md
+├── build/                   # Sphinx 构建输出目录
+├── config/                  # 配置文件
+│   └── pytest.ini
+├── docs/                    # 文档生成目录，包含 Doxygen 和 Sphinx 配置
+│   ├── Doxyfile
+│   ├── custom.css
+│   └── xml/
+│       ├── combine.xslt
+│       ├── compound.xsd
+│       ├── doxyfile.xsd
+│       ├── index.xsd
+│       └── xml.xsd
+├── examples/                # 使用示例
+│   └── calculate_elastic_constants.py
+├── logs/                    # 日志文件
+├── scripts/                 # 脚本文件，自动化任务
+│   ├── build_libs.bat
+│   ├── collect.py
+│   ├── datetime_updater.py
+│   └── make.bat
+├── setup.py                 # 项目安装脚本
+├── source/                  # Sphinx 文档的源文件
+│   ├── _static
+│   ├── _templates
+│   ├── conf.py
+│   └── index.rst
+├── src/                     # 项目源代码
+│   ├── ThermoElasticSim.egg-info/
+│   │   └── PKG-INFO
+│   ├── cpp/                 # C++ 文件实现物理计算
+│   │   ├── lennard_jones.cpp
+│   │   ├── nose_hoover.cpp
+│   │   ├── nose_hoover_chain.cpp
+│   │   ├── parrinello_rahman_hoover.cpp
+│   │   └── stress_calculator.cpp
+│   ├── lib/                 # 动态库，编译后的 C++ 文件
+│   │   ├── lennard_jones.dll
+│   │   ├── nose_hoover.dll
+│   │   ├── nose_hoover_chain.dll
+│   │   ├── parrinello_rahman_hoover.dll
+│   │   └── stress_calculator.dll
+│   └── python/              # Python 代码，用于控制流程和集成 C++ 计算
+│       ├── __init__.py
+│       ├── __pycache__
+│       ├── barostats.py
+│       ├── config.py
+│       ├── deformation.py
+│       ├── elasticity.py
+│       ├── integrators.py
+│       ├── interfaces/
+│       │   ├── __init__.py
+│       │   ├── __pycache__
+│       │   └── cpp_interface.py
+│       ├── md_simulator.py
+│       ├── mechanics.py
+│       ├── optimizers.py
+│       ├── ploy_lj.py
+│       ├── potentials.py
+│       ├── structure.py
+│       ├── thermostats.py
+│       ├── utils.py
+│       └── visualization.py
+└── tests/                   # 自动化测试
+    ├── __pycache__
+    ├── config.yaml
+    ├── test_cpp_interface.py
+    ├── test_deformation.py
+    ├── test_elasticity.py
+    ├── test_lj.py
+    ├── test_md.py
+    ├── test_mechanics.py
+    ├── test_nose_hoover.py
+    ├── test_optimizers.py
+    ├── test_pbc.py
+    ├── test_potentials.py
+    ├── test_simple_optimizer.py
+    ├── test_structure.py
+    ├── test_utils.py
+    └── test_visualization.py
 ```
 
 ## 安装指南
@@ -74,8 +117,9 @@ ThermoElasticSim/
 ### 前置条件
 
 - **Python 3.8+**
-- **Fortran 编译器**（如 `gfortran`）
+- **C++ 编译器**（如 `g++` 或 `clang++`）
 - **pip** 包管理工具
+- **make** 工具（Windows 用户可使用 MinGW 或 MSYS2）
 
 ### 安装步骤
 
@@ -96,40 +140,50 @@ ThermoElasticSim/
 3. **安装依赖**
 
    ```bash
-   pip install -r requirements.txt
+   make install-deps
    ```
 
-4. **编译 Fortran 模块**
+4. **编译 C++ 模块**
+
+   使用 `Makefile.libs` 编译 C++ 文件并生成动态库：
 
    ```bash
-   cd src/fortran
-   make
-   cd ../../
+   make build_libs
    ```
 
 ## 使用说明
 
-### 零温下弹性常数计算
+### 运行示例
+
+当前提供了一个示例脚本，用于计算弹性常数：
 
 ```bash
-python examples/zero_temperature_elastic_constants.py
+python examples/calculate_elastic_constants.py
 ```
 
-### 有限温度下弹性常数计算
+该脚本将根据实现的算法进行弹性常数的计算。更多功能正在开发中，后续将提供更多示例。
+
+### 文档生成
+
+项目使用 Sphinx 和 Doxygen 生成详细的文档。通过 `Makefile` 可以自动化文档的生成过程：
 
 ```bash
-python examples/finite_temperature_elastic_constants.py
+make html
 ```
 
-### 弹性波传播模拟
+生成的文档位于 `build/` 目录中。
+
+### 运行测试
+
+自动化测试使用 pytest 进行管理，通过 `Makefile` 可以方便地运行所有测试：
 
 ```bash
-python examples/wave_propagation_simulation.py
+make test
 ```
 
 ## 配置文件
 
-项目使用 `YAML` 格式的配置文件 `config.yaml` 来管理参数。以下是一个示例配置：
+项目使用 `YAML` 格式的配置文件 `tests/config.yaml` 来管理参数。以下是一个示例配置（**尚在测试中**）：
 
 ```yaml
 # config.yaml
@@ -142,28 +196,27 @@ unit_cell:
   atoms:
     - {symbol: 'Al', mass: 26.9815, position: [0.0, 0.0, 0.0]}
     - {symbol: 'Al', mass: 26.9815, position: [1.8075, 1.8075, 1.8075]}
-    # 添加更多原子
 
 potential:
-  type: 'EAM'  # 或 'LennardJones'
+  type: 'LennardJones'
   parameters:
-    epsilon: 0.0103  # 示例参数
-    sigma: 3.405      # 示例参数
+    epsilon: 0.0103
+    sigma: 3.405
   cutoff: 5.0
 
 optimizer:
-  method: 'ConjugateGradient'  # 或 'NewtonRaphson'
+  method: 'ConjugateGradient'
 
 deformation:
   delta: 0.01
 
 stress_evaluator:
-  type: 'EAM'  # 或 'LennardJones'
+  type: 'LennardJones'
 
 md_simulation:
-  temperature: 300  # K
-  pressure: 0.0      # GPa
-  timestep: 1.0e-3    # ps
+  temperature: 300
+  pressure: 0.0
+  timestep: 1.0e-3
   thermostat: 'Nosé-Hoover'
   barostat: 'NoBarostat'
   steps: 10000
@@ -200,4 +253,34 @@ md_simulation:
 
 ## 联系方式
 
-如有任何问题或建议，请通过 [issue](https://github.com/bud-primordium/ThermoElasticSim/issues) 与我们联系。
+如有任何问题或建议，请通过 [issue](https://github.com/bud-primordium/ThermoElasticSim/issues) 与项目维护者联系。
+
+---
+
+### 进一步优化建议
+
+1. **文档注释**
+
+   确保所有 C++ 和 Python 代码都有详细的文档注释，以便 Doxygen 和 Sphinx 能够正确生成文档。
+
+2. **持续集成**
+
+   配置 GitHub Actions 或其他 CI 工具，自动运行测试和文档生成。例如，可以创建 `.github/workflows/ci.yml` 文件，设置在每次提交时自动运行 `make test` 和 `make html`。
+
+3. **跨平台支持**
+
+   确保所有脚本和 `Makefile` 在不同操作系统上均可正常运行，必要时添加条件判断。例如，在 `Makefile.libs` 中，区分 Windows 和 Unix 系统的命令。
+
+4. **完善示例**
+
+   随着功能的开发，逐步增加更多的使用示例，帮助用户更好地理解和使用工具。
+
+### 参考资料
+
+- [GNU Make Manual](https://www.gnu.org/software/make/manual/make.html)
+- [CMake Documentation](https://cmake.org/documentation/)
+- [Breathe Documentation](https://breathe.readthedocs.io/en/latest/)
+- [Sphinx Documentation](https://www.sphinx-doc.org/en/master/)
+- [Doxygen Documentation](http://www.doxygen.nl/manual/index.html)
+
+如有进一步的问题或需要更多帮助，请随时提出！
