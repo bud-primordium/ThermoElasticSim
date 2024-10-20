@@ -45,7 +45,7 @@ ThermoElasticSim/
 │       └── xml.xsd
 ├── examples/                # 使用示例
 │   └── calculate_elastic_constants.py
-├── logs/                    # 日志文件
+├── logs/                    # 运行pytest后会生成此目录
 ├── scripts/                 # 脚本文件，自动化任务
 │   ├── build_libs.bat
 │   ├── collect.py
