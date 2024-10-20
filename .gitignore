@@ -31,7 +31,6 @@ src/lib/*.dylib
 
 # 日志文件
 *.log
-logs/
 all.txt
 src.txt
 tests.txt
