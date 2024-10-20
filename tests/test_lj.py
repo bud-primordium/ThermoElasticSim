@@ -5,6 +5,8 @@ import numpy as np
 import logging
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
+from datetime import datetime
+import os
 
 
 # 配置日志
@@ -25,14 +27,27 @@ def configure_logging():
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
+    # 获取当前时间并格式化为字符串
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 日志文件路径
+    log_directory = "./logs/lj/"
+    log_filename = f"{log_directory}/lj_{current_time}.log"  # 生成带时间戳的日志文件名
+
+    # 确保日志目录存在
+    os.makedirs(log_directory, exist_ok=True)
+
     # 创建文件处理器
-    fh = logging.FileHandler("logs/potential/test_potential.log", encoding="utf-8")
+    fh = logging.FileHandler(log_filename, encoding="utf-8")
     fh.setLevel(logging.DEBUG)  # 文件日志级别
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
     yield
-    # 测试结束后，可以在这里添加清理代码（如果需要）
+
+    # 测试结束后移除处理器
+    logger.removeHandler(ch)
+    logger.removeHandler(fh)
 
 
 def test_lj_potential_at_r_m():

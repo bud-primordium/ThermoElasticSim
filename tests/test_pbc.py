@@ -4,6 +4,7 @@ import pytest
 import numpy as np
 from python.structure import Atom, Cell
 import logging
+import os
 from datetime import datetime
 
 
@@ -27,9 +28,13 @@ def configure_logging():
 
     # 获取当前时间并格式化为字符串
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = (
-        f"./logs/pbc//test_pbc_{current_time}.log"  # 生成带时间戳的日志文件名
-    )
+
+    # 日志文件路径
+    log_directory = "./logs/pbc/"
+    log_filename = f"{log_directory}/pbc_{current_time}.log"  # 生成带时间戳的日志文件名
+
+    # 确保日志目录存在
+    os.makedirs(log_directory, exist_ok=True)
 
     # 创建文件处理器
     fh = logging.FileHandler(log_filename, encoding="utf-8")

@@ -12,6 +12,12 @@ from python.optimizers import (
 from datetime import datetime
 
 
+import pytest
+import logging
+import os
+from datetime import datetime
+
+
 # 配置日志
 @pytest.fixture(scope="session", autouse=True)
 def configure_logging():
@@ -32,7 +38,15 @@ def configure_logging():
 
     # 获取当前时间并格式化为字符串
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"./logs/optimizers/test_optimizers_{current_time}.log"  # 生成带时间戳的日志文件名
+
+    # 日志文件路径
+    log_directory = "./logs/optimizers/"
+    log_filename = (
+        f"{log_directory}/optimizers_{current_time}.log"  # 生成带时间戳的日志文件名
+    )
+
+    # 确保日志目录存在
+    os.makedirs(log_directory, exist_ok=True)
 
     # 创建文件处理器
     fh = logging.FileHandler(log_filename, encoding="utf-8")

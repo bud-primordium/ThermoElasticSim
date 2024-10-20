@@ -12,15 +12,18 @@ LIB_DIR = src/lib
 ifeq ($(OS),Windows_NT)
     LIB_EXT = .dll
     LIB_PREFIX =
+    $(info LIB_PREFIX is set to $(LIB_PREFIX))
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
         LIB_EXT = .so
         LIB_PREFIX = lib
+        $(info LIB_PREFIX is set to $(LIB_PREFIX))
     endif
     ifeq ($(UNAME_S),Darwin)
         LIB_EXT = .dylib
         LIB_PREFIX = lib
+        $(info LIB_PREFIX is set to $(LIB_PREFIX))
     endif
 endif
 
