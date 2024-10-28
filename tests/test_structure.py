@@ -1,5 +1,3 @@
-# tests/test_structure.py
-
 import pytest
 import numpy as np
 from python.structure import Atom, Cell
@@ -7,48 +5,7 @@ import logging
 from datetime import datetime
 import os
 
-
-# 配置日志记录（可选）
-@pytest.fixture(scope="session", autouse=True)
-def configure_logging():
-    """
-    配置日志以在测试期间输出到控制台和文件。
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)  # 设置全局日志级别
-
-    # 创建控制台处理器
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)  # 控制台日志级别
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
-    # 获取当前时间并格式化为字符串
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # 日志文件路径
-    log_directory = "./logs/structure/"
-    log_filename = (
-        f"{log_directory}/structure_{current_time}.log"  # 生成带时间戳的日志文件名
-    )
-
-    # 确保日志目录存在
-    os.makedirs(log_directory, exist_ok=True)
-
-    # 创建文件处理器
-    fh = logging.FileHandler(log_filename, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)  # 文件日志级别
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-
-    yield
-
-    # 测试结束后移除处理器
-    logger.removeHandler(ch)
-    logger.removeHandler(fh)
+# 配置日志记录（已在 conftest.py 中配置，故无需在这里再次配置）
 
 
 @pytest.fixture
@@ -66,7 +23,7 @@ def cell(atom):
     """
     @fixture 创建一个晶胞实例，包含一个原子
     """
-    lattice_vectors = np.eye(3) * 4.05  # Å
+    lattice_vectors = np.eye(3) * 4.0  # Å，选择4.0作为简单的例子
     return Cell(lattice_vectors, [atom], pbc_enabled=True)
 
 
@@ -86,7 +43,7 @@ def test_cell_creation(cell, atom):
     """
     @brief 测试晶胞的创建
     """
-    np.testing.assert_array_equal(cell.lattice_vectors, np.eye(3) * 4.05)
+    np.testing.assert_array_equal(cell.lattice_vectors, np.eye(3) * 4.0)
     assert len(cell.atoms) == 1
     assert cell.atoms[0] == atom
     assert cell.pbc_enabled is True
@@ -121,19 +78,56 @@ def test_apply_periodic_boundary(cell):
     ), "New position exceeds lattice constant."
 
 
+@pytest.mark.parametrize(
+    "displacement, expected_disp",
+    [
+        (np.array([3.0, 3.0, 3.0]), np.array([-1.0, -1.0, -1.0])),
+        (np.array([-3.0, -3.0, -3.0]), np.array([1.0, 1.0, 1.0])),
+        (np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])),
+        (np.array([2.0, 2.0, 2.0]), np.array([2.0, 2.0, 2.0])),
+        (np.array([4.0, 4.0, 4.0]), np.array([0.0, 0.0, 0.0])),
+    ],
+)
+def test_minimum_image_various(cell, displacement, expected_disp):
+    """
+    @brief 测试 Cell 类的 minimum_image 方法，使用各种位移向量。
+    """
+    min_disp = cell.minimum_image(displacement)
+    np.testing.assert_array_almost_equal(
+        min_disp,
+        expected_disp,
+        decimal=10,
+        err_msg=f"Minimum image displacement for {displacement} is incorrect.",
+    )
+
+
 def test_minimum_image(cell):
     """
     @brief 测试 Cell 类的 minimum_image 方法，确保其正确应用最小镜像原则。
     """
-    displacement = np.array([8.0, 8.0, 8.0])  # 示例位移
+    displacement = np.array([3.0, 3.0, 3.0])  # 示例位移
     min_disp = cell.minimum_image(displacement)
-    expected_disp = np.array([-2.0, -2.0, -2.0])  # 应用最小镜像原则后的位移
+    # lattice_vectors = 4.0 * I, displacement = [3,3,3]
+    # fractional = [0.75,0.75,0.75]
+    # fractional -= np.round(fractional) = [0.75-1, 0.75-1, 0.75-1] = [-0.25, -0.25, -0.25]
+    # min_disp = 4.0 * [-0.25, -0.25, -0.25] = [-1.0, -1.0, -1.0]
+    expected_disp = np.array([-1.0, -1.0, -1.0])
     np.testing.assert_array_almost_equal(
         min_disp,
         expected_disp,
         decimal=10,
         err_msg="Minimum image displacement is incorrect.",
     )
+
+
+def test_invalid_minimum_image(cell):
+    """
+    @brief 测试 Cell 类的 minimum_image 方法，确保在传入错误形状的位移向量时抛出异常。
+    """
+    with pytest.raises(
+        ValueError, match="Displacement must be a 3-dimensional vector."
+    ):
+        cell.minimum_image(np.array([1.0, 2.0]))  # 非3D向量
 
 
 def test_apply_deformation_locked(cell, atom):
@@ -156,7 +150,7 @@ def test_apply_deformation_locked(cell, atom):
     # 确保晶格向量未改变
     np.testing.assert_array_equal(
         cell.lattice_vectors,
-        np.eye(3) * 4.05,
+        np.eye(3) * 4.0,
         err_msg="Lattice vectors should remain unchanged when locked.",
     )
 
@@ -168,20 +162,33 @@ def test_apply_deformation_unlocked(cell, atom):
     cell.unlock_lattice_vectors()
     deformation_matrix = np.array([[1.1, 0.0, 0.0], [0.0, 0.9, 0.0], [0.0, 0.0, 1.05]])
     original_position = atom.position.copy()
+
+    # 保存原始晶格向量
+    original_lattice_vectors = cell.lattice_vectors.copy()
+
+    # 应用变形矩阵
     cell.apply_deformation(deformation_matrix)
-    expected_lattice_vectors = np.dot(np.eye(3) * 4.05, deformation_matrix.T)
-    expected_fractional = np.linalg.solve(
-        expected_lattice_vectors.T, original_position * 1.1
-    )
-    expected_position = np.dot(expected_lattice_vectors.T, expected_fractional)
+
+    # 计算预期的晶格向量
+    expected_lattice_vectors = np.dot(original_lattice_vectors, deformation_matrix.T)
+
+    # 计算原子的位置变换
+    fractional = np.linalg.solve(original_lattice_vectors.T, original_position)
+    fractional = np.dot(deformation_matrix, fractional)
+    expected_position = np.dot(expected_lattice_vectors.T, fractional)
+
     if cell.pbc_enabled:
         expected_position = cell.apply_periodic_boundary(expected_position)
+
+    # 断言晶格向量是否正确
     np.testing.assert_array_almost_equal(
         cell.lattice_vectors,
         expected_lattice_vectors,
         decimal=10,
         err_msg="Lattice vectors after deformation are incorrect.",
     )
+
+    # 断言原子的位置是否正确
     np.testing.assert_array_almost_equal(
         atom.position,
         expected_position,
@@ -211,31 +218,6 @@ def test_cell_copy(cell):
     assert cell_copy.pbc_enabled == cell.pbc_enabled
     assert cell_copy.lattice_locked == cell.lattice_locked
     assert cell_copy.volume == cell.volume
-
-
-def test_minimum_image(cell):
-    """
-    @brief 测试 Cell 类的 minimum_image 方法，确保其正确应用最小镜像原则。
-    """
-    displacement = np.array([8.0, 8.0, 8.0])  # 示例位移
-    min_disp = cell.minimum_image(displacement)
-    expected_disp = np.array([-2.0, -2.0, -2.0])  # 应用最小镜像原则后的位移
-    np.testing.assert_array_almost_equal(
-        min_disp,
-        expected_disp,
-        decimal=10,
-        err_msg="Minimum image displacement is incorrect.",
-    )
-
-
-def test_invalid_minimum_image(cell):
-    """
-    @brief 测试 Cell 类的 minimum_image 方法，确保在传入错误形状的位移向量时抛出异常。
-    """
-    with pytest.raises(
-        ValueError, match="Displacement must be a 3-dimensional vector."
-    ):
-        cell.minimum_image(np.array([1.0, 2.0]))  # 非3D向量
 
 
 def test_apply_periodic_boundary_no_pbc():
