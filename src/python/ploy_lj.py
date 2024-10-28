@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from python.potentials import LennardJonesPotential
-from python.structure import Cell, Atom  # 假设已有的结构体定义
+from python.structure import Cell, Atom
 
 # 创建 Lennard-Jones 势
 epsilon = 0.0103  # eV
@@ -14,9 +14,7 @@ atoms = [
     Atom(id=0, symbol="Al", mass_amu=26.9815, position=np.array([0.0, 0.0, 0.0])),
     Atom(id=1, symbol="Al", mass_amu=26.9815, position=np.array([2.5, 0.0, 0.0])),
 ]
-box_lengths = np.array([30.0, 30.0, 30.0])  # 立方体盒子
-
-cell = Cell(atoms=atoms, lattice_vectors=np.eye(3) * 20.0, pbc_enabled=True)
+cell = Cell(atoms=atoms, lattice_vectors=np.eye(3) * 30.0, pbc_enabled=True)
 
 # 准备测试距离
 distances = np.linspace(2.4, 6.0, 1000)
