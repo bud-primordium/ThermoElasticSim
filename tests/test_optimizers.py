@@ -24,17 +24,23 @@ from copy import deepcopy  # 用于深拷贝对象
 
 # 定义 Lennard-Jones 势能对象的 fixture，并设置邻居列表
 @pytest.fixture
-def lj_potential_with_neighbor_list_optim(fcc_cell, lj_potential):
+def lj_potential_with_neighbor_list_optim(fcc_cell):
     """
     创建一个 Lennard-Jones 势能对象，并设置邻居列表，用于优化测试。
     """
-    # 深拷贝 Lennard-Jones 势能对象，以避免影响其他测试
-    lj_potential_copy = deepcopy(lj_potential)
+    # 创建新的 Lennard-Jones 势能对象
+    epsilon = 0.0103  # eV
+    sigma = 2.55  # Å
+    cutoff = 2.5 * sigma
+    lj_potential_copy = LennardJonesPotential(
+        epsilon=epsilon, sigma=sigma, cutoff=cutoff
+    )
 
     # 创建并构建邻居列表
     neighbor_list = NeighborList(cutoff=lj_potential_copy.cutoff)
     neighbor_list.build(fcc_cell)
     lj_potential_copy.set_neighbor_list(neighbor_list)
+
     return lj_potential_copy
 
 
