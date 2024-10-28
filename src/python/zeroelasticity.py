@@ -1,12 +1,12 @@
-# 文件名: elastics.py
+# 文件名: zeroelasticity.py
 # 作者: Gilbert Young
 # 修改日期: 2024-10-20
-# 文件描述: 实现用于计算弹性常数的求解器和计算类。
+# 文件描述: 实现用于计算弹性常数的求解器和计算类（零温条件下）。
 
 """
-弹性常数模块
+弹性常数模块（零温）
 
-包含 ElasticConstantsSolver 和 ElasticConstantsCalculator 类，
+包含 ZeroKElasticConstantsSolver 和 ZeroKElasticConstantsCalculator 类，
 用于通过应力应变数据计算材料的弹性常数
 """
 
@@ -22,9 +22,9 @@ from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
 logger = logging.getLogger(__name__)
 
 
-class ElasticConstantsSolver:
+class ZeroKElasticConstantsSolver:
     """
-    计算弹性常数的求解器类
+    计算弹性常数的求解器类（零温）
     """
 
     def solve(self, strains, stresses):
@@ -57,12 +57,12 @@ class ElasticConstantsSolver:
         logger.debug("Solving elastic constants using least squares.")
         C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
         logger.debug(f"Elastic constants matrix (before conversion):\n{C}")
-        return C
+        return C.T  # 返回转置后的矩阵
 
 
-class ElasticConstantsCalculator:
+class ZeroKElasticConstantsCalculator:
     """
-    计算弹性常数的类
+    计算弹性常数的类（零温）
 
     Parameters
     ----------
@@ -140,6 +140,10 @@ class ElasticConstantsCalculator:
         deformed_cell.apply_deformation(F)
         logger.debug("Applied deformation to cell.")
 
+        # 对变形后的结构进行优化
+        self.optimizer.optimize(deformed_cell, self.potential)
+        logger.debug("Optimized deformed structure.")
+
         # 计算应力张量
         stress_tensor = self.stress_calculator.compute_stress(
             deformed_cell, self.potential
@@ -188,7 +192,7 @@ class ElasticConstantsCalculator:
 
         # 求解弹性常数矩阵
         logger.debug("Solving for elastic constants.")
-        elastic_solver = ElasticConstantsSolver()
+        elastic_solver = ZeroKElasticConstantsSolver()
         C = elastic_solver.solve(strains, stresses)
         logger.debug(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
 
