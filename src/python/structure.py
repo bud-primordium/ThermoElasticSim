@@ -197,7 +197,7 @@ class Cell:
             # 确保在 [0, 1) 范围内
             fractional = fractional % 1.0
             # 转换回笛卡尔坐标
-            new_positions = np.dot(self.lattice_vectors.T, fractional)
+            new_positions = np.dot(self.lattice_vectors, fractional)
             return new_positions
         else:
             return positions

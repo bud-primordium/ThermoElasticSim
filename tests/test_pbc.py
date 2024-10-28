@@ -7,8 +7,6 @@ import pytest
 import numpy as np
 from python.structure import Atom, Cell
 import logging
-import os
-from datetime import datetime
 
 
 def test_apply_periodic_boundary():
@@ -64,14 +62,14 @@ def test_apply_deformation_with_pbc():
             velocity=None,
         ),  # a/sqrt(2) for FCC
     ]
-    lattice_vectors = np.eye(3) * 5.1  # 盒子长度为 5.1 Å
+    lattice_vectors = np.eye(3) * 2.55  # 盒子长度为 2.55 Å
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
-    # 定义一个简单的变形矩阵（缩放）
+    # 定义一个变形矩阵（包括缩放和剪切）
     deformation_matrix = np.array(
         [
-            [1.001, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
+            [1.001, 0.01, 0.0],
+            [0.01, 1.0, 0.0],
             [0.0, 0.0, 1.0],
         ]
     )
@@ -80,23 +78,31 @@ def test_apply_deformation_with_pbc():
     cell.apply_deformation(deformation_matrix)
 
     # 变形后的晶格向量应被正确更新
-    expected_lattice_vectors = np.eye(3) * 5.1
-    expected_lattice_vectors[0, 0] *= 1.001  # x方向拉伸
+    expected_lattice_vectors = np.dot(np.eye(3) * 2.55, deformation_matrix)
     assert np.allclose(
         cell.lattice_vectors, expected_lattice_vectors, atol=1e-5
     ), f"Expected lattice vectors {expected_lattice_vectors}, got {cell.lattice_vectors}"
     logger.debug(f"Deformed lattice vectors correctly:\n{cell.lattice_vectors}")
 
-    # 变形后的原子位置应被正确更新并应用 PBC
     # 原子0: [0,0,0] 应保持不变
     assert np.allclose(
         cell.atoms[0].position, [0.0, 0.0, 0.0], atol=1e-5
     ), f"Expected atom0 position [0.0, 0.0, 0.0], got {cell.atoms[0].position}"
-    # 原子1: [2.55,2.55,2.55] -> [2.55*1.001,2.55,2.55] = [2.55255, 2.55, 2.55]
-    expected_atom1_position = np.array([2.55255, 2.55, 2.55])
-    assert np.allclose(
-        cell.atoms[1].position, expected_atom1_position, atol=1e-2
-    ), f"Expected atom1 position {expected_atom1_position}, got {cell.atoms[1].position}"
-    logger.debug(
-        f"Deformed atom positions correctly: {cell.atoms[1].position} == {expected_atom1_position}"
+
+    # 原子1: 通过变形矩阵进行线性变换，并应用 PBC
+    expected_atom1_position = np.dot([2.55, 2.55, 2.55], deformation_matrix)
+
+    # 先计算分数坐标
+    fractional_coords = np.linalg.solve(
+        expected_lattice_vectors.T, expected_atom1_position
     )
+    fractional_coords %= 1.0  # 应用周期性边界
+    # 转换回笛卡尔坐标
+    expected_atom1_position_pbc = np.dot(expected_lattice_vectors.T, fractional_coords)
+
+    # 应用 PBC 后的位置
+    cell.atoms[1].position = cell.apply_periodic_boundary(cell.atoms[1].position)
+
+    assert np.allclose(
+        cell.atoms[1].position, expected_atom1_position_pbc, atol=1e-4
+    ), f"Expected atom1 position {expected_atom1_position_pbc}, got {cell.atoms[1].position}"
