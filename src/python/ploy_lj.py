@@ -27,7 +27,7 @@ for d in distances:
 
     # 计算力和能量
     lj_potential.calculate_forces(cell)
-    forces.append(cell.atoms[0].force[0])  # 只记录x方向力
+    forces.append(cell.atoms[1].force[0])  # 只记录x方向力
     energies.append(lj_potential.calculate_energy(cell))
 
 # 绘制力-距离和能量-距离曲线
