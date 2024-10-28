@@ -37,7 +37,7 @@ def thermostat():
 
 # 定义 Lennard-Jones 势能对象的 fixture，并设置邻居列表
 @pytest.fixture
-def lj_potential_simple_with_neighbor_list(simple_cell, lj_potential):
+def lj_potential_with_neighbor_list(simple_cell, lj_potential):
     """
     创建一个 Lennard-Jones 势能对象，并设置邻居列表，用于简单晶胞的分子动力学测试。
     """
@@ -51,13 +51,13 @@ def lj_potential_simple_with_neighbor_list(simple_cell, lj_potential):
     return lj_potential_copy
 
 
-def test_md_simulation(simple_cell, lj_potential_simple_with_neighbor_list, integrator):
+def test_md_simulation(simple_cell, lj_potential_with_neighbor_list, integrator):
     """
     测试分子动力学模拟器的运行。
     """
     md_simulator = MDSimulator(
         cell=simple_cell,
-        potential=lj_potential_simple_with_neighbor_list,
+        potential=lj_potential_with_neighbor_list,
         integrator=integrator,
         thermostat=None,
     )
@@ -73,14 +73,14 @@ def test_md_simulation(simple_cell, lj_potential_simple_with_neighbor_list, inte
 
 
 def test_md_simulation_with_thermostat(
-    simple_cell, lj_potential_simple_with_neighbor_list, integrator, thermostat
+    simple_cell, lj_potential_with_neighbor_list, integrator, thermostat
 ):
     """
     测试分子动力学模拟器的运行，带恒温器。
     """
     md_simulator = MDSimulator(
         cell=simple_cell,
-        potential=lj_potential_simple_with_neighbor_list,
+        potential=lj_potential_with_neighbor_list,
         integrator=integrator,
         thermostat=thermostat,
     )

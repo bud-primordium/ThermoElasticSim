@@ -85,34 +85,12 @@ def lj_potential():
 
 
 @pytest.fixture
-def lj_potential_two_atom_with_neighbor_list(two_atom_cell, lj_potential):
-    """
-    创建一个 Lennard-Jones 势能对象，并设置其邻居列表，用于两原子系统的测试。
-    """
-    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
-    neighbor_list.build(two_atom_cell)
-    lj_potential.set_neighbor_list(neighbor_list)
-    return lj_potential
-
-
-@pytest.fixture
-def lj_potential_simple_with_neighbor_list(simple_cell, lj_potential):
+def lj_potential_with_neighbor_list(simple_cell, lj_potential):
     """
     创建一个 Lennard-Jones 势能对象，并设置其邻居列表，用于简单晶胞的测试。
     """
     neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
     neighbor_list.build(simple_cell)
-    lj_potential.set_neighbor_list(neighbor_list)
-    return lj_potential
-
-
-@pytest.fixture
-def lj_potential_fcc_with_neighbor_list(fcc_cell, lj_potential):
-    """
-    创建一个 Lennard-Jones 势能对象，并设置其邻居列表，用于 FCC 晶胞的测试。
-    """
-    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
-    neighbor_list.build(fcc_cell)
     lj_potential.set_neighbor_list(neighbor_list)
     return lj_potential
 
