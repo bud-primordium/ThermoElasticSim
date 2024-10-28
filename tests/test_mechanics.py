@@ -10,21 +10,23 @@ from python.utils import NeighborList
 from conftest import generate_fcc_positions  # 从 conftest 导入
 
 
-def test_stress_calculation(two_atom_cell, lj_potential):
+def test_stress_calculation(two_atom_cell, lj_potential_with_neighbor_list):
     """
     测试应力计算器的功能。
     """
     stress_calculator = StressCalculatorLJ()
     # 计算力
-    lj_potential.calculate_forces(two_atom_cell)
+    lj_potential_with_neighbor_list.calculate_forces(two_atom_cell)
     # 计算应力
-    stress_tensor = stress_calculator.compute_stress(two_atom_cell, lj_potential)
+    stress_tensor = stress_calculator.compute_stress(
+        two_atom_cell, lj_potential_with_neighbor_list
+    )
     # 由于只有两个原子，理论上应力张量应为零（在特定条件下）
     expected_stress = np.zeros((3, 3))
     np.testing.assert_array_almost_equal(stress_tensor, expected_stress, decimal=6)
 
 
-def test_elastic_constants_solver():
+def test_elastic_constants_solver(two_atom_cell, lj_potential_with_neighbor_list):
     """
     测试弹性常数求解器的功能。
     """
@@ -46,7 +48,12 @@ def test_elastic_constants_solver():
         np.array([0.0, 0.0, 0.0, 0.0, 23.0, 0.0]),
         np.array([0.0, 0.0, 0.0, 0.0, 0.0, 23.0]),
     ]
-    solver = ZeroKElasticConstantsCalculator()
+    solver = ZeroKElasticConstantsCalculator(
+        cell=two_atom_cell,
+        potential=lj_potential_with_neighbor_list,
+        delta=1e-3,
+        optimizer_type="GD",  # 使用梯度下降优化器
+    )
     C = solver.solve(strains, stresses)
     # 检查 C 是否为 6x6 矩阵
     assert C.shape == (6, 6), "Elastic constants matrix shape mismatch."
@@ -56,7 +63,7 @@ def test_elastic_constants_solver():
     np.testing.assert_array_almost_equal(C, expected_C, decimal=2)
 
 
-def test_zeroK_elastic_constants():
+def test_zero_elastic_constants(two_atom_cell, lj_potential_with_neighbor_list):
     """
     测试零温度下的弹性常数计算，确保在变形后进行结构优化。
     """

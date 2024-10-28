@@ -74,7 +74,7 @@ class StressCalculatorLJ(StressCalculator):
         box_lengths = cell.get_box_lengths()
 
         # 初始化应力张量数组
-        stress_tensor = np.zeros(9, dtype=np.float64)
+        stress_tensor = np.zeros((3, 3), dtype=np.float64)
 
         # 调用 C++ 接口计算应力张量
         self.cpp_interface.compute_stress(

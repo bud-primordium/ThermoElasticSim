@@ -126,6 +126,21 @@ def two_atom_neighbor_list(two_atom_cell, lj_potential):
     return neighbor_list
 
 
+@pytest.fixture
+def simple_cell():
+    """
+    @fixture 创建一个简单的晶胞，包含两个原子。
+    """
+    lattice_vectors = np.eye(3) * 6.0  # Å
+    mass_amu = 26.9815  # amu (Aluminum)
+    position1 = np.array([0.0, 0.0, 0.0])
+    position2 = np.array([2.55, 0.0, 0.0])  # 与原子1相距 σ = 2.55 Å
+    atom1 = Atom(id=0, symbol="Al", mass_amu=mass_amu, position=position1)
+    atom2 = Atom(id=1, symbol="Al", mass_amu=mass_amu, position=position2)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=[atom1, atom2], pbc_enabled=True)
+    return cell
+
+
 def generate_fcc_positions(lattice_constant, repetitions):
     """
     生成面心立方 (FCC) 结构的原子位置。
