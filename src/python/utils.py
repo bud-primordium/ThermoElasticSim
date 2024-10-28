@@ -131,7 +131,7 @@ class NeighborList:
         positions = cell.get_positions()
         num_atoms = cell.num_atoms
         self.neighbor_list = [[] for _ in range(num_atoms)]
-        cutoff_with_skin_squared = self.cutoff_with_skin ** 2
+        cutoff_with_skin_squared = self.cutoff_with_skin**2
 
         for i in range(num_atoms):
             for j in range(i + 1, num_atoms):
@@ -161,7 +161,9 @@ class NeighborList:
         displacements = positions - self.last_positions
         if self.cell.pbc_enabled:
             # 考虑 PBC 下的位移
-            displacements = np.array([self.cell.minimum_image(disp) for disp in displacements])
+            displacements = np.array(
+                [self.cell.minimum_image(disp) for disp in displacements]
+            )
         max_displacement = np.max(np.linalg.norm(displacements, axis=1))
         return max_displacement > (self.skin * 0.5)
 

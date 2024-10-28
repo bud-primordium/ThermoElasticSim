@@ -87,6 +87,8 @@ class LennardJonesPotential(Potential):
         parameters = {"epsilon": epsilon, "sigma": sigma}
         super().__init__(parameters, cutoff)
         self.cpp_interface = CppInterface("lennard_jones")
+        # 自动创建邻居列表
+        self.neighbor_list = NeighborList(cutoff=self.cutoff)
         logger.debug(
             f"Lennard-Jones Potential initialized with epsilon={epsilon}, sigma={sigma}, cutoff={cutoff}."
         )
@@ -100,11 +102,15 @@ class LennardJonesPotential(Potential):
         cell : Cell
             包含原子的晶胞对象
         """
-        if self.neighbor_list is None:
-            raise ValueError("Neighbor list is not set for the potential.")
+        # 如果邻居列表未构建，则构建它
+        if self.neighbor_list.cell is None:
+            logger.debug("Neighbor list not built yet. Building now.")
+            self.neighbor_list.build(cell)
+        else:
+            # 检查是否需要更新邻居列表
+            logger.debug("Updating neighbor list.")
+            self.neighbor_list.update()
 
-        logger.debug("Updating neighbor list.")
-        self.neighbor_list.update()
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
@@ -163,11 +169,14 @@ class LennardJonesPotential(Potential):
         float
             计算的总势能，单位为 eV
         """
-        if self.neighbor_list is None:
-            raise ValueError("Neighbor list is not set for the potential.")
+        if self.neighbor_list.cell is None:
+            logger.debug("Neighbor list not built yet. Building now.")
+            self.neighbor_list.build(cell)
+        else:
+            # 检查是否需要更新邻居列表
+            logger.debug("Updating neighbor list.")
+            self.neighbor_list.update()
 
-        logger.debug("Updating neighbor list for energy calculation.")
-        self.neighbor_list.update()
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
