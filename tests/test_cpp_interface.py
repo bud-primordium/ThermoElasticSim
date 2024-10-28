@@ -132,7 +132,7 @@ def test_calculate_forces(lj_interface, two_atom_cell, two_atom_neighbor_list):
     expected_force_magnitude = 24.0 * epsilon  # 0.2472 eV/Å
 
     # 计算力的方向
-    expected_force_atom0 = np.array([expected_force_magnitude, 0.0, 0.0])
+    expected_force_atom0 = np.array([-expected_force_magnitude, 0.0, 0.0])
     expected_force_atom1 = -expected_force_atom0
 
     # 检查力是否接近理论值

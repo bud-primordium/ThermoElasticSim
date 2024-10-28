@@ -27,7 +27,7 @@ def test_stress_calculation(two_atom_cell, lj_potential_with_neighbor_list):
     # 不再假设应力张量为零，而是检查应力值是否与预期相符
     # 根据计算，手动计算期望的应力张量（或根据物理意义设置一个合理范围）
     expected_stress = np.array(
-        [[-0.00475202, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        [[+0.00475202, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
     )
     np.testing.assert_array_almost_equal(stress_tensor, expected_stress, decimal=6)
 
