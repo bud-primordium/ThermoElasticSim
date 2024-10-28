@@ -4,35 +4,22 @@ import pytest
 from python.visualization import Visualizer
 from python.structure import Cell, Atom
 import numpy as np
-import matplotlib
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.collections import PathCollection
 import os
 
-matplotlib.use("Agg")  # 使用无头后端，防止弹出图形窗口
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # 导入 Axes3D
-from matplotlib.collections import PathCollection  # 导入 PathCollection 类
 
-
-def test_plot_cell_structure(tmp_path):
+def test_plot_cell_structure(tmp_path, two_atom_cell):
     """
     @brief 测试 Visualizer.plot_cell_structure 函数
     """
-    # 创建一个简单的晶胞
-    atoms = [
-        Atom(id=0, mass_amu=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
-        Atom(
-            id=1, mass_amu=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"
-        ),  # sigma=2.55 Å
-    ]
-    lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
-    cell = Cell(atoms=atoms, lattice_vectors=lattice_vectors)
-
     # 创建 Visualizer 实例
     visualizer = Visualizer()
 
     # 调用绘图函数，捕获图形对象
     try:
-        fig, ax = visualizer.plot_cell_structure(cell, show=False)
+        fig, ax = visualizer.plot_cell_structure(two_atom_cell, show=False)
         assert isinstance(fig, plt.Figure), "返回的对象不是 Matplotlib Figure"
         assert isinstance(ax, Axes3D), "返回的对象不是 Matplotlib Axes3D"
 
@@ -42,14 +29,17 @@ def test_plot_cell_structure(tmp_path):
         ]
         total_points = 0  # 记录所有散点的数量
         for path_collection in scatter:
-            offsets = path_collection._offsets3d
-            x_data, y_data, z_data = offsets
-            total_points += len(x_data)
+            offsets = path_collection.get_offsets()
+            if hasattr(path_collection, "_offsets3d"):
+                x_data, y_data, z_data = path_collection._offsets3d
+                total_points += len(x_data)
+            else:
+                total_points += len(offsets)
 
         # 检查总的原子散点数是否匹配
         assert total_points == len(
-            atoms
-        ), f"Expected {len(atoms)} atoms plotted, found {total_points}"
+            two_atom_cell.atoms
+        ), f"Expected {len(two_atom_cell.atoms)} atoms plotted, found {total_points}"
 
         # 保存图形到指定文件夹
         plot_path = tmp_path / "cell_structure.png"
@@ -60,31 +50,17 @@ def test_plot_cell_structure(tmp_path):
         pytest.fail(f"绘图函数抛出异常: {e}")
 
 
-def test_plot_stress_strain():
+@pytest.mark.parametrize(
+    "strain_data, stress_data",
+    [
+        (np.random.rand(10, 6), np.random.rand(10, 6)),
+        (np.zeros((10, 6)), np.zeros((10, 6))),
+    ],
+)
+def test_plot_stress_strain(strain_data, stress_data):
     """
-    @brief 测试 Visualizer.plot_stress_strain 函数，使用随机数据
+    @brief 测试 Visualizer.plot_stress_strain 函数，使用随机数据和全零数据
     """
-    strain_data = np.random.rand(10, 6)  # 生成随机应变数据
-    stress_data = np.random.rand(10, 6)  # 生成随机应力数据
-
-    # 创建 Visualizer 实例
-    visualizer = Visualizer()
-
-    try:
-        fig, ax = visualizer.plot_stress_strain(strain_data, stress_data, show=False)
-        assert isinstance(fig, plt.Figure), "返回的对象不是 Matplotlib Figure"
-        assert isinstance(ax, plt.Axes), "返回的对象不是 Matplotlib Axes"
-    except Exception as e:
-        pytest.fail(f"绘图函数抛出异常: {e}")
-
-
-def test_plot_stress_strain_with_zero_data():
-    """
-    @brief 测试 Visualizer.plot_stress_strain 函数，使用全零数据
-    """
-    strain_data = np.zeros((10, 6))  # 全零应变数据
-    stress_data = np.zeros((10, 6))  # 全零应力数据
-
     # 创建 Visualizer 实例
     visualizer = Visualizer()
 
@@ -116,7 +92,7 @@ def test_plot_empty_cell_structure():
     """
     atoms = []  # 空原子列表
     lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
-    cell = Cell(atoms=atoms, lattice_vectors=lattice_vectors)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
     # 创建 Visualizer 实例
     visualizer = Visualizer()

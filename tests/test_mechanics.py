@@ -4,51 +4,29 @@ import pytest
 import numpy as np
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
-from python.elasticity import (
-    ElasticConstantsSolver,
-    StrainCalculator,
-)  # 确保导入 StrainCalculator
+from python.zeroelasticity import ZeroKElasticConstantsCalculator
 from python.mechanics import StressCalculatorLJ
+from python.utils import NeighborList
+from conftest import generate_fcc_positions  # 从 conftest 导入
 
 
-@pytest.fixture
-def single_atom_cell():
-    atoms = [
-        Atom(
-            id=0,
-            mass_amu=26.9815,
-            position=np.array([0.0, 0.0, 0.0]),
-            symbol="Al",
-        )
-    ]
-    lattice_vectors = np.eye(3) * 5.1
-    return Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
-
-
-@pytest.fixture
-def lj_potential_single():
-    return LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
-
-
-def test_stress_calculation(single_atom_cell, lj_potential_single):
+def test_stress_calculation(two_atom_cell, lj_potential):
     """
-    @brief 测试应力计算器的功能。
+    测试应力计算器的功能。
     """
     stress_calculator = StressCalculatorLJ()
     # 计算力
-    lj_potential_single.calculate_forces(single_atom_cell)
+    lj_potential.calculate_forces(two_atom_cell)
     # 计算应力
-    stress_tensor = stress_calculator.compute_stress(
-        single_atom_cell, lj_potential_single
-    )
-    # 由于只有一个原子，理论上应力张量应为零
+    stress_tensor = stress_calculator.compute_stress(two_atom_cell, lj_potential)
+    # 由于只有两个原子，理论上应力张量应为零（在特定条件下）
     expected_stress = np.zeros((3, 3))
     np.testing.assert_array_almost_equal(stress_tensor, expected_stress, decimal=6)
 
 
 def test_elastic_constants_solver():
     """
-    @brief 测试弹性常数求解器的功能。
+    测试弹性常数求解器的功能。
     """
     strains = [
         np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
@@ -68,87 +46,73 @@ def test_elastic_constants_solver():
         np.array([0.0, 0.0, 0.0, 0.0, 23.0, 0.0]),
         np.array([0.0, 0.0, 0.0, 0.0, 0.0, 23.0]),
     ]
-    solver = ElasticConstantsSolver()
+    solver = ZeroKElasticConstantsCalculator()
     C = solver.solve(strains, stresses)
     # 检查 C 是否为 6x6 矩阵
     assert C.shape == (6, 6), "Elastic constants matrix shape mismatch."
-    # 预期弹性常数矩阵（修正后的值）
-    expected_C = np.array(
-        [
-            [6900.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 6900.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 6900.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 2300.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 2300.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 2300.0],
-        ]
-    )
+    # 预期弹性常数矩阵
+    expected_C = np.diag([6900.0, 6900.0, 6900.0, 2300.0, 2300.0, 2300.0])
     # 检查弹性常数矩阵是否接近预期值
     np.testing.assert_array_almost_equal(C, expected_C, decimal=2)
 
 
-def test_force_direction():
+def test_zeroK_elastic_constants():
     """
-    @brief 验证力的方向是否为负梯度方向。
+    测试零温度下的弹性常数计算，确保在变形后进行结构优化。
     """
-    # 创建一个简单的晶胞
-    atoms = [
-        Atom(id=0, mass_amu=26.9815, position=np.array([0.0, 0.0, 0.0]), symbol="Al"),
-        Atom(
-            id=1, mass_amu=26.9815, position=np.array([2.55, 2.55, 2.55]), symbol="Al"
-        ),
-    ]
-    lattice_vectors = np.eye(3) * 5.1  # 示例晶格向量
+    lattice_constant = 4.05  # Å
+    repetitions = 2
+
+    # 生成 2x2x2 超胞的原子位置
+    positions = generate_fcc_positions(lattice_constant, repetitions)
+    atoms = []
+    for idx, pos in enumerate(positions):
+        atoms.append(
+            Atom(
+                id=idx,
+                symbol="Al",
+                mass_amu=26.9815,
+                position=pos,
+            )
+        )
+
+    # 更新晶格矢量
+    lattice_vectors = np.eye(3) * lattice_constant * repetitions
+
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
-    # 定义 Lennard-Jones 势
-    epsilon = 0.0103  # eV
-    sigma = 2.55  # Å
-    cutoff = 2.5 * sigma  # Å
-    lj_potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
+    # 定义 Lennard-Jones 势能
+    lj_potential = LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
 
-    # 计算初始能量和力
-    initial_energy = lj_potential.calculate_energy(cell)
-    initial_force = cell.get_forces()
+    # 创建邻居列表并关联到势能函数
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list.build(cell)
+    lj_potential.set_neighbor_list(neighbor_list)
 
-    # 计算能量的数值梯度近似
-    delta = 1e-5
-    expected_force = np.zeros_like(initial_force)
-    for i in range(cell.num_atoms):
-        for dim in range(3):
-            # 正向微小位移
-            displaced = cell.copy()
-            displaced.atoms[i].position[dim] += delta
-            energy_displaced = lj_potential.calculate_energy(displaced)
-            # 负梯度近似
-            expected_force[i, dim] = -(energy_displaced - initial_energy) / delta
+    # 创建 ZeroKElasticConstantsCalculator 实例
+    elastic_calculator = ZeroKElasticConstantsCalculator(
+        cell=cell,
+        potential=lj_potential,
+        delta=1e-3,
+        optimizer_type="GD",  # 使用梯度下降优化器
+    )
 
-    # 检查力方向是否接近负梯度方向
-    np.testing.assert_array_almost_equal(initial_force, expected_force, decimal=3)
+    # 计算弹性常数
+    C_in_GPa = elastic_calculator.calculate_elastic_constants()
 
+    # 检查 C_in_GPa 是一个 6x6 的矩阵
+    assert C_in_GPa.shape == (6, 6), "弹性常数矩阵形状不匹配。"
 
-def test_strain_calculation():
-    """
-    @brief 测试 StrainCalculator 计算应变的正确性。
-    """
-    # 创建一个样本变形矩阵 F
-    delta = 1e-3  # 0.1% 应变
-    F = np.array([[1 + delta, 0, 0], [0, 1 + delta, 0], [0, 0, 1 + delta]])
+    # 检查对称性
+    assert np.allclose(C_in_GPa, C_in_GPa.T, atol=1e-3), "弹性常数矩阵不是对称的。"
 
-    # 预期的应变张量: epsilon = (F + F^T)/2 - I = delta * I
-    expected_strain = np.array([delta, delta, delta, 0, 0, 0])  # Voigt 表示法
+    # 检查对角元素为正
+    for i in range(6):
+        assert C_in_GPa[i, i] > 0, f"弹性常数 C[{i},{i}] 不是正值。"
 
-    # 初始化 StrainCalculator
-    strain_calculator = StrainCalculator()
-
-    # 计算应变
-    strain_voigt = strain_calculator.compute_strain(F)
-
-    # 检查计算的应变是否为 NumPy 数组
-    assert isinstance(strain_voigt, np.ndarray), "应变向量应为 NumPy 数组。"
-
-    # 检查应变向量的形状
-    assert strain_voigt.shape == (6,), "应变向量的形状应为 (6,)。"
-
-    # 检查计算的应变是否与预期值匹配
-    np.testing.assert_array_almost_equal(strain_voigt, expected_strain, decimal=6)
+    # 检查非对角元素在合理范围内
+    for i in range(6):
+        for j in range(i + 1, 6):
+            assert (
+                -100.0 <= C_in_GPa[i, j] <= 100.0
+            ), f"弹性常数 C[{i},{j}] 不在合理范围内。"

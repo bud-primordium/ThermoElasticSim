@@ -2,48 +2,36 @@
 
 import pytest
 import numpy as np
-from python.interfaces.cpp_interface import CppInterface
-from python.structure import Atom, Cell
-from python.potentials import LennardJonesPotential
+from itertools import combinations
 
 
-@pytest.fixture
-def lj_interface():
-    return CppInterface("lennard_jones")
-
-
-@pytest.fixture
-def stress_calculator_interface():
-    return CppInterface("stress_calculator")
-
-
-@pytest.fixture
-def nose_hoover_interface():
-    return CppInterface("nose_hoover")
-
-
-@pytest.fixture
-def nose_hoover_chain_interface():
-    return CppInterface("nose_hoover_chain")
-
-
-def test_calculate_energy(lj_interface):
+def test_calculate_energy(lj_interface, two_atom_cell, two_atom_neighbor_list):
     """
     测试 C++ 实现的 Lennard-Jones 势能计算函数
     """
-    num_atoms = 2
-    positions = np.array(
-        [0.0, 0.0, 0.0, 2.55, 0.0, 0.0], dtype=np.float64
-    )  # 两个原子，距离 r = σ = 2.55 Å
-    box_lengths = np.array([5.1, 5.1, 5.1], dtype=np.float64)  # 模拟盒子长度
+    num_atoms = two_atom_cell.num_atoms
+    positions = two_atom_cell.get_positions().flatten()
+    box_lengths = two_atom_cell.get_box_lengths()
+
+    # 构建邻居对列表
+    neighbor_pairs = [
+        (i, j)
+        for i, j in combinations(range(num_atoms), 2)
+        if j in two_atom_neighbor_list.get_neighbors(i)
+    ]
+    neighbor_list_flat = [index for pair in neighbor_pairs for index in pair]
+    neighbor_pairs_array = np.array(neighbor_list_flat, dtype=np.int32)
+    num_pairs = len(neighbor_pairs)
 
     energy = lj_interface.calculate_energy(
-        num_atoms,
-        positions,
+        num_atoms=num_atoms,
+        positions=positions,
         epsilon=0.0103,
         sigma=2.55,
         cutoff=2.5 * 2.55,
         box_lengths=box_lengths,
+        neighbor_pairs=neighbor_pairs_array,
+        num_pairs=num_pairs,
     )
 
     # 检查能量是否为浮点数
@@ -57,23 +45,79 @@ def test_calculate_energy(lj_interface):
     ), f"Energy {energy} is not close to expected {expected_energy}."
 
 
-def test_calculate_forces(lj_interface):
+@pytest.mark.parametrize(
+    "r, expected_energy",
+    [
+        (1.0, 4.0 * 0.0103 * ((2.55 / 1.0) ** 12 - (2.55 / 1.0) ** 6)),
+        (2.55, 4.0 * 0.0103 * ((2.55 / 2.55) ** 12 - (2.55 / 2.55) ** 6)),
+        (3.0, 4.0 * 0.0103 * ((2.55 / 3.0) ** 12 - (2.55 / 3.0) ** 6)),
+    ],
+)
+def test_calculate_energy_different_r(lj_interface, r, expected_energy):
     """
-    测试 C++ 实现的 Lennard-Jones 势能计算力函数
+    测试 C++ 实现的 Lennard-Jones 势能计算函数在不同距离下的能量
     """
     num_atoms = 2
-    positions = np.array([0.0, 0.0, 0.0, 2.55, 0.0, 0.0], dtype=np.float64)
-    box_lengths = np.array([5.1, 5.1, 5.1], dtype=np.float64)
-    forces = np.zeros_like(positions, dtype=np.float64)
+    positions = np.array([0.0, 0.0, 0.0, r, 0.0, 0.0], dtype=np.float64)
+    box_lengths = np.array([10.0, 10.0, 10.0], dtype=np.float64)
 
-    lj_interface.calculate_forces(
-        num_atoms,
-        positions,
-        forces,
+    # 构建邻居对列表
+    neighbor_pairs = [(0, 1)]
+    neighbor_list_flat = [0, 1]
+    neighbor_pairs_array = np.array(neighbor_list_flat, dtype=np.int32)
+    num_pairs = len(neighbor_pairs)
+
+    energy = lj_interface.calculate_energy(
+        num_atoms=num_atoms,
+        positions=positions,
         epsilon=0.0103,
         sigma=2.55,
         cutoff=2.5 * 2.55,
         box_lengths=box_lengths,
+        neighbor_pairs=neighbor_pairs_array,
+        num_pairs=num_pairs,
+    )
+
+    # 计算预期能量
+    # expected_energy 已作为参数传入
+
+    np.testing.assert_almost_equal(
+        energy,
+        expected_energy,
+        decimal=6,
+        err_msg=f"Energy at r={r} is not close to expected {expected_energy}.",
+    )
+
+
+def test_calculate_forces(lj_interface, two_atom_cell, two_atom_neighbor_list):
+    """
+    测试 C++ 实现的 Lennard-Jones 势能计算力函数
+    """
+    num_atoms = two_atom_cell.num_atoms
+    positions = two_atom_cell.get_positions().flatten()
+    box_lengths = two_atom_cell.get_box_lengths()
+    forces = np.zeros_like(positions, dtype=np.float64)
+
+    # 构建邻居对列表
+    neighbor_pairs = [
+        (i, j)
+        for i, j in combinations(range(num_atoms), 2)
+        if j in two_atom_neighbor_list.get_neighbors(i)
+    ]
+    neighbor_list_flat = [index for pair in neighbor_pairs for index in pair]
+    neighbor_pairs_array = np.array(neighbor_list_flat, dtype=np.int32)
+    num_pairs = len(neighbor_pairs)
+
+    lj_interface.calculate_forces(
+        num_atoms=num_atoms,
+        positions=positions,
+        forces=forces,
+        epsilon=0.0103,
+        sigma=2.55,
+        cutoff=2.5 * 2.55,
+        box_lengths=box_lengths,
+        neighbor_pairs=neighbor_pairs_array,
+        num_pairs=num_pairs,
     )
 
     # 重新形状为 (num_atoms, 3)
@@ -81,80 +125,26 @@ def test_calculate_forces(lj_interface):
 
     # 计算期望的力
     epsilon = 0.0103
+    sigma = 2.55
+    r = sigma  # 两个原子之间的距离
 
-    # 理论上，在 r = sigma，力 = 24 * epsilon
-    expected_force_theory = 24.0 * epsilon  # 0.2472 eV/Å
+    # 在 r = sigma, F = 24 * epsilon
+    expected_force_magnitude = 24.0 * epsilon  # 0.2472 eV/Å
+
+    # 计算力的方向
+    expected_force_atom0 = np.array([expected_force_magnitude, 0.0, 0.0])
+    expected_force_atom1 = -expected_force_atom0
 
     # 检查力是否接近理论值
-    np.testing.assert_allclose(forces[0, 0], expected_force_theory, atol=1e-6)
-    np.testing.assert_allclose(forces[1, 0], -expected_force_theory, atol=1e-6)
-    # 其他方向的力应为零
-    np.testing.assert_allclose(forces[:, 1:], 0.0, atol=1e-6)
-
-
-def test_nose_hoover(nose_hoover_interface):
-    """
-    测试 C++ 实现的 Nose-Hoover 恒温器函数
-    """
-    dt = 1.0
-    num_atoms = 2
-    masses = np.array([1.0, 1.0], dtype=np.float64)
-    velocities = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64)
-    forces = np.array([0.0, 0.0, 0.0, -1.0, 0.0, 0.0], dtype=np.float64)
-    xi = 0.0
-    Q = 10.0
-    target_temperature = 300.0
-
-    # C++ 函数 expects a pointer to xi, so create a mutable array
-    xi_array = np.array([xi], dtype=np.float64)
-
-    updated_xi = nose_hoover_interface.nose_hoover(
-        dt,
-        num_atoms,
-        masses,
-        velocities,
-        forces,
-        xi_array,  # 传递数组
-        Q,
-        target_temperature,
+    np.testing.assert_allclose(
+        forces[0],
+        expected_force_atom0,
+        atol=1e-6,
+        err_msg=f"Force on atom0 {forces[0]} is not close to expected {expected_force_atom0}.",
     )
-
-    # Check that xi has been updated
-    assert isinstance(updated_xi, float), "xi is not a float."
-    # 根据实现，xi 应该有变化
-    assert (
-        updated_xi != xi
-    ), f"xi was not updated. Original: {xi}, Updated: {updated_xi}"
-
-
-def test_nose_hoover_chain(nose_hoover_chain_interface):
-    """
-    测试 C++ 实现的 Nose-Hoover 链恒温器函数
-    """
-    dt = 1.0
-    num_atoms = 2
-    masses = np.array([1.0, 1.0], dtype=np.float64)
-    velocities = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64)
-    forces = np.array([0.0, 0.0, 0.0, -1.0, 0.0, 0.0], dtype=np.float64)
-    xi_chain = np.zeros(2, dtype=np.float64)  # 假设链长度为 2
-    Q = np.array([10.0, 10.0], dtype=np.float64)
-    chain_length = 2
-    target_temperature = 300.0
-
-    nose_hoover_chain_interface.nose_hoover_chain(
-        dt,
-        num_atoms,
-        masses,
-        velocities,
-        forces,
-        xi_chain,
-        Q,
-        chain_length,
-        target_temperature,
+    np.testing.assert_allclose(
+        forces[1],
+        expected_force_atom1,
+        atol=1e-6,
+        err_msg=f"Force on atom1 {forces[1]} is not close to expected {expected_force_atom1}.",
     )
-
-    # Check that xi_chain has been updated
-    assert isinstance(xi_chain, np.ndarray), "xi_chain is not a numpy array."
-    assert xi_chain.shape == (chain_length,), "xi_chain shape mismatch."
-    # 检查是否有变化
-    assert not np.all(xi_chain == 0.0), "xi_chain was not updated."

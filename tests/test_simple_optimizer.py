@@ -3,87 +3,10 @@
 import pytest
 import numpy as np
 import logging
-import os
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
 from python.optimizers import GradientDescentOptimizer
-from datetime import datetime
-
-
-# 配置日志
-@pytest.fixture(scope="session", autouse=True)
-def configure_logging():
-    """
-    配置日志以在测试期间输出到控制台和文件。
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)  # 设置全局日志级别
-
-    # 创建控制台处理器
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)  # 控制台日志级别
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
-    # 获取当前时间并格式化为字符串
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # 日志文件路径
-    log_directory = "./logs/simple_optimizer/"
-    log_filename = f"{log_directory}/simple_optimizer_{current_time}.log"  # 生成带时间戳的日志文件名
-
-    # 确保日志目录存在
-    os.makedirs(log_directory, exist_ok=True)
-
-    # 创建文件处理器
-    fh = logging.FileHandler(log_filename, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)  # 文件日志级别
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-
-    yield
-
-    # 测试结束后移除处理器
-    logger.removeHandler(ch)
-    logger.removeHandler(fh)
-
-
-@pytest.fixture
-def lj_potential_simple():
-    """
-    创建一个 Lennard-Jones 势能对象，用于简单系统优化测试。
-    """
-    return LennardJonesPotential(epsilon=0.0103, sigma=2.55, cutoff=2.5 * 2.55)
-
-
-@pytest.fixture
-def simple_cell():
-    """
-    创建一个包含两个原子的晶胞，测试优化器的有效性。
-    """
-    sigma = 2.55
-    atoms = [
-        Atom(
-            id=0,
-            symbol="Al",
-            mass_amu=26.9815,
-            position=[0.0, 0.0, 0.0],
-            velocity=None,
-        ),
-        Atom(
-            id=1,
-            symbol="Al",
-            mass_amu=26.9815,
-            position=[3.0, 0.0, 0.0],  # 初始距离为3.0 Å
-            velocity=None,
-        ),
-    ]
-    lattice_vectors = np.eye(3) * 10.0  # 盒子大小为10 Å，避免PBC影响
-    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=False)
-    return cell
+from conftest import generate_fcc_positions  # 从 conftest 导入
 
 
 def test_gradient_descent_optimizer_simple(lj_potential_simple, simple_cell):
@@ -94,7 +17,7 @@ def test_gradient_descent_optimizer_simple(lj_potential_simple, simple_cell):
     optimizer = GradientDescentOptimizer(
         max_steps=10000, tol=1e-4, step_size=1e-2, energy_tol=1e-4
     )
-    cell = simple_cell
+    cell = simple_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
     optimizer.optimize(cell, lj_potential_simple)
 
