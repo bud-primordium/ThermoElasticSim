@@ -84,7 +84,7 @@ def test_calculate_energy_different_r(lj_interface, r, expected_energy):
     np.testing.assert_almost_equal(
         energy,
         expected_energy,
-        decimal=6,
+        decimal=10,
         err_msg=f"Energy at r={r} is not close to expected {expected_energy}.",
     )
 
