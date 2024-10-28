@@ -65,6 +65,7 @@ class GradientDescentOptimizer(Optimizer):
         atoms = cell.atoms
         potential.calculate_forces(cell)
         previous_energy = potential.calculate_energy(cell)
+        step_size = self.step_size  # 使用局部变量以实现步长自适应
 
         for step in range(1, self.max_steps + 1):
             # 记录原子位置和力
@@ -83,6 +84,17 @@ class GradientDescentOptimizer(Optimizer):
             logger.debug(
                 f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV, Energy Change = {energy_change:.6e} eV"
             )
+
+            # 调整步长
+            if energy_change > 0:
+                # 能量增加，减小步长
+                step_size *= 0.5
+            else:
+                # 能量减少，适当增加步长
+                step_size *= 1.05
+
+            # 更新 previous_energy
+            previous_energy = total_energy
 
             # 检查收敛条件
             if max_force < self.tol and energy_change < self.energy_tol:
