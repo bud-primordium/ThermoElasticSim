@@ -1,9 +1,16 @@
+# 文件名: test_zeroelasticity.py
+# 作者: Gilbert Young
+# 修改日期: 2024-10-20
+# 文件描述: 测试用于计算零温弹性常数的求解器和计算类。
+
 import pytest
 import numpy as np
 from datetime import datetime
+from itertools import product
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
-from python.elasticity import ElasticConstantsCalculator
+from python.zeroelasticity import ZeroKElasticConstantsCalculator  # 更新导入路径和类名
+from python.utils import NeighborList
 import logging
 import os
 
@@ -31,9 +38,7 @@ def configure_logging():
 
     # 日志文件路径
     log_directory = "./logs/elasticity/"
-    log_filename = (
-        f"{log_directory}/elasticity_{current_time}.log"  # 生成带时间戳的日志文件名
-    )
+    log_filename = f"{log_directory}/0K_{current_time}.log"  # 生成带时间戳的日志文件名
 
     # 确保日志目录存在
     os.makedirs(log_directory, exist_ok=True)
@@ -51,35 +56,65 @@ def configure_logging():
     logger.removeHandler(fh)
 
 
-def test_elastic_constants_calculator():
+def generate_fcc_supercell(lattice_constant, repetitions):
     """
-    @brief 测试 ElasticConstantsCalculator 计算弹性常数
-    """
-    logger = logging.getLogger(__name__)
-    logger.debug("Starting Elastic Constants Calculator Test.")
+    生成面心立方 (FCC) 结构的超胞原子位置。
 
-    # 创建简单的 FCC 晶格，4 个原子
-    atoms = []
-    lattice_constant = 4.05  # FCC 晶格参数，铝的实验晶格常数为 4.05 Å
-    positions = [
-        [0.0, 0.0, 0.0],  # 面心立方结构原子位置
-        [1.0, 1.0, 0.0],
-        [1.0, 0.0, 1.0],
-        [0.0, 1.0, 1.0],
-        [1.0, 1.0, 1.0],  # 额外的一个原子，确保FCC的基元
+    Parameters
+    ----------
+    lattice_constant : float
+        FCC 晶格常数，单位 Å。
+    repetitions : int
+        每个方向上的单位晶胞重复次数。
+
+    Returns
+    -------
+    list of list of float
+        原子位置列表。
+    """
+    # FCC 单位晶胞的标准原子位置（分数坐标）
+    base_positions = [
+        [0.0, 0.0, 0.0],
+        [0.5, 0.5, 0.0],
+        [0.5, 0.0, 0.5],
+        [0.0, 0.5, 0.5],
     ]
 
-    for pos in positions:
+    positions = []
+    for i, j, k in product(range(repetitions), repeat=3):
+        for pos in base_positions:
+            cartesian = (np.array([i, j, k]) + np.array(pos)) * lattice_constant
+            positions.append(cartesian.tolist())
+
+    return positions
+
+
+def test_zeroK_elastic_constants():
+    """
+    @brief 测试零温度下的弹性常数计算，确保在变形后进行结构优化。
+    """
+    logger = logging.getLogger(__name__)
+    logger.debug("Starting 0K Elastic Constants Calculator Test.")
+
+    lattice_constant = 4.05  # Å
+    repetitions = 3
+
+    # 生成 3x3x3 超胞的原子位置
+    positions = generate_fcc_supercell(lattice_constant, repetitions)
+    atoms = []
+    for idx, pos in enumerate(positions):
         atoms.append(
             Atom(
-                id=len(atoms),
+                id=idx,
                 symbol="Al",
                 mass_amu=26.9815,
-                position=np.array(pos) * lattice_constant,
+                position=pos,
             )
         )
 
-    lattice_vectors = np.eye(3) * lattice_constant * 10  # 简单的立方晶胞
+    # 更新晶格矢量
+    lattice_vectors = np.eye(3) * lattice_constant * repetitions
+
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     logger.debug(f"Created cell with {len(atoms)} atoms.")
 
@@ -90,15 +125,21 @@ def test_elastic_constants_calculator():
     lj_potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
     logger.debug("Initialized Lennard-Jones potential.")
 
-    # 创建 ElasticConstantsCalculator 实例
-    elastic_calculator = ElasticConstantsCalculator(
+    # 创建邻居列表并关联到势能函数
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list.build(cell)
+    lj_potential.set_neighbor_list(neighbor_list)
+    logger.debug("Neighbor list built and set for potential.")
+
+    # 创建 ZeroKElasticConstantsCalculator 实例
+    elastic_calculator = ZeroKElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
         delta=1e-3,
         optimizer_type="GD",  # 使用梯度下降优化器
     )
     logger.debug(
-        "Initialized ElasticConstantsCalculator with Gradient Descent Optimizer."
+        "Initialized ZeroKElasticConstantsCalculator with Gradient Descent Optimizer."
     )
 
     # 计算弹性常数
@@ -131,4 +172,4 @@ def test_elastic_constants_calculator():
                 0.0 <= C_in_GPa[i, j] <= 100.0
             ), f"弹性常数 C[{i},{j}] 不在合理范围内。"
 
-    logger.debug("Elastic Constants Calculator Test Passed.")
+    logger.debug("ZeroK Elastic Constants Calculator Test Passed.")
