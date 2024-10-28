@@ -10,6 +10,7 @@
 """
 
 import numpy as np
+import itertools
 
 
 class TensorConverter:
@@ -119,30 +120,40 @@ class NeighborList:
         self.cell = None  # 引用到 Cell 对象
 
     def build(self, cell):
-        """
-        构建邻居列表。
-
-        Parameters
-        ----------
-        cell : Cell
-            包含原子的晶胞对象。
-        """
-        self.cell = cell
         positions = cell.get_positions()
         num_atoms = cell.num_atoms
-        self.neighbor_list = [[] for _ in range(num_atoms)]
-        cutoff_with_skin_squared = self.cutoff_with_skin**2
+        box_size = cell.get_box_lengths()
+        cutoff = self.cutoff_with_skin
 
-        for i in range(num_atoms):
-            for j in range(i + 1, num_atoms):
-                rij = positions[j] - positions[i]
-                # 应用最小镜像原则以考虑 PBC
-                if cell.pbc_enabled:
-                    rij = cell.minimum_image(rij)
-                distance_squared = np.dot(rij, rij)
-                if distance_squared < cutoff_with_skin_squared:
-                    self.neighbor_list[i].append(j)
-                    self.neighbor_list[j].append(i)
+        # 定义网格尺寸
+        grid_size = cutoff
+        grid_dims = np.floor(box_size / grid_size).astype(int)
+        grid_dims[grid_dims == 0] = 1  # 防止出现0，至少为1
+
+        # 初始化网格
+        grid = {}
+        for idx, pos in enumerate(positions):
+            grid_idx = tuple(((pos / grid_size) % grid_dims).astype(int))
+            grid.setdefault(grid_idx, []).append(idx)
+
+        # 构建邻居列表
+        self.neighbor_list = [[] for _ in range(num_atoms)]
+        for grid_idx, atom_indices in grid.items():
+            # 检查当前网格及其相邻网格
+            for offset in itertools.product([-1, 0, 1], repeat=3):
+                neighbor_grid_idx = tuple((np.array(grid_idx) + offset) % grid_dims)
+                neighbor_atom_indices = grid.get(neighbor_grid_idx, [])
+                for i in atom_indices:
+                    for j in neighbor_atom_indices:
+                        if j > i:
+                            rij = positions[j] - positions[i]
+                            # 应用最小镜像原则
+                            if cell.pbc_enabled:
+                                rij = cell.minimum_image(rij)
+                            distance_squared = np.dot(rij, rij)
+                            if distance_squared < cutoff**2:
+                                self.neighbor_list[i].append(j)
+                                self.neighbor_list[j].append(i)
 
         self.last_positions = positions.copy()
 
