@@ -160,7 +160,7 @@ class Cell:
                 "Applying deformation to lattice vectors and atomic positions."
             )
             # 更新晶格矢量
-            self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
+            self.lattice_vectors = self.lattice_vectors @ deformation_matrix.T
             logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
             # 更新原子坐标
@@ -171,7 +171,7 @@ class Cell:
                 positions,
             )
             # 在新的晶格矢量下计算新的笛卡尔坐标
-            new_positions = np.dot(self.lattice_vectors.T, fractional)
+            new_positions = self.lattice_vectors.T @ fractional
             if self.pbc_enabled:
                 # 确保周期性边界条件生效，将原子坐标映射回晶胞内
                 new_positions = self.apply_periodic_boundary(new_positions)
