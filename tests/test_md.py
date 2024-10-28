@@ -9,6 +9,7 @@ from python.thermostats import NoseHooverThermostat
 
 from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
+from python.utils import NeighborList
 
 
 @pytest.fixture
@@ -55,13 +56,24 @@ def thermostat():
     return NoseHooverThermostat(target_temperature=300, time_constant=100)
 
 
-def test_md_simulation(simple_cell, lj_potential, integrator):
+@pytest.fixture
+def lj_potential_with_neighbors(lj_potential, simple_cell):
+    """
+    @fixture 定义 Lennard-Jones 势，并设置邻居列表。
+    """
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list.build(simple_cell)
+    lj_potential.set_neighbor_list(neighbor_list)
+    return lj_potential
+
+
+def test_md_simulation(simple_cell, lj_potential_with_neighbors, integrator):
     """
     @brief 测试分子动力学模拟器的运行。
     """
     md_simulator = MDSimulator(
         cell=simple_cell,
-        potential=lj_potential,
+        potential=lj_potential_with_neighbors,
         integrator=integrator,
         thermostat=None,
     )
@@ -77,14 +89,14 @@ def test_md_simulation(simple_cell, lj_potential, integrator):
 
 
 def test_md_simulation_with_thermostat(
-    simple_cell, lj_potential, integrator, thermostat
+    simple_cell, lj_potential_with_neighbors, integrator, thermostat
 ):
     """
     @brief 测试分子动力学模拟器的运行，带恒温器。
     """
     md_simulator = MDSimulator(
         cell=simple_cell,
-        potential=lj_potential,
+        potential=lj_potential_with_neighbors,
         integrator=integrator,
         thermostat=thermostat,
     )

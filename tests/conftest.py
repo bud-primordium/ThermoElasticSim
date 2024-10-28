@@ -106,13 +106,14 @@ def two_atom_cell():
 
 
 @pytest.fixture
-def two_atom_neighbor_list(two_atom_cell):
+def two_atom_neighbor_list(two_atom_cell, lj_potential):
     """
-    创建并返回两个原子的邻居列表。
+    创建并返回两个原子的邻居列表，并将其设置到 Lennard-Jones 势中。
     """
-    cutoff = 2.5 * 2.55  # 2.5 * sigma
+    cutoff = lj_potential.cutoff  # 2.5 * sigma
     neighbor_list = NeighborList(cutoff=cutoff)
     neighbor_list.build(two_atom_cell)
+    lj_potential.set_neighbor_list(neighbor_list)
     return neighbor_list
 
 
