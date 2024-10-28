@@ -109,8 +109,8 @@ extern "C"
                 for (int k = 0; k < 3; ++k)
                 {
                     double fij = force_scalar * rij[k];
-                    forces[3 * i + k] -= fij;
-                    forces[3 * j + k] += fij;
+                    forces[3 * i + k] += fij;
+                    forces[3 * j + k] -= fij;
                 }
             }
         }
