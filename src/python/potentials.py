@@ -10,7 +10,11 @@
 """
 
 import numpy as np
+from .utils import NeighborList
 from .interfaces.cpp_interface import CppInterface
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Potential:
@@ -28,17 +32,7 @@ class Potential:
     def __init__(self, parameters, cutoff):
         self.parameters = parameters
         self.cutoff = cutoff
-
-    def calculate_potential(self, cell):
-        """
-        计算势能，需子类实现
-
-        Parameters
-        ----------
-        cell : Cell
-            包含原子的晶胞对象
-        """
-        raise NotImplementedError
+        self.neighbor_list = None  # 邻居列表
 
     def calculate_forces(self, cell):
         """
@@ -62,6 +56,17 @@ class Potential:
         """
         raise NotImplementedError
 
+    def set_neighbor_list(self, neighbor_list):
+        """
+        设置邻居列表。
+
+        Parameters
+        ----------
+        neighbor_list : NeighborList
+            邻居列表对象。
+        """
+        self.neighbor_list = neighbor_list
+
 
 class LennardJonesPotential(Potential):
     """
@@ -81,10 +86,10 @@ class LennardJonesPotential(Potential):
         # 初始化父类参数
         parameters = {"epsilon": epsilon, "sigma": sigma}
         super().__init__(parameters, cutoff)
-        self.epsilon = epsilon  # 势能深度，单位 eV
-        self.sigma = sigma  # 势能零距，单位 Å
-        self.cutoff = cutoff  # 截断距离，单位 Å
         self.cpp_interface = CppInterface("lennard_jones")
+        logger.debug(
+            f"Lennard-Jones Potential initialized with epsilon={epsilon}, sigma={sigma}, cutoff={cutoff}."
+        )
 
     def calculate_forces(self, cell):
         """
@@ -95,31 +100,54 @@ class LennardJonesPotential(Potential):
         cell : Cell
             包含原子的晶胞对象
         """
+        if self.neighbor_list is None:
+            raise ValueError("Neighbor list is not set for the potential.")
+
+        logger.debug("Updating neighbor list.")
+        self.neighbor_list.update()
         num_atoms = cell.num_atoms
-        # 获取所有原子的位置信息并转换为连续的 NumPy 数组
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
         ).flatten()
-        # 初始化力数组
-        forces = np.zeros_like(positions, dtype=np.float64)
-        # 获取盒子长度信息
         box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
 
+        # 构建邻居对列表
+        neighbor_pairs = [
+            (i, j)
+            for i in range(num_atoms)
+            for j in self.neighbor_list.get_neighbors(i)
+            if j > i
+        ]
+
+        neighbor_list_flat = [index for pair in neighbor_pairs for index in pair]
+        neighbor_list_array = np.ascontiguousarray(neighbor_list_flat, dtype=np.int32)
+
+        logger.debug(f"Number of neighbor pairs: {len(neighbor_pairs)}.")
+
+        # 初始化力数组
+        forces = np.zeros_like(positions, dtype=np.float64)
+
         # 调用 C++ 接口计算作用力
+        logger.debug("Calling C++ interface to calculate forces.")
         self.cpp_interface.calculate_forces(
             num_atoms,
             positions,
             forces,
-            self.epsilon,
-            self.sigma,
+            self.parameters["epsilon"],
+            self.parameters["sigma"],
             self.cutoff,
             box_lengths,
+            neighbor_list_array,
+            len(neighbor_pairs),
         )
 
         # 更新原子力，按原子顺序存储计算结果
         forces = forces.reshape((num_atoms, 3))
+        logger.debug("Updating atomic forces.")
         for i, atom in enumerate(cell.atoms):
             atom.force = forces[i]
+
+        logger.debug("Forces calculation and update completed.")
 
     def calculate_energy(self, cell):
         """
@@ -135,21 +163,43 @@ class LennardJonesPotential(Potential):
         float
             计算的总势能，单位为 eV
         """
+        if self.neighbor_list is None:
+            raise ValueError("Neighbor list is not set for the potential.")
+
+        logger.debug("Updating neighbor list for energy calculation.")
+        self.neighbor_list.update()
         num_atoms = cell.num_atoms
-        # 获取所有原子的位置信息并转换为连续的 NumPy 数组
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
         ).flatten()
-        # 获取盒子长度信息
         box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
 
+        # 构建邻居对列表
+        neighbor_pairs = [
+            (i, j)
+            for i in range(num_atoms)
+            for j in self.neighbor_list.get_neighbors(i)
+            if j > i
+        ]
+
+        neighbor_list_flat = [index for pair in neighbor_pairs for index in pair]
+        neighbor_list_array = np.ascontiguousarray(neighbor_list_flat, dtype=np.int32)
+
+        logger.debug(
+            f"Number of neighbor pairs for energy calculation: {len(neighbor_pairs)}."
+        )
+
         # 调用 C++ 接口计算能量
+        logger.debug("Calling C++ interface to calculate energy.")
         energy = self.cpp_interface.calculate_energy(
             num_atoms,
             positions,
-            self.epsilon,
-            self.sigma,
+            self.parameters["epsilon"],
+            self.parameters["sigma"],
             self.cutoff,
             box_lengths,
+            neighbor_list_array,
+            len(neighbor_pairs),
         )
+        logger.debug(f"Calculated potential energy: {energy} eV.")
         return energy

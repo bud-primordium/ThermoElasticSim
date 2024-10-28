@@ -143,15 +143,17 @@ class Cell:
             logger.debug(
                 "Lattice vectors are locked. Only applying deformation to atomic positions."
             )
-            # 仅更新原子坐标
-            for atom in self.atoms:
-                original_position = atom.position.copy()
-                atom.position = np.dot(deformation_matrix, atom.position)
-                if self.pbc_enabled:
-                    atom.position = self.apply_periodic_boundary(atom.position)
-                logger.debug(
-                    f"Atom {atom.id} position changed from {original_position} to {atom.position}"
-                )
+            # 批量更新原子坐标
+            positions = self.get_positions().T  # (3, N)
+            fractional = np.linalg.solve(self.lattice_vectors.T, positions)
+            fractional = np.dot(deformation_matrix, fractional)
+            new_positions = np.dot(self.lattice_vectors.T, fractional)
+            if self.pbc_enabled:
+                new_positions = self.apply_periodic_boundary(new_positions)
+            # 更新所有原子的位置信息
+            for i, atom in enumerate(self.atoms):
+                atom.position = new_positions[:, i]
+                logger.debug(f"Atom {atom.id} position changed to {atom.position}")
         else:
             logger.debug(
                 "Applying deformation to lattice vectors and atomic positions."
@@ -160,43 +162,45 @@ class Cell:
             self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
             logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
-            # 更新原子坐标并应用 PBC（如果启用）
-            for atom in self.atoms:
-                original_position = atom.position.copy()
-                atom.position = np.dot(deformation_matrix, atom.position)
-                if self.pbc_enabled:
-                    atom.position = self.apply_periodic_boundary(atom.position)
-                logger.debug(
-                    f"Atom {atom.id} position changed from {original_position} to {atom.position}"
-                )
+            # 更新原子坐标
+            positions = self.get_positions().T  # (3, N)
+            fractional = np.linalg.solve(self.lattice_vectors.T, positions)
+            new_positions = np.dot(self.lattice_vectors.T, fractional)
+            if self.pbc_enabled:
+                new_positions = self.apply_periodic_boundary(new_positions)
+            # 更新所有原子的位置信息
+            for i, atom in enumerate(self.atoms):
+                atom.position = new_positions[:, i]
+                logger.debug(f"Atom {atom.id} position changed to {atom.position}")
 
         # 更新体积
         self.volume = self.calculate_volume()
+        logger.debug(f"Updated cell volume: {self.volume}")
 
-    def apply_periodic_boundary(self, position):
+    def apply_periodic_boundary(self, positions):
         """
         应用周期性边界条件，将原子位置限制在晶胞内
 
         Parameters
         ----------
-        position : array_like
-            原子的笛卡尔坐标位置
+        positions : numpy.ndarray
+            原子的笛卡尔坐标位置，形状为 (3, N)
 
         Returns
         -------
         numpy.ndarray
-            应用 PBC 后的笛卡尔坐标位置
+            应用 PBC 后的笛卡尔坐标位置，形状为 (3, N)
         """
         if self.pbc_enabled:
             # 转换到分数坐标
-            fractional = np.linalg.solve(self.lattice_vectors.T, position)
+            fractional = np.linalg.solve(self.lattice_vectors.T, positions)
             # 确保在 [0, 1) 范围内
             fractional = fractional % 1.0
             # 转换回笛卡尔坐标
-            new_position = np.dot(self.lattice_vectors.T, fractional)
-            return new_position
+            new_positions = np.dot(self.lattice_vectors.T, fractional)
+            return new_positions
         else:
-            return position
+            return positions
 
     def copy(self):
         """创建 Cell 的深拷贝"""
@@ -242,3 +246,30 @@ class Cell:
             原子力数组，形状为 (num_atoms, 3)
         """
         return np.array([atom.force for atom in self.atoms], dtype=np.float64)
+
+    def minimum_image(self, displacement):
+        """
+        应用最小镜像原则，计算两个原子间的最小位移。
+
+        Parameters
+        ----------
+        displacement : numpy.ndarray
+            两个原子间的位移向量。
+
+        Returns
+        -------
+        numpy.ndarray
+            最小镜像下的位移向量。
+
+        Notes
+        -----
+        在计算原子间的相互作用力或距离时，应使用最小镜像原则来确保位移向量是最短的。
+        """
+        logger.debug(f"Original displacement: {displacement}")
+        fractional = np.linalg.solve(self.lattice_vectors.T, displacement)
+        logger.debug(f"Fractional displacement before adjustment: {fractional}")
+        fractional -= np.round(fractional)  # 将分数坐标限制在 [-0.5, 0.5)
+        logger.debug(f"Fractional displacement after adjustment: {fractional}")
+        displacement = np.dot(self.lattice_vectors.T, fractional)
+        logger.debug(f"Minimum image displacement: {displacement}")
+        return displacement

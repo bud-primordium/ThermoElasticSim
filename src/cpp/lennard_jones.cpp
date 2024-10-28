@@ -58,7 +58,9 @@ extern "C"
         double epsilon,
         double sigma,
         double cutoff,
-        const double *box_lengths)
+        const double *box_lengths,
+        const int *neighbor_pairs,
+        int num_pairs)
     {
         // 清零力数组
         for (int i = 0; i < 3 * num_atoms; ++i)
@@ -74,48 +76,41 @@ extern "C"
         solve_cutoff_cubic(cutoff, r0, sigma, epsilon, a, b, c, d);
 
         // 力的计算
-        for (int i = 0; i < num_atoms; ++i)
+        for (int p = 0; p < num_pairs; ++p)
         {
-            const double *ri = &positions[3 * i];
-            for (int j = i + 1; j < num_atoms; ++j)
+            int i = neighbor_pairs[2 * p];
+            int j = neighbor_pairs[2 * p + 1];
+            double rij[3];
+            for (int k = 0; k < 3; ++k)
             {
-                const double *rj = &positions[3 * j];
-                double rij[3];
-                for (int k = 0; k < 3; ++k)
+                rij[k] = positions[3 * i + k] - positions[3 * j + k];
+                // 最小镜像法已经在 Python 中处理
+            }
+
+            double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
+
+            if (r2 < cutoff_sq)
+            {
+                double r = sqrt(r2);
+                double force_scalar;
+
+                if (r < r0)
                 {
-                    rij[k] = ri[k] - rj[k];
-                    // 最小镜像法
-                    if (rij[k] > 0.5 * box_lengths[k])
-                        rij[k] -= box_lengths[k];
-                    else if (rij[k] < -0.5 * box_lengths[k])
-                        rij[k] += box_lengths[k];
+                    double r_inv = 1.0 / r;
+                    double r6_inv = pow(sigma * r_inv, 6); // (σ/r)^6
+                    force_scalar = 24.0 * epsilon * (2.0 * r6_inv * r6_inv - r6_inv) * r_inv;
+                }
+                else
+                {
+                    // 使用三次多项式过渡区的力 F(r) = -dV/dr = -(3a*r^2 + 2b*r + c)
+                    force_scalar = -(3.0 * a * r * r + 2.0 * b * r + c);
                 }
 
-                double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
-
-                if (r2 < cutoff_sq)
+                for (int k = 0; k < 3; ++k)
                 {
-                    double r = sqrt(r2);
-                    double force_scalar;
-
-                    if (r < r0)
-                    {
-                        double r_inv = 1.0 / r;
-                        double r6_inv = pow(sigma * r_inv, 6); // (σ/r)^6
-                        force_scalar = 24.0 * epsilon * (2.0 * r6_inv * r6_inv - r6_inv) * r_inv;
-                    }
-                    else
-                    {
-                        // 使用三次多项式过渡区的力 F(r) = -dV/dr = -(3a*r^2 + 2b*r + c)
-                        force_scalar = -(3.0 * a * r * r + 2.0 * b * r + c);
-                    }
-
-                    for (int k = 0; k < 3; ++k)
-                    {
-                        double fij = force_scalar * rij[k];
-                        forces[3 * i + k] -= fij;
-                        forces[3 * j + k] += fij;
-                    }
+                    double fij = force_scalar * rij[k];
+                    forces[3 * i + k] -= fij;
+                    forces[3 * j + k] += fij;
                 }
             }
         }
@@ -138,7 +133,9 @@ extern "C"
         double epsilon,
         double sigma,
         double cutoff,
-        const double *box_lengths)
+        const double *box_lengths,
+        const int *neighbor_pairs,
+        int num_pairs)
     {
         double energy = 0.0;
         double cutoff_sq = cutoff * cutoff;
@@ -149,44 +146,37 @@ extern "C"
         solve_cutoff_cubic(cutoff, r0, sigma, epsilon, a, b, c, d);
 
         // 势能的计算
-        for (int i = 0; i < num_atoms; ++i)
+        for (int p = 0; p < num_pairs; ++p)
         {
-            const double *ri = &positions[3 * i];
-            for (int j = i + 1; j < num_atoms; ++j)
+            int i = neighbor_pairs[2 * p];
+            int j = neighbor_pairs[2 * p + 1];
+            double rij[3];
+            for (int k = 0; k < 3; ++k)
             {
-                const double *rj = &positions[3 * j];
-                double rij[3];
-                for (int k = 0; k < 3; ++k)
+                rij[k] = positions[3 * i + k] - positions[3 * j + k];
+                // 最小镜像法已经在 Python 中处理
+            }
+
+            double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
+
+            if (r2 < cutoff_sq)
+            {
+                double r = sqrt(r2);
+                double potential;
+
+                if (r < r0)
                 {
-                    rij[k] = ri[k] - rj[k];
-                    // 最小镜像法
-                    if (rij[k] > 0.5 * box_lengths[k])
-                        rij[k] -= box_lengths[k];
-                    else if (rij[k] < -0.5 * box_lengths[k])
-                        rij[k] += box_lengths[k];
+                    double r_inv = 1.0 / r;
+                    double r6_inv = pow(sigma * r_inv, 6); // (σ/r)^6
+                    potential = 4.0 * epsilon * (r6_inv * r6_inv - r6_inv);
+                }
+                else
+                {
+                    // 使用三次多项式过渡区的势能 V(r) = a*r^3 + b*r^2 + c*r + d
+                    potential = a * pow(r, 3) + b * pow(r, 2) + c * r + d;
                 }
 
-                double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
-
-                if (r2 < cutoff_sq)
-                {
-                    double r = sqrt(r2);
-                    double potential;
-
-                    if (r < r0)
-                    {
-                        double r_inv = 1.0 / r;
-                        double r6_inv = pow(sigma * r_inv, 6); // (σ/r)^6
-                        potential = 4.0 * epsilon * (r6_inv * r6_inv - r6_inv);
-                    }
-                    else
-                    {
-                        // 使用三次多项式过渡区的势能 V(r) = a*r^3 + b*r^2 + c*r + d
-                        potential = a * pow(r, 3) + b * pow(r, 2) + c * r + d;
-                    }
-
-                    energy += potential;
-                }
+                energy += potential;
             }
         }
 

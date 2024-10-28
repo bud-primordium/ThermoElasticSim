@@ -95,6 +95,102 @@ class DataCollector:
         self.data.append({"positions": positions, "velocities": velocities})
 
 
+class NeighborList:
+    """
+    邻居列表类，用于生成和维护原子的邻居列表。
+    """
+
+    def __init__(self, cutoff, skin=0.3):
+        """
+        初始化邻居列表。
+
+        Parameters
+        ----------
+        cutoff : float
+            截断半径，单位为 Å。
+        skin : float, optional
+            皮肤厚度（skin width），默认值为 0.3 Å。
+        """
+        self.cutoff = cutoff
+        self.skin = skin
+        self.cutoff_with_skin = cutoff + skin
+        self.neighbor_list = None
+        self.last_positions = None
+        self.cell = None  # 引用到 Cell 对象
+
+    def build(self, cell):
+        """
+        构建邻居列表。
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象。
+        """
+        self.cell = cell
+        positions = cell.get_positions()
+        num_atoms = cell.num_atoms
+        self.neighbor_list = [[] for _ in range(num_atoms)]
+        cutoff_with_skin_squared = self.cutoff_with_skin ** 2
+
+        for i in range(num_atoms):
+            for j in range(i + 1, num_atoms):
+                rij = positions[j] - positions[i]
+                # 应用最小镜像原则以考虑 PBC
+                if cell.pbc_enabled:
+                    rij = cell.minimum_image(rij)
+                distance_squared = np.dot(rij, rij)
+                if distance_squared < cutoff_with_skin_squared:
+                    self.neighbor_list[i].append(j)
+                    self.neighbor_list[j].append(i)
+
+        self.last_positions = positions.copy()
+
+    def need_refresh(self):
+        """
+        判断是否需要更新邻居列表。
+
+        Returns
+        -------
+        bool
+            如果需要更新，返回 True；否则返回 False。
+        """
+        if self.last_positions is None:
+            return True
+        positions = self.cell.get_positions()
+        displacements = positions - self.last_positions
+        if self.cell.pbc_enabled:
+            # 考虑 PBC 下的位移
+            displacements = np.array([self.cell.minimum_image(disp) for disp in displacements])
+        max_displacement = np.max(np.linalg.norm(displacements, axis=1))
+        return max_displacement > (self.skin * 0.5)
+
+    def update(self):
+        """
+        更新邻居列表，如果需要的话。
+        """
+        if self.need_refresh():
+            self.build(self.cell)
+
+    def get_neighbors(self, atom_index):
+        """
+        获取指定原子的邻居列表。
+
+        Parameters
+        ----------
+        atom_index : int
+            原子的索引。
+
+        Returns
+        -------
+        list of int
+            邻居原子的索引列表。
+        """
+        if self.neighbor_list is None:
+            self.build(self.cell)
+        return self.neighbor_list[atom_index]
+
+
 # 单位转换常量
 # 定义常见单位转换的常量，用于模拟中单位的转换
 
