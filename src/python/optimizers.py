@@ -1,6 +1,6 @@
 # 文件名: optimizers.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-20
+# 修改日期: 2024-10-28
 # 文件描述: 实现梯度下降和 BFGS 优化器。
 
 """
@@ -114,10 +114,10 @@ class GradientDescentOptimizer(Optimizer):
 
             previous_energy = total_energy
 
-            # 更新位置，沿着负梯度方向移动
+            # 更新位置，沿着力的方向移动
             for atom in atoms:
-                displacement = self.step_size * atom.force  # F = -dV/dx
-                atom.position -= displacement  # position += step_size * F = position - step_size * dV/dx
+                displacement = self.step_size * atom.force
+                atom.position += displacement  # 修正为 +=
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
                 logger.debug(f"Atom {atom.id} new position: {atom.position}")
@@ -133,11 +133,8 @@ class GradientDescentOptimizer(Optimizer):
                 for j in range(i + 1, num_atoms):
                     rij = atoms[j].position - atoms[i].position
                     # 应用最小镜像规则
-                    for dim in range(3):
-                        rij[dim] -= (
-                            round(rij[dim] / cell.lattice_vectors[dim, dim])
-                            * cell.lattice_vectors[dim, dim]
-                        )
+                    if cell.pbc_enabled:
+                        rij = cell.minimum_image(rij)
                     r = np.linalg.norm(rij)
                     if r < min_distance:
                         min_distance = r
@@ -195,6 +192,8 @@ class BFGSOptimizer(Optimizer):
             # 更新所有原子的位置
             for i, atom in enumerate(cell.atoms):
                 atom.position = positions[i * 3 : (i + 1) * 3]
+                # 应用 PBC
+                atom.position = cell.apply_periodic_boundary(atom.position)
             return potential.calculate_energy(cell)
 
         # 定义梯度函数（力）
@@ -202,9 +201,11 @@ class BFGSOptimizer(Optimizer):
             # 更新所有原子的位置
             for i, atom in enumerate(cell.atoms):
                 atom.position = positions[i * 3 : (i + 1) * 3]
+                # 应用 PBC
+                atom.position = cell.apply_periodic_boundary(atom.position)
             potential.calculate_forces(cell)
             forces = cell.get_forces()
-            return forces.flatten()
+            return -forces.flatten()  # 修正符号为 -forces
 
         # 获取初始位置
         initial_positions = cell.get_positions().flatten()
