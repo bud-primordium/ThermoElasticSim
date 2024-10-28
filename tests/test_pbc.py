@@ -24,7 +24,8 @@ def test_apply_periodic_boundary():
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
     # 应用 PBC
-    new_position = cell.apply_periodic_boundary(atoms[0].position)
+    position = np.array([6.0, 6.0, 6.0]).reshape(3, 1)  # 调整形状为 (3, 1)
+    new_position = cell.apply_periodic_boundary(position).flatten()
     expected_position = np.array([1.0, 1.0, 1.0])  # 6 % 5 = 1
     assert np.allclose(
         new_position, expected_position
@@ -33,7 +34,7 @@ def test_apply_periodic_boundary():
 
     # 测试未启用 PBC
     cell_no_pbc = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=False)
-    new_position_no_pbc = cell_no_pbc.apply_periodic_boundary(atoms[0].position)
+    new_position_no_pbc = cell_no_pbc.apply_periodic_boundary(position).flatten()
     expected_position_no_pbc = np.array([6.0, 6.0, 6.0])
     assert np.allclose(
         new_position_no_pbc, expected_position_no_pbc
@@ -90,19 +91,26 @@ def test_apply_deformation_with_pbc():
     ), f"Expected atom0 position [0.0, 0.0, 0.0], got {cell.atoms[0].position}"
 
     # 原子1: 通过变形矩阵进行线性变换，并应用 PBC
-    expected_atom1_position = np.dot([2.55, 2.55, 2.55], deformation_matrix)
+    deformed_position = np.dot([2.55, 2.55, 2.55], deformation_matrix)
+    logger.debug(f"Deformed position before PBC: {deformed_position}")
 
     # 先计算分数坐标
-    fractional_coords = np.linalg.solve(
-        expected_lattice_vectors.T, expected_atom1_position
-    )
-    fractional_coords %= 1.0  # 应用周期性边界
-    # 转换回笛卡尔坐标
-    expected_atom1_position_pbc = np.dot(expected_lattice_vectors.T, fractional_coords)
+    fractional_coords = np.linalg.solve(expected_lattice_vectors.T, deformed_position)
+    logger.debug(f"Fractional coordinates before PBC: {fractional_coords}")
 
-    # 应用 PBC 后的位置
-    cell.atoms[1].position = cell.apply_periodic_boundary(cell.atoms[1].position)
+    fractional_coords %= 1.0  # 应用周期性边界
+    logger.debug(f"Fractional coordinates after PBC: {fractional_coords}")
+
+    # 转换回笛卡尔坐标
+    expected_atom1_position_pbc = np.dot(
+        expected_lattice_vectors.T, fractional_coords
+    ).flatten()
+    logger.debug(f"Expected atom 1 position after PBC: {expected_atom1_position_pbc}")
+
+    # 实际位置
+    actual_position = cell.atoms[1].position
+    logger.debug(f"Actual atom 1 position: {actual_position}")
 
     assert np.allclose(
-        cell.atoms[1].position, expected_atom1_position_pbc, atol=1e-4
-    ), f"Expected atom1 position {expected_atom1_position_pbc}, got {cell.atoms[1].position}"
+        actual_position, expected_atom1_position_pbc, atol=1e-4
+    ), f"Expected atom1 position {expected_atom1_position_pbc}, got {actual_position}"

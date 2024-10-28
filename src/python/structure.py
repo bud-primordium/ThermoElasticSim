@@ -149,6 +149,7 @@ class Cell:
             fractional = np.dot(deformation_matrix, fractional)
             new_positions = np.dot(self.lattice_vectors.T, fractional)
             if self.pbc_enabled:
+                # 这里确保新的坐标经过周期性边界条件处理
                 new_positions = self.apply_periodic_boundary(new_positions)
             # 更新所有原子的位置信息
             for i, atom in enumerate(self.atoms):
@@ -164,9 +165,15 @@ class Cell:
 
             # 更新原子坐标
             positions = self.get_positions().T  # (3, N)
-            fractional = np.linalg.solve(self.lattice_vectors.T, positions)
+            # 先计算原始分数坐标
+            fractional = np.linalg.solve(
+                np.dot(self.lattice_vectors, np.linalg.inv(deformation_matrix).T).T,
+                positions,
+            )
+            # 在新的晶格矢量下计算新的笛卡尔坐标
             new_positions = np.dot(self.lattice_vectors.T, fractional)
             if self.pbc_enabled:
+                # 确保周期性边界条件生效，将原子坐标映射回晶胞内
                 new_positions = self.apply_periodic_boundary(new_positions)
             # 更新所有原子的位置信息
             for i, atom in enumerate(self.atoms):
@@ -197,7 +204,7 @@ class Cell:
             # 确保在 [0, 1) 范围内
             fractional = fractional % 1.0
             # 转换回笛卡尔坐标
-            new_positions = np.dot(self.lattice_vectors, fractional)
+            new_positions = np.dot(self.lattice_vectors.T, fractional)
             return new_positions
         else:
             return positions
