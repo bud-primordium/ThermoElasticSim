@@ -1,4 +1,7 @@
-# tests/conftest.py
+# 文件名: tests/conftest.py
+# 作者: Gilbert Young
+# 修改日期: 2024-10-20
+# 文件描述: 定义共享的 pytest fixture，供多个测试文件使用。
 
 import pytest
 import numpy as np
@@ -82,11 +85,35 @@ def lj_potential():
 
 
 @pytest.fixture
-def lj_potential_with_neighbor_list(lj_potential, two_atom_neighbor_list):
+def lj_potential_two_atom_with_neighbor_list(two_atom_cell, lj_potential):
     """
-    创建一个 Lennard-Jones 势能对象，并设置其邻居列表。
+    创建一个 Lennard-Jones 势能对象，并设置其邻居列表，用于两原子系统的测试。
     """
-    lj_potential.set_neighbor_list(two_atom_neighbor_list)
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list.build(two_atom_cell)
+    lj_potential.set_neighbor_list(neighbor_list)
+    return lj_potential
+
+
+@pytest.fixture
+def lj_potential_simple_with_neighbor_list(simple_cell, lj_potential):
+    """
+    创建一个 Lennard-Jones 势能对象，并设置其邻居列表，用于简单晶胞的测试。
+    """
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list.build(simple_cell)
+    lj_potential.set_neighbor_list(neighbor_list)
+    return lj_potential
+
+
+@pytest.fixture
+def lj_potential_fcc_with_neighbor_list(fcc_cell, lj_potential):
+    """
+    创建一个 Lennard-Jones 势能对象，并设置其邻居列表，用于 FCC 晶胞的测试。
+    """
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list.build(fcc_cell)
+    lj_potential.set_neighbor_list(neighbor_list)
     return lj_potential
 
 
@@ -110,7 +137,7 @@ def two_atom_cell():
             id=1, symbol="Al", mass_amu=26.9815, position=[2.55, 0.0, 0.0]
         ),  # r = sigma = 2.55 Å
     ]
-    cell = Cell(lattice_vectors, atoms, pbc_enabled=True)
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
     return cell
 
 
@@ -119,8 +146,7 @@ def two_atom_neighbor_list(two_atom_cell, lj_potential):
     """
     创建并返回两个原子的邻居列表，并将其设置到 Lennard-Jones 势中。
     """
-    cutoff = lj_potential.cutoff  # 2.5 * sigma
-    neighbor_list = NeighborList(cutoff=cutoff)
+    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
     neighbor_list.build(two_atom_cell)
     lj_potential.set_neighbor_list(neighbor_list)
     return neighbor_list
@@ -129,7 +155,7 @@ def two_atom_neighbor_list(two_atom_cell, lj_potential):
 @pytest.fixture
 def simple_cell():
     """
-    @fixture 创建一个简单的晶胞，包含两个原子。
+    创建一个简单的晶胞，包含两个原子。
     """
     lattice_vectors = np.eye(3) * 6.0  # Å
     mass_amu = 26.9815  # amu (Aluminum)
@@ -172,3 +198,36 @@ def generate_fcc_positions(lattice_constant, repetitions):
             positions.append(cartesian.tolist())
 
     return positions
+
+
+@pytest.fixture
+def fcc_cell():
+    """
+    创建一个包含多个原子的面心立方 (FCC) 晶胞，用于优化测试。
+
+    @return Cell 实例
+    """
+    lattice_constant = 4.05  # Å
+    repetitions = 2
+
+    # 生成 FCC 结构的原子位置
+    positions = generate_fcc_positions(lattice_constant, repetitions)
+
+    # 创建 Atom 实例列表
+    atoms = []
+    for idx, pos in enumerate(positions):
+        atoms.append(
+            Atom(
+                id=idx,
+                symbol="Al",
+                mass_amu=26.9815,
+                position=np.array(pos),
+                velocity=None,
+            )
+        )
+
+    # 定义晶格矢量
+    lattice_vectors = np.eye(3) * lattice_constant * repetitions
+
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+    return cell

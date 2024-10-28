@@ -14,10 +14,10 @@ from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
 from python.utils import NeighborList
 
-from conftest import generate_fcc_positions  # 从 conftest 导入
+from copy import deepcopy  # 用于深拷贝对象
 
 
-# 定义缺失的 integrator fixture
+# 定义 integrator fixture
 @pytest.fixture
 def integrator():
     """
@@ -26,7 +26,7 @@ def integrator():
     return VelocityVerletIntegrator(dt=1.0)  # dt 单位为 fs
 
 
-# 定义缺失的 thermostat fixture
+# 定义 thermostat fixture
 @pytest.fixture
 def thermostat():
     """
@@ -35,58 +35,29 @@ def thermostat():
     return NoseHooverThermostat(temperature=300.0, Q=100.0)
 
 
-# 定义 simple_cell fixture，用于包含两个原子的简单晶胞
+# 定义 Lennard-Jones 势能对象的 fixture，并设置邻居列表
 @pytest.fixture
-def simple_cell():
+def lj_potential_simple_with_neighbor_list(simple_cell, lj_potential):
     """
-    创建一个简单的包含两个原子的晶胞，用于测试分子动力学模拟。
+    创建一个 Lennard-Jones 势能对象，并设置邻居列表，用于简单晶胞的分子动力学测试。
     """
-    atoms = [
-        Atom(
-            id=0,
-            symbol="Al",
-            mass_amu=26.9815,
-            position=np.array([0.0, 0.0, 0.0]),
-            velocity=np.array([0.0, 0.0, 0.0]),
-        ),
-        Atom(
-            id=1,
-            symbol="Al",
-            mass_amu=26.9815,
-            position=np.array([2.55, 0.0, 0.0]),
-            velocity=np.array([0.0, 0.0, 0.0]),
-        ),
-    ]
-    lattice_vectors = np.eye(3) * 5.0  # Arbitrary lattice vectors
-    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
-    return cell
-
-
-# 定义 Lennard-Jones 势能对象的 fixture
-@pytest.fixture
-def lj_potential_with_neighbor_list():
-    """
-    创建一个 Lennard-Jones 势能对象，并设置邻居列表。
-    """
-    epsilon = 0.0103  # eV
-    sigma = 2.55  # Å
-    cutoff = 2.5 * sigma  # 截断半径
-    lj_potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
+    # 深拷贝 Lennard-Jones 势能对象，以避免影响其他测试
+    lj_potential_copy = deepcopy(lj_potential)
 
     # 创建并构建邻居列表
-    neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+    neighbor_list = NeighborList(cutoff=lj_potential_copy.cutoff)
     neighbor_list.build(simple_cell)
-    lj_potential.set_neighbor_list(neighbor_list)
-    return lj_potential
+    lj_potential_copy.set_neighbor_list(neighbor_list)
+    return lj_potential_copy
 
 
-def test_md_simulation(simple_cell, lj_potential_with_neighbor_list, integrator):
+def test_md_simulation(simple_cell, lj_potential_simple_with_neighbor_list, integrator):
     """
     测试分子动力学模拟器的运行。
     """
     md_simulator = MDSimulator(
         cell=simple_cell,
-        potential=lj_potential_with_neighbor_list,
+        potential=lj_potential_simple_with_neighbor_list,
         integrator=integrator,
         thermostat=None,
     )
@@ -102,14 +73,14 @@ def test_md_simulation(simple_cell, lj_potential_with_neighbor_list, integrator)
 
 
 def test_md_simulation_with_thermostat(
-    simple_cell, lj_potential_with_neighbor_list, integrator, thermostat
+    simple_cell, lj_potential_simple_with_neighbor_list, integrator, thermostat
 ):
     """
     测试分子动力学模拟器的运行，带恒温器。
     """
     md_simulator = MDSimulator(
         cell=simple_cell,
-        potential=lj_potential_with_neighbor_list,
+        potential=lj_potential_simple_with_neighbor_list,
         integrator=integrator,
         thermostat=thermostat,
     )

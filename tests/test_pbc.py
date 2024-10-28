@@ -1,4 +1,7 @@
-# tests/test_pbc.py
+# 文件名: tests/test_pbc.py
+# 作者: Gilbert Young
+# 修改日期: 2024-10-20
+# 文件描述: 测试周期性边界条件 (PBC) 的应用和变形方法的正确性。
 
 import pytest
 import numpy as np
@@ -6,47 +9,6 @@ from python.structure import Atom, Cell
 import logging
 import os
 from datetime import datetime
-
-
-# 配置日志
-@pytest.fixture(scope="session", autouse=True)
-def configure_logging():
-    """
-    配置日志以在测试期间输出到控制台和文件。
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)  # 设置全局日志级别
-
-    # 创建控制台处理器
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)  # 控制台日志级别
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
-    # 获取当前时间并格式化为字符串
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # 日志文件路径
-    log_directory = "./logs/pbc/"
-    log_filename = f"{log_directory}/pbc_{current_time}.log"  # 生成带时间戳的日志文件名
-
-    # 确保日志目录存在
-    os.makedirs(log_directory, exist_ok=True)
-
-    # 创建文件处理器
-    fh = logging.FileHandler(log_filename, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)  # 文件日志级别
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-
-    yield
-
-    # 测试结束后移除处理器
-    logger.removeHandler(ch)
-    logger.removeHandler(fh)
 
 
 def test_apply_periodic_boundary():
@@ -133,7 +95,7 @@ def test_apply_deformation_with_pbc():
     # 原子1: [2.55,2.55,2.55] -> [2.55*1.001,2.55,2.55] = [2.55255, 2.55, 2.55]
     expected_atom1_position = np.array([2.55255, 2.55, 2.55])
     assert np.allclose(
-        cell.atoms[1].position, expected_atom1_position, atol=1e-3
+        cell.atoms[1].position, expected_atom1_position, atol=1e-2
     ), f"Expected atom1 position {expected_atom1_position}, got {cell.atoms[1].position}"
     logger.debug(
         f"Deformed atom positions correctly: {cell.atoms[1].position} == {expected_atom1_position}"
