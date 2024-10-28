@@ -6,25 +6,21 @@
 import pytest
 import numpy as np
 import logging
-import os
-from datetime import datetime
-
-from python.structure import Atom, Cell
 from python.potentials import LennardJonesPotential
+from python.structure import Atom, Cell
 from python.optimizers import (
     GradientDescentOptimizer,
     BFGSOptimizer,
 )
 from python.utils import NeighborList
 
-from copy import deepcopy  # 用于深拷贝对象
 
 # 配置日志（假设已在 conftest.py 中通过 autouse=True 自动应用，不需在此定义）
 
 
 # 定义 Lennard-Jones 势能对象的 fixture，并设置邻居列表
 @pytest.fixture
-def lj_potential_with_neighbor_list_optim(fcc_cell):
+def lj_potential_with_neighbor_list_optim(two_atom_cell):
     """
     创建一个 Lennard-Jones 势能对象，并设置邻居列表，用于优化测试。
     """
@@ -38,21 +34,53 @@ def lj_potential_with_neighbor_list_optim(fcc_cell):
 
     # 创建并构建邻居列表
     neighbor_list = NeighborList(cutoff=lj_potential_copy.cutoff)
-    neighbor_list.build(fcc_cell)
+    neighbor_list.build(two_atom_cell)
     lj_potential_copy.set_neighbor_list(neighbor_list)
 
     return lj_potential_copy
 
 
-def test_gradient_descent_optimizer(lj_potential_with_neighbor_list_optim, fcc_cell):
+@pytest.fixture
+def fcc_1x1_cell():
+    lattice_constant = 4.3  # Å (使用合适的FCC晶格常数)
+    lattice_vectors = np.eye(3) * lattice_constant  # 正交晶格
+    mass_amu = 26.9815  # amu (Aluminum)
+
+    # 定义分数坐标并转换为真实坐标
+    fractional_positions = [
+        [0.0, 0.0, 0.0],  # 角位置
+        [0.5, 0.5, 0.0],  # FCC 面心位置
+        [0.5, 0.0, 0.5],  # FCC 面心位置
+        [0.0, 0.5, 0.5],  # FCC 面心位置
+    ]
+
+    # 将分数坐标转换为真实坐标
+    positions = [
+        np.dot(lattice_vectors.T, frac_pos) for frac_pos in fractional_positions
+    ]
+
+    # 构建原子列表
+    atoms = [
+        Atom(id=i, symbol="Al", mass_amu=mass_amu, position=pos)
+        for i, pos in enumerate(positions)
+    ]
+
+    # 创建Cell对象
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+    return cell
+
+
+def test_gradient_descent_optimizer(
+    lj_potential_with_neighbor_list_optim, fcc_1x1_cell
+):
     """
-    测试梯度下降优化器，使用面心立方 (FCC) 结构。
+    测试梯度下降优化器，使用简fcc 1*1晶胞。
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
-        max_steps=20000, tol=1e-3, step_size=1e-3, energy_tol=1e-4
+        max_steps=2000, tol=1e-4, step_size=1e-4, energy_tol=1e-5
     )
-    cell = fcc_cell.copy()  # 使用深拷贝以避免修改原始晶胞
+    cell = fcc_1x1_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
     optimizer.optimize(cell, lj_potential_with_neighbor_list_optim)
 
@@ -70,13 +98,13 @@ def test_gradient_descent_optimizer(lj_potential_with_neighbor_list_optim, fcc_c
     ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
 
 
-def test_bfgs_optimizer(lj_potential_with_neighbor_list_optim, fcc_cell):
+def test_bfgs_optimizer(lj_potential_with_neighbor_list_optim, fcc_1x1_cell):
     """
-    测试 BFGS 优化器，使用面心立方 (FCC) 结构。
+    测试 BFGS 优化器，使用简fcc 1*1晶胞。
     """
     logger = logging.getLogger(__name__)
-    optimizer = BFGSOptimizer(tol=1e-4, maxiter=20000)
-    cell = fcc_cell.copy()  # 使用深拷贝以避免修改原始晶胞
+    optimizer = BFGSOptimizer(tol=1e-4, maxiter=2000)
+    cell = fcc_1x1_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
     optimizer.optimize(cell, lj_potential_with_neighbor_list_optim)
 

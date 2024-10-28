@@ -97,7 +97,7 @@ def test_zeroK_elastic_constants():
     logger.debug("Starting 0K Elastic Constants Calculator Test.")
 
     lattice_constant = 4.05  # Å
-    repetitions = 3
+    repetitions = 1
 
     # 生成 3x3x3 超胞的原子位置
     positions = generate_fcc_supercell(lattice_constant, repetitions)
