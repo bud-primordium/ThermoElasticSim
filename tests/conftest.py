@@ -82,6 +82,15 @@ def lj_potential():
 
 
 @pytest.fixture
+def lj_potential_with_neighbor_list(lj_potential, two_atom_neighbor_list):
+    """
+    创建一个 Lennard-Jones 势能对象，并设置其邻居列表。
+    """
+    lj_potential.set_neighbor_list(two_atom_neighbor_list)
+    return lj_potential
+
+
+@pytest.fixture
 def lj_interface():
     """
     创建一个 C++ 接口实例，用于 Lennard-Jones 势能计算。
