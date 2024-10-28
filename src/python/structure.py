@@ -268,10 +268,15 @@ class Cell:
         numpy.ndarray
             最小镜像下的位移向量。
 
-        Notes
-        -----
-        在计算原子间的相互作用力或距离时，应使用最小镜像原则来确保位移向量是最短的。
+        Raises
+        ------
+        ValueError
+            如果位移向量不是 3D 向量。
         """
+        # 检查位移向量是否为3D
+        if displacement.shape != (3,):
+            raise ValueError("Displacement must be a 3-dimensional vector.")
+
         logger.debug(f"Original displacement: {displacement}")
         fractional = np.linalg.solve(self.lattice_vectors.T, displacement)
         logger.debug(f"Fractional displacement before adjustment: {fractional}")
