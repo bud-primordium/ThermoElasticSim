@@ -146,7 +146,7 @@ class GradientDescentOptimizer(Optimizer):
                 f"Step {step}: Min distance = {min_distance:.3f} Å between atoms {min_pair[0]} and {min_pair[1]}"
             )
 
-            if min_distance < 0.8 * potential.sigma:
+            if min_distance < 0.8 * potential.parameters["sigma"]:
                 logger.error(
                     f"Step {step}: Minimum inter-atomic distance {min_distance:.3f} Å is too small between atoms {min_pair[0]} and {min_pair[1]}. Terminating optimization."
                 )

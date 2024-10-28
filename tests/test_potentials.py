@@ -35,7 +35,10 @@ def test_energy_calculation(lj_potential, two_atom_cell):
     expected_energy = (
         4.0
         * lj_potential.epsilon
-        * ((lj_potential.sigma / r) ** 12 - (lj_potential.sigma / r) ** 6)
+        * (
+            (lj_potential.parameters["sigma"] / r) ** 12
+            - (lj_potential.parameters["sigma"] / r) ** 6
+        )
     )
     np.testing.assert_almost_equal(energy, expected_energy, decimal=10)
 
