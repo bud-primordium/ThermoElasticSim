@@ -79,6 +79,8 @@ class CppInterface:
                 ctypes.c_double,  # sigma
                 ctypes.c_double,  # cutoff
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
+                ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"),  # neighbor_pairs
+                ctypes.c_int,  # num_pairs
             ]
             self.lib.calculate_forces.restype = None
 
@@ -89,6 +91,8 @@ class CppInterface:
                 ctypes.c_double,  # sigma
                 ctypes.c_double,  # cutoff
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
+                ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"),  # neighbor_pairs
+                ctypes.c_int,  # num_pairs
             ]
             self.lib.calculate_energy.restype = ctypes.c_double
 
@@ -141,20 +145,26 @@ class CppInterface:
         num_atoms : int
             原子数。
         positions : numpy.ndarray
-            原子位置数组。
+            原子位置数组，形状为 (num_atoms, 3)。
         velocities : numpy.ndarray
-            原子速度数组。
+            原子速度数组，形状为 (num_atoms, 3)。
         forces : numpy.ndarray
-            原子受力数组。
+            原子受力数组，形状为 (num_atoms, 3)。
         masses : numpy.ndarray
-            原子质量数组。
+            原子质量数组，形状为 (num_atoms,)。
         volume : float
             系统体积。
         box_lengths : numpy.ndarray
-            盒子尺寸。
+            盒子长度数组，形状为 (3,)。
         stress_tensor : numpy.ndarray
-            输出的应力张量。
+            输出的应力张量，形状为 (3, 3)。
+
+        Returns
+        -------
+        None
         """
+        # 确保传递的 stress_tensor 是连续的并且是浮点类型
+        stress_tensor_contiguous = np.ascontiguousarray(stress_tensor, dtype=np.float64)
         self.lib.compute_stress(
             num_atoms,
             positions,
@@ -163,66 +173,112 @@ class CppInterface:
             masses,
             volume,
             box_lengths,
-            stress_tensor,
+            stress_tensor_contiguous,
         )
+        # 将计算结果写回原数组
+        stress_tensor[:] = stress_tensor_contiguous.reshape((3, 3))
 
-    def calculate_energy(
-        self, num_atoms, positions, epsilon, sigma, cutoff, box_lengths
+    def calculate_forces(
+        self,
+        num_atoms,
+        positions,
+        forces,
+        epsilon,
+        sigma,
+        cutoff,
+        box_lengths,
+        neighbor_pairs,
+        num_pairs,
     ):
         """
-        计算系统的总 Lennard-Jones 势能。
+        调用 C++ 接口计算作用力。
 
         Parameters
         ----------
         num_atoms : int
             原子数。
         positions : numpy.ndarray
-            原子位置数组。
+            原子位置数组，形状为 (num_atoms, 3)。
+        forces : numpy.ndarray
+            力数组，形状为 (num_atoms, 3)，将被更新。
         epsilon : float
-            Lennard-Jones 势参数 ε。
+            Lennard-Jones 势参数 ε，单位 eV。
         sigma : float
-            Lennard-Jones 势参数 σ。
+            Lennard-Jones 势参数 σ，单位 Å。
         cutoff : float
-            截断距离。
+            截断距离，单位 Å。
         box_lengths : numpy.ndarray
-            盒子尺寸。
+            盒子长度数组，形状为 (3,)。
+        neighbor_pairs : numpy.ndarray
+            邻居对数组，形状为 (2*num_pairs,)。
+        num_pairs : int
+            邻居对的数量。
+
+        Returns
+        -------
+        None
+        """
+        self.lib.calculate_forces(
+            num_atoms,
+            positions,
+            forces,
+            epsilon,
+            sigma,
+            cutoff,
+            box_lengths,
+            neighbor_pairs,
+            num_pairs,
+        )
+
+    def calculate_energy(
+        self,
+        num_atoms,
+        positions,
+        epsilon,
+        sigma,
+        cutoff,
+        box_lengths,
+        neighbor_pairs,
+        num_pairs,
+    ):
+        """
+        调用 C++ 接口计算能量。
+
+        Parameters
+        ----------
+        num_atoms : int
+            原子数。
+        positions : numpy.ndarray
+            原子位置数组，形状为 (num_atoms, 3)。
+        epsilon : float
+            Lennard-Jones 势参数 ε，单位 eV。
+        sigma : float
+            Lennard-Jones 势参数 σ，单位 Å。
+        cutoff : float
+            截断距离，单位 Å。
+        box_lengths : numpy.ndarray
+            盒子长度数组，形状为 (3,)。
+        neighbor_pairs : numpy.ndarray
+            邻居对数组，形状为 (2*num_pairs,)。
+        num_pairs : int
+            邻居对的数量。
 
         Returns
         -------
         float
-            总 Lennard-Jones 势能。
+            总势能，单位 eV。
         """
         energy = self.lib.calculate_energy(
-            num_atoms, positions, epsilon, sigma, cutoff, box_lengths
+            num_atoms,
+            positions,
+            epsilon,
+            sigma,
+            cutoff,
+            box_lengths,
+            neighbor_pairs,
+            num_pairs,
         )
         return energy
-
-    def calculate_forces(
-        self, num_atoms, positions, forces, epsilon, sigma, cutoff, box_lengths
-    ):
-        """
-        计算系统的力。
-
-        Parameters
-        ----------
-        num_atoms : int
-            原子数。
-        positions : numpy.ndarray
-            原子位置数组。
-        forces : numpy.ndarray
-            输出的力数组。
-        epsilon : float
-            Lennard-Jones 势参数 ε。
-        sigma : float
-            Lennard-Jones 势参数 σ。
-        cutoff : float
-            截断距离。
-        box_lengths : numpy.ndarray
-            盒子尺寸。
-        """
-        self.lib.calculate_forces(
-            num_atoms, positions, forces, epsilon, sigma, cutoff, box_lengths
-        )
 
     def nose_hoover(
         self, dt, num_atoms, masses, velocities, forces, xi_array, Q, target_temperature
