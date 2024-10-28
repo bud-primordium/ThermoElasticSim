@@ -164,7 +164,12 @@ class CppInterface:
         None
         """
         # 确保传递的 stress_tensor 是连续的并且是浮点类型
-        stress_tensor_contiguous = np.ascontiguousarray(stress_tensor, dtype=np.float64)
+        # 将 (3,3) 的 stress_tensor 转换为 (9,) 的扁平数组
+        stress_tensor_flat = np.ascontiguousarray(
+            stress_tensor.ravel(), dtype=np.float64
+        )
+
+        # 调用 C++ 函数，假设 C++ 函数会修改 stress_tensor_flat
         self.lib.compute_stress(
             num_atoms,
             positions,
@@ -173,10 +178,11 @@ class CppInterface:
             masses,
             volume,
             box_lengths,
-            stress_tensor_contiguous,
+            stress_tensor_flat,
         )
-        # 将计算结果写回原数组
-        stress_tensor[:] = stress_tensor_contiguous.reshape((3, 3))
+
+        # 将修改后的扁平数组重新形状为 (3,3)
+        stress_tensor[:, :] = stress_tensor_flat.reshape((3, 3))
 
     def calculate_forces(
         self,
