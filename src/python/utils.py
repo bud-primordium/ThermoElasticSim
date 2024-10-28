@@ -125,7 +125,37 @@ class NeighborList:
         box_size = cell.get_box_lengths()
         cutoff = self.cutoff_with_skin
 
-        # 定义网格尺寸
+        # 对小系统使用简单的双重循环
+        if num_atoms < 64:
+            self._build_brute_force(cell, positions, num_atoms, cutoff)
+        else:
+            # 对大系统使用网格划分
+            self._build_with_grid(cell, positions, num_atoms, box_size, cutoff)
+
+        self.last_positions = positions.copy()
+
+    def _build_brute_force(self, cell, positions, num_atoms, cutoff):
+        """
+        使用双重循环构建小系统的邻居列表。
+        """
+        self.neighbor_list = [[] for _ in range(num_atoms)]
+        cutoff_squared = cutoff**2
+
+        for i in range(num_atoms):
+            for j in range(i + 1, num_atoms):
+                rij = positions[j] - positions[i]
+                # 应用最小镜像原则
+                if cell.pbc_enabled:
+                    rij = cell.minimum_image(rij)
+                distance_squared = np.dot(rij, rij)
+                if distance_squared < cutoff_squared:
+                    self.neighbor_list[i].append(j)
+                    self.neighbor_list[j].append(i)
+
+    def _build_with_grid(self, cell, positions, num_atoms, box_size, cutoff):
+        """
+        使用网格划分构建大系统的邻居列表。
+        """
         grid_size = cutoff
         grid_dims = np.floor(box_size / grid_size).astype(int)
         grid_dims[grid_dims == 0] = 1  # 防止出现0，至少为1
@@ -138,9 +168,13 @@ class NeighborList:
 
         # 构建邻居列表
         self.neighbor_list = [[] for _ in range(num_atoms)]
+        cutoff_squared = cutoff**2
+
         for grid_idx, atom_indices in grid.items():
             # 检查当前网格及其相邻网格
-            for offset in itertools.product([-1, 0, 1], repeat=3):
+            for offset in itertools.product(
+                *[[-1, 0, 1] if dim > 1 else [0] for dim in grid_dims]
+            ):
                 neighbor_grid_idx = tuple((np.array(grid_idx) + offset) % grid_dims)
                 neighbor_atom_indices = grid.get(neighbor_grid_idx, [])
                 for i in atom_indices:
@@ -151,11 +185,9 @@ class NeighborList:
                             if cell.pbc_enabled:
                                 rij = cell.minimum_image(rij)
                             distance_squared = np.dot(rij, rij)
-                            if distance_squared < cutoff**2:
+                            if distance_squared < cutoff_squared:
                                 self.neighbor_list[i].append(j)
                                 self.neighbor_list[j].append(i)
-
-        self.last_positions = positions.copy()
 
     def need_refresh(self):
         """
