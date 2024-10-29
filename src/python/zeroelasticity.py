@@ -79,7 +79,7 @@ class ZeroKElasticConstantsCalculator:
     def __init__(self, cell, potential, delta=1e-3, optimizer_type="GD"):
         self.cell = cell
         self.potential = potential
-        self.delta = delta
+        self.delta = delta  # 指的是形变
         self.deformer = Deformer(delta)
         self.stress_calculator = StressCalculatorLJ()
         self.strain_calculator = StrainCalculator()
