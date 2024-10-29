@@ -277,11 +277,11 @@ class Cell:
         if displacement.shape != (3,):
             raise ValueError("Displacement must be a 3-dimensional vector.")
 
-        logger.debug(f"Original displacement: {displacement}")
+        # logger.debug(f"Original displacement: {displacement}")
         fractional = np.linalg.solve(self.lattice_vectors.T, displacement)
-        logger.debug(f"Fractional displacement before adjustment: {fractional}")
+        # logger.debug(f"Fractional displacement before adjustment: {fractional}")
         fractional -= np.round(fractional)  # 将分数坐标限制在 [-0.5, 0.5)
-        logger.debug(f"Fractional displacement after adjustment: {fractional}")
+        # logger.debug(f"Fractional displacement after adjustment: {fractional}")
         displacement = np.dot(self.lattice_vectors.T, fractional)
-        logger.debug(f"Minimum image displacement: {displacement}")
+        # logger.debug(f"Minimum image displacement: {displacement}")
         return displacement
