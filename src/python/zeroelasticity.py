@@ -115,7 +115,23 @@ class ZeroKElasticConstantsCalculator:
         self.optimizer.optimize(self.cell, self.potential)
         logger.debug("Initial structure optimization completed.")
 
-    def calculate_stress_strain(self, F):
+    def calculate_stress_strain(self, F, deformation_index):
+        """
+        对指定的变形矩阵计算应力和应变
+
+        Parameters
+        ----------
+        F : numpy.ndarray
+            变形矩阵
+        deformation_index : int
+            变形矩阵的编号，便于日志追踪
+
+        Returns
+        -------
+        tuple
+            包含应变（Voigt 表示）和应力（Voigt 表示）的元组
+        """
+        logger.info(f"Processing deformation matrix #{deformation_index}")
         logger.debug(f"Deformation matrix F:\n{F}")
 
         # 复制初始晶胞
@@ -123,7 +139,7 @@ class ZeroKElasticConstantsCalculator:
 
         # 施加变形
         deformed_cell.apply_deformation(F)
-        logger.debug("Applied deformation to cell.")
+        logger.debug(f"Applied deformation to cell #{deformation_index}.")
 
         # 为每个任务创建独立的优化器实例
         if isinstance(self.optimizer, GradientDescentOptimizer):
@@ -139,26 +155,36 @@ class ZeroKElasticConstantsCalculator:
                 tol=self.optimizer.tol,
                 maxiter=self.optimizer.maxiter,
             )
-        else:
-            raise ValueError("Unsupported optimizer type.")
 
         # 对变形后的结构进行优化
         optimizer.optimize(deformed_cell, self.potential)
-        logger.debug("Optimized deformed structure.")
+        logger.debug(f"Optimized deformed structure #{deformation_index}.")
 
         # 计算应力张量
         stress_tensor = self.stress_calculator.compute_stress(
             deformed_cell, self.potential
         )
-        logger.debug(f"Computed stress tensor:\n{stress_tensor}")
+        logger.info(
+            f"Computed stress tensor for deformation #{deformation_index}:\n{stress_tensor}"
+        )
 
         # 计算应变张量
         strain_voigt = self.strain_calculator.compute_strain(F)
-        logger.debug(f"Computed strain (Voigt): {strain_voigt}")
+        logger.info(
+            f"Computed strain (Voigt) for deformation #{deformation_index}: {strain_voigt}"
+        )
 
         # 转换应力为 Voigt 表示法
         stress_voigt = TensorConverter.to_voigt(stress_tensor)
-        logger.debug(f"Converted stress to Voigt notation: {stress_voigt}")
+        logger.info(
+            f"Converted stress to Voigt notation for deformation #{deformation_index}: {stress_voigt}"
+        )
+
+        # 输出位置以确认变形后的结构
+        final_positions = deformed_cell.get_positions()
+        logger.debug(
+            f"Final atom positions for deformation #{deformation_index}:\n{final_positions}"
+        )
 
         return strain_voigt, stress_voigt
 
@@ -171,7 +197,7 @@ class ZeroKElasticConstantsCalculator:
         numpy.ndarray
             弹性常数矩阵，形状为 (6, 6)，单位为 GPa
         """
-        logger.debug("Starting elastic constants calculation.")
+        logger.info("Starting elastic constants calculation.")
 
         # 在优化前计算初始应力
         self.calculate_initial_stress()
@@ -186,7 +212,10 @@ class ZeroKElasticConstantsCalculator:
 
         # 并行计算每个应变的应力和应变
         with ThreadPoolExecutor() as executor:
-            results = executor.map(self.calculate_stress_strain, F_list)
+            results = executor.map(
+                lambda i_F: self.calculate_stress_strain(i_F[1], i_F[0]),
+                enumerate(F_list),
+            )
 
         for strain, stress in results:
             strains.append(strain)
@@ -196,10 +225,10 @@ class ZeroKElasticConstantsCalculator:
         logger.debug("Solving for elastic constants.")
         elastic_solver = ZeroKElasticConstantsSolver()
         C = elastic_solver.solve(strains, stresses)
-        logger.debug(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
+        logger.info(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
 
         # 单位转换为 GPa
         C_in_GPa = C * EV_TO_GPA
-        logger.debug(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
+        logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
 
         return C_in_GPa
