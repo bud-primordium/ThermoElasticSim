@@ -89,7 +89,7 @@ class ZeroKElasticConstantsCalculator:
                 max_steps=10000, tol=1e-5, step_size=1e-3, energy_tol=1e-5
             )
         elif optimizer_type == "BFGS":
-            self.optimizer = BFGSOptimizer(tol=1e-6, maxiter=10000)
+            self.optimizer = BFGSOptimizer(tol=1e-5, maxiter=10000)
         else:
             raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
 
