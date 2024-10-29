@@ -153,7 +153,7 @@ class Cell:
             # 更新所有原子的位置信息
             for i, atom in enumerate(self.atoms):
                 atom.position = new_positions[:, i]
-                logger.debug(f"Atom {atom.id} position changed to {atom.position}")
+                # logger.debug(f"Atom {atom.id} position changed to {atom.position}")
         else:
             logger.debug(
                 "Applying deformation to lattice vectors and atomic positions."
@@ -177,7 +177,7 @@ class Cell:
             # 更新所有原子的位置信息
             for i, atom in enumerate(self.atoms):
                 atom.position = new_positions[:, i]
-                logger.debug(f"Atom {atom.id} position changed to {atom.position}")
+                # logger.debug(f"Atom {atom.id} position changed to {atom.position}")
 
         # 更新体积
         self.volume = self.calculate_volume()

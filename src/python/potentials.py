@@ -108,7 +108,7 @@ class LennardJonesPotential(Potential):
             self.neighbor_list.build(cell)
         else:
             # 检查是否需要更新邻居列表
-            logger.debug("Updating neighbor list.")
+            # logger.debug("Updating neighbor list.")
             self.neighbor_list.update()
 
         num_atoms = cell.num_atoms
@@ -153,7 +153,7 @@ class LennardJonesPotential(Potential):
         for i, atom in enumerate(cell.atoms):
             atom.force = forces[i]
 
-        logger.debug("Forces calculation and update completed.")
+        # logger.debug("Forces calculation and update completed.")
 
     def calculate_energy(self, cell):
         """
