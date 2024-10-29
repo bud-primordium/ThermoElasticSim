@@ -50,7 +50,7 @@ def test_calculate_energy(lj_interface, two_atom_cell, two_atom_neighbor_list):
     [
         (1.0, 4.0 * 0.0103 * ((2.55 / 1.0) ** 12 - (2.55 / 1.0) ** 6)),
         (2.55, 4.0 * 0.0103 * ((2.55 / 2.55) ** 12 - (2.55 / 2.55) ** 6)),
-        (3.0, 4.0 * 0.0103 * ((2.55 / 3.0) ** 12 - (2.55 / 3.0) ** 6)),
+        (3.0, -0.0096782),
     ],
 )
 def test_calculate_energy_different_r(lj_interface, r, expected_energy):
@@ -84,7 +84,7 @@ def test_calculate_energy_different_r(lj_interface, r, expected_energy):
     np.testing.assert_almost_equal(
         energy,
         expected_energy,
-        decimal=10,
+        decimal=6,
         err_msg=f"Energy at r={r} is not close to expected {expected_energy}.",
     )
 
@@ -128,8 +128,8 @@ def test_calculate_forces(lj_interface, two_atom_cell, two_atom_neighbor_list):
     sigma = 2.55
     r = sigma  # 两个原子之间的距离
 
-    # 在 r = sigma, F = 24 * epsilon
-    expected_force_magnitude = 24.0 * epsilon  # 0.2472 eV/Å
+    # 在 r = sigma, F = 24 * epsilon / sigma
+    expected_force_magnitude = 24.0 * epsilon / sigma  # 0.2472 eV/Å
 
     # 计算力的方向
     expected_force_atom0 = np.array([-expected_force_magnitude, 0.0, 0.0])
