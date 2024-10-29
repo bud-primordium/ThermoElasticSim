@@ -144,6 +144,10 @@ class GradientDescentOptimizer(Optimizer):
             )
             self.converged = False
 
+        # 输出最终原子位置
+        final_positions = cell.get_positions()
+        logger.debug(f"Gradient Descent Optimizer final positions:\n{final_positions}")
+
 
 class BFGSOptimizer(Optimizer):
     """
@@ -219,3 +223,7 @@ class BFGSOptimizer(Optimizer):
         else:
             self.converged = False
             logger.warning(f"BFGS Optimizer did not converge: {result.message}")
+
+        # 输出最终原子位置
+        final_positions = cell.get_positions()
+        logger.debug(f"BFGS Optimizer final positions:\n{final_positions}")
