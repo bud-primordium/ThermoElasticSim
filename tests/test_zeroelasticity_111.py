@@ -135,7 +135,7 @@ def test_zeroK_elastic_constants():
     elastic_calculator = ZeroKElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
-        delta=1e-4,
+        delta=1e-3,
         optimizer_type="BFGS",  # 使用BFGS优化器
     )
     logger.debug("Initialized ZeroKElasticConstantsCalculator with BFGS Optimizer.")
