@@ -12,7 +12,6 @@
 import numpy as np
 from .utils import AMU_TO_EVFSA2
 import logging
-from copy import deepcopy
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
