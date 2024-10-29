@@ -117,13 +117,14 @@ class NeighborList:
         self.cutoff_with_skin = cutoff + skin
         self.neighbor_list = None
         self.last_positions = None
-        self.cell = None  # 引用到 Cell 对象
+        self.cell = None  # 之后再引用到 Cell 对象
 
     def build(self, cell):
         positions = cell.get_positions()
         num_atoms = cell.num_atoms
         box_size = cell.get_box_lengths()
         cutoff = self.cutoff_with_skin
+        self.cell = cell  # 正确设置关联的晶胞对象
 
         # 对小系统使用简单的双重循环
         if num_atoms < 64:
