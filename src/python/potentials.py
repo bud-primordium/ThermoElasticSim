@@ -128,13 +128,13 @@ class LennardJonesPotential(Potential):
         neighbor_list_flat = [index for pair in neighbor_pairs for index in pair]
         neighbor_list_array = np.ascontiguousarray(neighbor_list_flat, dtype=np.int32)
 
-        logger.debug(f"Number of neighbor pairs: {len(neighbor_pairs)}.")
+        # logger.debug(f"Number of neighbor pairs: {len(neighbor_pairs)}.")
 
         # 初始化力数组
         forces = np.zeros_like(positions, dtype=np.float64)
 
         # 调用 C++ 接口计算作用力
-        logger.debug("Calling C++ interface to calculate forces.")
+        # logger.debug("Calling C++ interface to calculate forces.")
         self.cpp_interface.calculate_forces(
             num_atoms,
             positions,
@@ -149,7 +149,7 @@ class LennardJonesPotential(Potential):
 
         # 更新原子力，按原子顺序存储计算结果
         forces = forces.reshape((num_atoms, 3))
-        logger.debug("Updating atomic forces.")
+        # logger.debug("Updating atomic forces.")
         for i, atom in enumerate(cell.atoms):
             atom.force = forces[i]
 
