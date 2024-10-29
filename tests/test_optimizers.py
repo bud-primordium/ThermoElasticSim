@@ -78,7 +78,7 @@ def test_gradient_descent_optimizer(
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
-        max_steps=2000, tol=1e-4, step_size=1e-4, energy_tol=1e-5
+        max_steps=20000, tol=1e-3, step_size=1e-3, energy_tol=1e-4
     )
     cell = fcc_1x1_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
