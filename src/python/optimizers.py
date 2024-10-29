@@ -28,7 +28,7 @@ class Optimizer:
 
 class GradientDescentOptimizer(Optimizer):
     """
-    梯度下降优化器
+    带动量项的梯度下降优化器
 
     Parameters
     ----------
@@ -40,19 +40,24 @@ class GradientDescentOptimizer(Optimizer):
         更新步长
     energy_tol : float
         能量变化的收敛阈值
+    beta : float
+        动量项的系数，范围在 [0, 1)
     """
 
-    def __init__(self, max_steps=10000, tol=1e-3, step_size=1e-3, energy_tol=1e-4):
-        """初始化梯度下降优化器"""
+    def __init__(
+        self, max_steps=10000, tol=1e-3, step_size=1e-3, energy_tol=1e-4, beta=0.9
+    ):
+        """初始化带动量项的梯度下降优化器"""
         self.max_steps = max_steps
         self.tol = tol
         self.step_size = step_size
         self.energy_tol = energy_tol
+        self.beta = beta  # 动量项的系数
         self.converged = False  # 收敛标志
 
     def optimize(self, cell, potential):
         """
-        执行梯度下降优化
+        执行带动量项的梯度下降优化
 
         Parameters
         ----------
@@ -65,10 +70,9 @@ class GradientDescentOptimizer(Optimizer):
         atoms = cell.atoms
         potential.calculate_forces(cell)
         previous_energy = potential.calculate_energy(cell)
-        step_size = self.step_size  # 使用局部变量以实现步长自适应
+        velocities = [np.zeros(3, dtype=np.float64) for _ in atoms]  # 初始化动量
 
         for step in range(1, self.max_steps + 1):
-            # 记录原子位置和力
             positions = cell.get_positions()
             forces = cell.get_forces()
             logger.debug(f"Step {step} - Atom positions:\n{positions}")
@@ -77,62 +81,36 @@ class GradientDescentOptimizer(Optimizer):
             # 计算最大力
             max_force = max(np.linalg.norm(atom.force) for atom in atoms)
             potential_energy = potential.calculate_energy(cell)
-            total_energy = potential_energy  # 仅考虑势能
+            total_energy = potential_energy
 
-            # 日志记录
             energy_change = abs(total_energy - previous_energy)
             logger.debug(
-                f"GD Step {step}: Max force = {max_force:.6f} eV/Å, Total Energy = {total_energy:.6f} eV, Energy Change = {energy_change:.6e} eV"
+                f"GD with Momentum Step {step}: Max force = {max_force:.6f} eV/Å, "
+                f"Total Energy = {total_energy:.6f} eV, Energy Change = {energy_change:.6e} eV"
             )
 
-            # 调整步长
-            if energy_change > 0:
-                # 能量增加，减小步长
-                step_size *= 0.5
-            else:
-                # 能量减少，适当增加步长
-                step_size *= 1.05
+            # 检查收敛条件
+            if max_force < self.tol and energy_change < self.energy_tol:
+                logger.info(
+                    f"Gradient Descent with Momentum converged after {step} steps."
+                )
+                self.converged = True
+                break
 
             # 更新 previous_energy
             previous_energy = total_energy
 
-            # 检查收敛条件
-            if max_force < self.tol and energy_change < self.energy_tol:
-                logger.info(f"Gradient Descent converged after {step} steps.")
-                self.converged = True
-                break
-
-            # 检查能量和力的有效性
-            if np.isnan(total_energy) or np.isinf(total_energy):
-                logger.error(
-                    f"Energy is nan or inf at step {step}. Terminating optimization."
-                )
-                self.converged = False
-                break
-            if np.any(np.isnan(forces)) or np.any(np.isinf(forces)):
-                logger.error(
-                    f"Force contains nan or inf at step {step}. Terminating optimization."
-                )
-                self.converged = False
-                break
-
-            # 确保能量大体上递减
-            if total_energy > 3 * abs(previous_energy + self.energy_tol):
-                logger.warning(
-                    f"Energy increased from {previous_energy:.6f} eV to {total_energy:.6f} eV at step {step}. Terminating optimization."
-                )
-                self.converged = False
-                break
-
-            previous_energy = total_energy
-
-            # 更新位置，沿着力的方向移动
-            for atom in atoms:
-                displacement = self.step_size * atom.force
-                atom.position += displacement  # 修正为 +=
+            # 使用动量更新原子位置
+            for i, atom in enumerate(atoms):
+                # 更新动量项
+                velocities[i] = self.beta * velocities[i] + (1 - self.beta) * atom.force
+                displacement = self.step_size * velocities[i]
+                atom.position += displacement
                 # 应用周期性边界条件
                 atom.position = cell.apply_periodic_boundary(atom.position)
-                logger.debug(f"Atom {atom.id} new position: {atom.position}")
+                logger.debug(
+                    f"Atom {atom.id} new position with momentum: {atom.position}"
+                )
 
             # 重新计算力
             potential.calculate_forces(cell)
@@ -140,11 +118,10 @@ class GradientDescentOptimizer(Optimizer):
             # 检查原子间距离
             min_distance = np.inf
             num_atoms = len(atoms)
-            min_pair = (-1, -1)  # 初始化最小距离原子对
+            min_pair = (-1, -1)
             for i in range(num_atoms):
                 for j in range(i + 1, num_atoms):
                     rij = atoms[j].position - atoms[i].position
-                    # 应用最小镜像规则
                     if cell.pbc_enabled:
                         rij = cell.minimum_image(rij)
                     r = np.linalg.norm(rij)
@@ -163,7 +140,7 @@ class GradientDescentOptimizer(Optimizer):
                 break
         else:
             logger.warning(
-                "Gradient Descent Optimization did not converge within the maximum number of steps."
+                "Gradient Descent with Momentum did not converge within the maximum number of steps."
             )
             self.converged = False
 
