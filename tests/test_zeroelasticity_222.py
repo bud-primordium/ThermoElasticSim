@@ -135,12 +135,10 @@ def test_zeroK_elastic_constants():
     elastic_calculator = ZeroKElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
-        delta=1e-3,
-        optimizer_type="GD",  # 使用梯度下降优化器
+        delta=1e-4,
+        optimizer_type="BFGS",  # 使用BFGS优化器
     )
-    logger.debug(
-        "Initialized ZeroKElasticConstantsCalculator with Gradient Descent Optimizer."
-    )
+    logger.debug("Initialized ZeroKElasticConstantsCalculator with BFGS Optimizer.")
 
     # 计算弹性常数
     C_in_GPa = elastic_calculator.calculate_elastic_constants()
