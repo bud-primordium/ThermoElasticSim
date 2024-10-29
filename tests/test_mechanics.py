@@ -1,16 +1,9 @@
 # tests/test_mechanics.py
 
-import pytest
 import numpy as np
-from python.structure import Atom, Cell
-from python.potentials import LennardJonesPotential
-from python.zeroelasticity import (
-    ZeroKElasticConstantsCalculator,
-    ZeroKElasticConstantsSolver,
-)
+import logging
+from python.zeroelasticity import ZeroKElasticConstantsSolver
 from python.mechanics import StressCalculatorLJ
-from python.utils import NeighborList
-from conftest import generate_fcc_positions  # 从 conftest 导入
 
 
 def test_stress_calculation(two_atom_cell, lj_potential_with_neighbor_list):
@@ -18,17 +11,33 @@ def test_stress_calculation(two_atom_cell, lj_potential_with_neighbor_list):
     测试应力计算器的功能。
     """
     stress_calculator = StressCalculatorLJ()
+
     # 计算力
     lj_potential_with_neighbor_list.calculate_forces(two_atom_cell)
+
     # 计算应力
     stress_tensor = stress_calculator.compute_stress(
         two_atom_cell, lj_potential_with_neighbor_list
     )
-    # 不再假设应力张量为零，而是检查应力值是否与预期相符
-    # 根据计算，手动计算期望的应力张量（或根据物理意义设置一个合理范围）
+
+    # 计算预期的应力张量，假设 epsilon 和 sigma 已定义
+    epsilon = 0.0103  # 根据实际情况替换
+    sigma = 2.55  # 单位 Å
+    force_magnitude = 24 * epsilon / sigma  # 相互作用力大小
+
+    # 晶胞体积
+    cell_volume = np.linalg.det(two_atom_cell.lattice_vectors)  # 计算晶胞的体积
+    print(f"Cell volume: {cell_volume}")
+
+    # 应力张量的 x 分量（正应力）
+    expected_stress_xx = force_magnitude * sigma / cell_volume
+
+    # 设置预期应力张量，其他分量为零
     expected_stress = np.array(
-        [[+0.00475202, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        [[expected_stress_xx, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
     )
+
+    # 检查应力张量是否与预期值相符
     np.testing.assert_array_almost_equal(stress_tensor, expected_stress, decimal=6)
 
 
