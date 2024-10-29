@@ -174,7 +174,7 @@ class LennardJonesPotential(Potential):
             self.neighbor_list.build(cell)
         else:
             # 检查是否需要更新邻居列表
-            logger.debug("Updating neighbor list.")
+            # logger.debug("Updating neighbor list.")
             self.neighbor_list.update()
 
         num_atoms = cell.num_atoms
@@ -199,7 +199,7 @@ class LennardJonesPotential(Potential):
         )
 
         # 调用 C++ 接口计算能量
-        logger.debug("Calling C++ interface to calculate energy.")
+        # logger.debug("Calling C++ interface to calculate energy.")
         energy = self.cpp_interface.calculate_energy(
             num_atoms,
             positions,
