@@ -1,4 +1,4 @@
-# 文件名: test_zeroelasticity.py
+# 文件名: test_zeroelasticity_111.py
 # 作者: Gilbert Young
 # 修改日期: 2024-10-20
 # 文件描述: 测试用于计算零温弹性常数的求解器和计算类。
@@ -37,7 +37,7 @@ def configure_logging():
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 日志文件路径
-    log_directory = "./logs/elasticity/"
+    log_directory = "./logs/elasticity_111/"
     log_filename = f"{log_directory}/0K_{current_time}.log"  # 生成带时间戳的日志文件名
 
     # 确保日志目录存在
