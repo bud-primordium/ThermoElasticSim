@@ -116,21 +116,6 @@ class ZeroKElasticConstantsCalculator:
         logger.debug("Initial structure optimization completed.")
 
     def calculate_stress_strain(self, F):
-        """
-        对单个应变矩阵施加变形，计算应力和应变
-
-        Parameters
-        ----------
-        F : numpy.ndarray
-            变形矩阵
-
-        Returns
-        -------
-        strain_voigt : numpy.ndarray
-            应变张量（Voigt 表示法）
-        stress_voigt : numpy.ndarray
-            应力张量（Voigt 表示法）
-        """
         logger.debug(f"Deformation matrix F:\n{F}")
 
         # 复制初始晶胞
@@ -140,8 +125,25 @@ class ZeroKElasticConstantsCalculator:
         deformed_cell.apply_deformation(F)
         logger.debug("Applied deformation to cell.")
 
+        # 为每个任务创建独立的优化器实例
+        if isinstance(self.optimizer, GradientDescentOptimizer):
+            optimizer = GradientDescentOptimizer(
+                max_steps=self.optimizer.max_steps,
+                tol=self.optimizer.tol,
+                step_size=self.optimizer.step_size,
+                energy_tol=self.optimizer.energy_tol,
+                beta=self.optimizer.beta,
+            )
+        elif isinstance(self.optimizer, BFGSOptimizer):
+            optimizer = BFGSOptimizer(
+                tol=self.optimizer.tol,
+                maxiter=self.optimizer.maxiter,
+            )
+        else:
+            raise ValueError("Unsupported optimizer type.")
+
         # 对变形后的结构进行优化
-        self.optimizer.optimize(deformed_cell, self.potential)
+        optimizer.optimize(deformed_cell, self.potential)
         logger.debug("Optimized deformed structure.")
 
         # 计算应力张量
