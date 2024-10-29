@@ -30,17 +30,26 @@ for d in distances:
     forces.append(cell.atoms[1].force[0])  # 只记录x方向力
     energies.append(lj_potential.calculate_energy(cell))
 
+# Lennard-Jones 力和能量公式
+theoretical_forces = [
+    24.0 * epsilon * ((2 * (sigma / d) ** 12) - (sigma / d) ** 6) / d for d in distances
+]
+theoretical_energies = [
+    4.0 * epsilon * ((sigma / d) ** 12 - (sigma / d) ** 6) for d in distances
+]
 # 绘制力-距离和能量-距离曲线
 plt.figure(figsize=(12, 5))
 
 plt.subplot(1, 2, 1)
-plt.plot(distances, forces)
+plt.plot(distances, forces, label="Computed Force")
+plt.plot(distances, theoretical_forces, label="Theoretical Force", linestyle="--")
 plt.title("Force vs. Distance")
 plt.xlabel("Distance (Å)")
 plt.ylabel("Force (eV/Å)")
 
 plt.subplot(1, 2, 2)
-plt.plot(distances, energies)
+plt.plot(distances, energies, label="Computed Energy")
+plt.plot(distances, theoretical_energies, label="Theoretical Energy", linestyle="--")
 plt.title("Energy vs. Distance")
 plt.xlabel("Distance (Å)")
 plt.ylabel("Energy (eV)")

@@ -100,7 +100,7 @@ def test_lj_potential_with_neighbor_list(lj_potential, r, expected_energy):
     epsilon = 0.0103
     sigma = 2.55
     expected_force_magnitude = (
-        24.0 * epsilon * sigma * ((2 * (sigma / r) ** 12) - (sigma / r) ** 6) / r
+        24.0 * epsilon * ((2 * (sigma / r) ** 12) - (sigma / r) ** 6) / r
     )
     expected_force_atom0 = np.array([-expected_force_magnitude, 0.0, 0.0])
     expected_force_atom1 = -expected_force_atom0
