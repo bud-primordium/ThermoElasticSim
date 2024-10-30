@@ -17,27 +17,38 @@ from python.utils import NeighborList
 
 # 配置日志（假设已在 conftest.py 中通过 autouse=True 自动应用，不需在此定义）
 
+logger = logging.getLogger(__name__)
+
 
 # 定义 Lennard-Jones 势能对象的 fixture，并设置邻居列表
 @pytest.fixture
-def lj_potential_with_neighbor_list_optim(two_atom_cell):
+def create_lj_potential():
     """
     创建一个 Lennard-Jones 势能对象，并设置邻居列表，用于优化测试。
+    允许传入不同的晶胞以适应不同的测试用例。
     """
-    # 创建新的 Lennard-Jones 势能对象
-    epsilon = 0.0103  # eV
-    sigma = 2.55  # Å
-    cutoff = 2.5 * sigma
-    lj_potential_copy = LennardJonesPotential(
-        epsilon=epsilon, sigma=sigma, cutoff=cutoff
-    )
 
-    # 创建并构建邻居列表
-    neighbor_list = NeighborList(cutoff=lj_potential_copy.cutoff)
-    neighbor_list.build(two_atom_cell)
-    lj_potential_copy.set_neighbor_list(neighbor_list)
+    def _create(epsilon, sigma, cell):
+        cutoff = 2.5 * sigma
+        lj_potential = LennardJonesPotential(
+            epsilon=epsilon, sigma=sigma, cutoff=cutoff
+        )
 
-    return lj_potential_copy
+        neighbor_list = NeighborList(cutoff=lj_potential.cutoff)
+        neighbor_list.build(cell)
+        lj_potential.set_neighbor_list(neighbor_list)
+
+        # 添加断言和调试信息
+        assert neighbor_list.neighbor_list is not None, "Neighbor list not built."
+        assert (
+            len(neighbor_list.neighbor_list) == cell.num_atoms
+        ), f"Neighbor list length {len(neighbor_list.neighbor_list)} does not match num_atoms {cell.num_atoms}"
+        for i, neighbors in enumerate(neighbor_list.neighbor_list):
+            logger.debug(f"Atom {i} neighbors: {neighbors}")
+
+        return lj_potential
+
+    return _create
 
 
 @pytest.fixture
@@ -70,9 +81,7 @@ def fcc_1x1_cell():
     return cell
 
 
-def test_gradient_descent_optimizer(
-    lj_potential_with_neighbor_list_optim, fcc_1x1_cell
-):
+def test_gradient_descent_optimizer(create_lj_potential, fcc_1x1_cell):
     """
     测试梯度下降优化器，使用简fcc 1*1晶胞。
     """
@@ -82,11 +91,17 @@ def test_gradient_descent_optimizer(
     )
     cell = fcc_1x1_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
-    optimizer.optimize(cell, lj_potential_with_neighbor_list_optim)
+    # 添加断言
+    assert cell.num_atoms >= 3, f"Expected at least 3 atoms, but got {cell.num_atoms}"
+
+    # 使用传入的 cell 创建 Lennard-Jones 势能对象
+    lj_potential = create_lj_potential(epsilon=0.0103, sigma=2.55, cell=cell)
+
+    optimizer.optimize(cell, lj_potential)
 
     assert optimizer.converged, "Gradient Descent Optimizer did not converge"
 
-    energy = lj_potential_with_neighbor_list_optim.calculate_energy(cell)
+    energy = lj_potential.calculate_energy(cell)
     forces = cell.get_forces()
     logger.debug(f"Gradient Descent - Post-optimization Energy: {energy:.6f} eV")
     logger.debug(f"Gradient Descent - Post-optimization Forces: {forces}")
@@ -98,7 +113,7 @@ def test_gradient_descent_optimizer(
     ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
 
 
-def test_bfgs_optimizer(lj_potential_with_neighbor_list_optim, fcc_1x1_cell):
+def test_bfgs_optimizer(create_lj_potential, fcc_1x1_cell):
     """
     测试 BFGS 优化器，使用简fcc 1*1晶胞。
     """
@@ -106,11 +121,17 @@ def test_bfgs_optimizer(lj_potential_with_neighbor_list_optim, fcc_1x1_cell):
     optimizer = BFGSOptimizer(tol=1e-4, maxiter=2000)
     cell = fcc_1x1_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
-    optimizer.optimize(cell, lj_potential_with_neighbor_list_optim)
+    # 添加断言
+    assert cell.num_atoms >= 3, f"Expected at least 3 atoms, but got {cell.num_atoms}"
+
+    # 使用传入的 cell 创建 Lennard-Jones 势能对象
+    lj_potential = create_lj_potential(epsilon=0.0103, sigma=2.55, cell=cell)
+
+    optimizer.optimize(cell, lj_potential)
 
     assert optimizer.converged, "BFGS Optimizer did not converge"
 
-    energy = lj_potential_with_neighbor_list_optim.calculate_energy(cell)
+    energy = lj_potential.calculate_energy(cell)
     forces = cell.get_forces()
     logger.debug(f"BFGS Optimizer - Post-optimization Energy: {energy:.6f} eV")
     logger.debug(f"BFGS Optimizer - Post-optimization Forces: {forces}")
@@ -118,5 +139,5 @@ def test_bfgs_optimizer(lj_potential_with_neighbor_list_optim, fcc_1x1_cell):
     # 检查最大力是否小于容差
     max_force = max(np.linalg.norm(f) for f in forces)
     assert (
-        max_force < 2 * optimizer.tol
-    ), f"Max force {max_force} exceeds tolerance {2 * optimizer.tol}"
+        max_force < optimizer.tol
+    ), f"Max force {max_force} exceeds tolerance {optimizer.tol}"
