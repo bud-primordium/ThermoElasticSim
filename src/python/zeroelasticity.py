@@ -84,6 +84,7 @@ class ZeroKElasticConstantsCalculator:
         self.deformer = Deformer(delta)
         self.stress_calculator = StressCalculatorLJ()
         self.strain_calculator = StrainCalculator()
+        self.visualizer = Visualizer()  # 初始化 Visualizer 实例
 
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
@@ -113,8 +114,22 @@ class ZeroKElasticConstantsCalculator:
     def optimize_initial_structure(self):
         """在施加变形前对结构进行一次优化，使得初始结构的应力为零"""
         logger.debug("Starting initial structure optimization.")
-        self.optimizer.optimize(self.cell, self.potential)
+        converged, trajectory = self.optimizer.optimize(self.cell, self.potential)
         logger.debug("Initial structure optimization completed.")
+
+        # 生成优化过程的动画
+        if converged:
+            animation_filename = "initial_optimization.gif"
+            self.visualizer.create_optimization_animation(
+                trajectory,
+                animation_filename,
+                title="Initial Structure Optimization",
+                pbc=self.cell.pbc_enabled,
+                show=False,
+            )
+            logger.info(f"Saved initial optimization animation to {animation_filename}")
+        else:
+            logger.warning("Initial structure optimization did not converge.")
 
     def calculate_stress_strain(self, F, deformation_index):
         """
@@ -158,8 +173,26 @@ class ZeroKElasticConstantsCalculator:
             )
 
         # 对变形后的结构进行优化
-        optimizer.optimize(deformed_cell, self.potential)
+        converged, trajectory = optimizer.optimize(deformed_cell, self.potential)
         logger.debug(f"Optimized deformed structure #{deformation_index}.")
+
+        # 生成变形优化过程的动画
+        if converged:
+            animation_filename = f"deformation_{deformation_index}_optimization.gif"
+            self.visualizer.create_optimization_animation(
+                trajectory,
+                animation_filename,
+                title=f"Deformation #{deformation_index} Optimization",
+                pbc=deformed_cell.pbc_enabled,
+                show=False,
+            )
+            logger.info(
+                f"Saved deformation optimization animation to {animation_filename}"
+            )
+        else:
+            logger.warning(
+                f"Deformation #{deformation_index} optimization did not converge."
+            )
 
         # 计算应力张量
         stress_tensor = self.stress_calculator.compute_stress(
@@ -239,14 +272,24 @@ class ZeroKElasticConstantsCalculator:
         logger.info(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
 
         # 在计算弹性常数矩阵后，绘制应力-应变关系图
-        visualizer = Visualizer()
         strain_data = np.array(strains)
         stress_data = np.array(stresses)
-        fig, ax = visualizer.plot_stress_strain(strain_data, stress_data, show=False)
+        fig, ax = self.visualizer.plot_stress_strain(
+            strain_data, stress_data, show=False
+        )
         stress_strain_plot_filename = "stress_strain_relationship.png"
         fig.savefig(stress_strain_plot_filename)
         logger.info(
             f"Saved stress-strain relationship plot to {stress_strain_plot_filename}"
+        )
+
+        # 生成应力-应变关系动画（可选）
+        animation_filename = "stress_strain_relationship.gif"
+        self.visualizer.create_stress_strain_animation(
+            strain_data, stress_data, animation_filename, show=False
+        )
+        logger.info(
+            f"Saved stress-strain relationship animation to {animation_filename}"
         )
 
         # 单位转换为 GPa
