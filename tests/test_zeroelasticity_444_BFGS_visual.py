@@ -1,10 +1,11 @@
-# 文件名: test_zeroelasticity_444_BFGS.py
+# 文件名: test_zeroelasticity_444_BFGS_visual.py
 # 作者: Gilbert Young
 # 修改日期: 2024-10-20
 # 文件描述: 测试用于计算零温弹性常数的求解器和计算类。
 
 import pytest
 import numpy as np
+import matplotlib.pyplot as plt
 from datetime import datetime
 from itertools import product
 from python.structure import Atom, Cell
@@ -125,6 +126,7 @@ def test_zeroK_elastic_constants():
     initial_plot_filename = "initial_cell_structure.png"
     fig.savefig(initial_plot_filename)
     logger.info(f"Saved initial cell structure plot to {initial_plot_filename}")
+    plt.close(fig)  # 关闭图形以释放资源
 
     # 定义 Lennard-Jones 势能
     epsilon = 0.0103  # eV
