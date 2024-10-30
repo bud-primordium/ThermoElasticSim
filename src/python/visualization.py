@@ -12,19 +12,23 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import os
 from .structure import Cell
+from matplotlib.animation import FuncAnimation, PillowWriter
 
 
 class Visualizer:
-    """
-    可视化类，用于绘制晶体结构和应力-应变关系
-    """
-
-    def __init__(self):
+    def __init__(self, save_path="./output"):
         """
         初始化可视化工具类
+
+        Parameters
+        ----------
+        save_path : str
+            图片和动画的保存路径，默认为 './output'
         """
-        pass
+        self.save_path = save_path
+        os.makedirs(self.save_path, exist_ok=True)  # 确保路径存在
 
     def plot_cell_structure(self, cell_structure: Cell, show=True):
         """
@@ -83,11 +87,33 @@ class Visualizer:
         if not single_element:
             plt.legend()
 
+        # 设置相同的轴比例
+        self.set_axes_equal(ax)
+
         # 显示或返回图形对象
         if show:
             plt.show()
 
         return fig, ax
+
+    def set_axes_equal(self, ax):
+        """
+        使3D坐标轴比例相同
+        """
+        limits = np.array(
+            [
+                ax.get_xlim3d(),
+                ax.get_ylim3d(),
+                ax.get_zlim3d(),
+            ]
+        )
+        origin = np.min(limits, axis=1)
+        size = np.max(limits, axis=1) - origin
+        max_size = max(size)
+        origin -= (max_size - size) / 2
+        ax.set_xlim3d(origin[0], origin[0] + max_size)
+        ax.set_ylim3d(origin[1], origin[1] + max_size)
+        ax.set_zlim3d(origin[2], origin[2] + max_size)
 
     def plot_stress_strain(
         self, strain_data: np.ndarray, stress_data: np.ndarray, show=True
@@ -132,3 +158,151 @@ class Visualizer:
             plt.show()
 
         return fig, ax
+
+    def create_optimization_animation(
+        self, trajectory, filename, title="Optimization", pbc=True, show=True
+    ):
+        filename = os.path.join(self.save_path, filename)  # 使用保存路径
+        """
+        创建优化过程的动画
+
+        Parameters
+        ----------
+        trajectory : list of dict
+            记录的轨迹数据，每个元素包含 'positions', 'volume', 'lattice_vectors'
+        filename : str
+            保存动画的文件名（支持 .gif, .mp4 等格式）
+        title : str, optional
+            动画标题，默认为 "Optimization"
+        pbc : bool, optional
+            是否应用周期性边界条件，默认为 True
+        show : bool, optional
+            是否立即显示动画，默认为 True
+        """
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+
+        # 初始化图像
+        scatter = ax.scatter([], [], [], color="b", s=20)
+        quivers = [
+            ax.quiver(0, 0, 0, 0, 0, 0, color="r", arrow_length_ratio=0.1)
+            for _ in range(3)
+        ]
+        text_volume = ax.text2D(0.05, 0.95, "", transform=ax.transAxes)
+        text_lattice = ax.text2D(0.05, 0.90, "", transform=ax.transAxes)
+        text_atoms = ax.text2D(0.05, 0.85, "", transform=ax.transAxes)
+
+        def init():
+            scatter._offsets3d = ([], [], [])
+            for quiver in quivers:
+                quiver.remove()
+            quivers[:] = [
+                ax.quiver(0, 0, 0, 0, 0, 0, color="r", arrow_length_ratio=0.1)
+                for _ in range(3)
+            ]
+            text_volume.set_text("")
+            text_lattice.set_text("")
+            text_atoms.set_text("")
+            return scatter, *quivers, text_volume, text_lattice, text_atoms
+
+        def update(frame):
+            data = trajectory[frame]
+            positions = data["positions"]
+            volume = data["volume"]
+            lattice_vectors = data["lattice_vectors"]
+            num_atoms = positions.shape[0]
+
+            scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
+
+            # 更新晶格矢量箭头
+            for i, vec in enumerate(lattice_vectors.T):
+                quivers[i].remove()
+                quivers[i] = ax.quiver(
+                    0, 0, 0, vec[0], vec[1], vec[2], color="r", arrow_length_ratio=0.1
+                )
+
+            # 更新文本信息
+            text_volume.set_text(f"Volume: {volume:.2f} Å³")
+            lattice_str = "\n".join(
+                [
+                    f"v{i+1}: [{vec[0]:.2f}, {vec[1]:.2f}, {vec[2]:.2f}]"
+                    for i, vec in enumerate(lattice_vectors)
+                ]
+            )
+            text_lattice.set_text(f"Lattice Vectors:\n{lattice_str}")
+            text_atoms.set_text(f"Number of Atoms: {num_atoms}")
+
+            ax.set_title(f"{title} - Step {frame + 1}/{len(trajectory)}")
+
+            return scatter, *quivers, text_volume, text_lattice, text_atoms
+
+        ani = FuncAnimation(
+            fig,
+            update,
+            frames=len(trajectory),
+            init_func=init,
+            blit=False,
+            interval=200,
+        )
+
+        # 设置相同的轴比例
+        self.set_axes_equal(ax)
+
+        # 保存动画
+        ani.save(filename, writer=PillowWriter(fps=5))
+        if show:
+            plt.show()
+        plt.close(fig)
+
+    def create_stress_strain_animation(
+        self, strain_data, stress_data, filename, show=True
+    ):
+        """
+        创建应力-应变关系的动画
+
+        Parameters
+        ----------
+        strain_data : numpy.ndarray
+            应变数据，形状为 (N, 6)
+        stress_data : numpy.ndarray
+            应力数据，形状为 (N, 6)
+        filename : str
+            保存动画的文件名（支持 .gif, .mp4 等格式）
+        show : bool, optional
+            是否立即显示动画，默认为 True
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        lines = [ax.plot([], [], label=f"Stress {i+1}")[0] for i in range(6)]
+        ax.set_xlim(strain_data.min(), strain_data.max())
+        ax.set_ylim(stress_data.min(), stress_data.max())
+        ax.set_xlabel("Strain")
+        ax.set_ylabel("Stress (eV/Å³)")
+        ax.set_title("Stress-Strain Relationship Animation")
+        ax.legend()
+        ax.grid(True)
+
+        def init():
+            for line in lines:
+                line.set_data([], [])
+            return lines
+
+        def update(frame):
+            for i, line in enumerate(lines):
+                line.set_data(strain_data[:frame, i], stress_data[:frame, i])
+            return lines
+
+        ani = FuncAnimation(
+            fig,
+            update,
+            frames=len(strain_data) + 1,
+            init_func=init,
+            blit=False,
+            interval=100,
+        )
+
+        plt.tight_layout()
+        ani.save(filename, writer=PillowWriter(fps=5))
+        if show:
+            plt.show()
+        plt.close(fig)
