@@ -23,7 +23,7 @@ def test_calculate_energy(lj_interface, two_atom_cell, two_atom_neighbor_list):
     neighbor_pairs_array = np.array(neighbor_list_flat, dtype=np.int32)
     num_pairs = len(neighbor_pairs)
 
-    energy = lj_interface.calculate_energy(
+    energy = lj_interface.calculate_lj_energy(
         num_atoms=num_atoms,
         positions=positions,
         epsilon=0.0103,
@@ -67,7 +67,7 @@ def test_calculate_energy_different_r(lj_interface, r, expected_energy):
     neighbor_pairs_array = np.array(neighbor_list_flat, dtype=np.int32)
     num_pairs = len(neighbor_pairs)
 
-    energy = lj_interface.calculate_energy(
+    energy = lj_interface.calculate_lj_energy(
         num_atoms=num_atoms,
         positions=positions,
         epsilon=0.0103,
@@ -108,7 +108,7 @@ def test_calculate_forces(lj_interface, two_atom_cell, two_atom_neighbor_list):
     neighbor_pairs_array = np.array(neighbor_list_flat, dtype=np.int32)
     num_pairs = len(neighbor_pairs)
 
-    lj_interface.calculate_forces(
+    lj_interface.calculate_lj_forces(
         num_atoms=num_atoms,
         positions=positions,
         forces=forces,
