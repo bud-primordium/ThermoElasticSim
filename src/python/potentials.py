@@ -1,6 +1,6 @@
 # 文件名: potentials.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-20
+# 修改日期: 2024-10-30
 # 文件描述: 实现 Lennard-Jones 势能及其相关方法。
 
 """
@@ -135,7 +135,7 @@ class LennardJonesPotential(Potential):
 
         # 调用 C++ 接口计算作用力
         # logger.debug("Calling C++ interface to calculate forces.")
-        self.cpp_interface.calculate_forces(
+        self.cpp_interface.calculate_lj_forces(
             num_atoms,
             positions,
             forces,
@@ -200,7 +200,7 @@ class LennardJonesPotential(Potential):
 
         # 调用 C++ 接口计算能量
         # logger.debug("Calling C++ interface to calculate energy.")
-        energy = self.cpp_interface.calculate_energy(
+        energy = self.cpp_interface.calculate_lj_energy(
             num_atoms,
             positions,
             self.parameters["epsilon"],

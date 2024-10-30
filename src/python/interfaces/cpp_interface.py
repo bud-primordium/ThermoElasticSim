@@ -71,7 +71,7 @@ class CppInterface:
             self.lib.compute_stress.restype = None
 
         elif lib_name == "lennard_jones":
-            self.lib.calculate_forces.argtypes = [
+            self.lib.calculate_lj_forces.argtypes = [
                 ctypes.c_int,  # num_atoms
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
@@ -82,9 +82,9 @@ class CppInterface:
                 ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"),  # neighbor_pairs
                 ctypes.c_int,  # num_pairs
             ]
-            self.lib.calculate_forces.restype = None
+            self.lib.calculate_lj_forces.restype = None
 
-            self.lib.calculate_energy.argtypes = [
+            self.lib.calculate_lj_energy.argtypes = [
                 ctypes.c_int,  # num_atoms
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
                 ctypes.c_double,  # epsilon
@@ -94,7 +94,7 @@ class CppInterface:
                 ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"),  # neighbor_pairs
                 ctypes.c_int,  # num_pairs
             ]
-            self.lib.calculate_energy.restype = ctypes.c_double
+            self.lib.calculate_lj_energy.restype = ctypes.c_double
 
         elif lib_name == "nose_hoover":
             self.lib.nose_hoover.argtypes = [
@@ -184,7 +184,7 @@ class CppInterface:
         # 将修改后的扁平数组重新形状为 (3,3)
         stress_tensor[:, :] = stress_tensor_flat.reshape((3, 3))
 
-    def calculate_forces(
+    def calculate_lj_forces(
         self,
         num_atoms,
         positions,
@@ -224,7 +224,7 @@ class CppInterface:
         -------
         None
         """
-        self.lib.calculate_forces(
+        self.lib.calculate_lj_forces(
             num_atoms,
             positions,
             forces,
@@ -236,7 +236,7 @@ class CppInterface:
             num_pairs,
         )
 
-    def calculate_energy(
+    def calculate_lj_energy(
         self,
         num_atoms,
         positions,
@@ -274,7 +274,7 @@ class CppInterface:
         float
             总势能，单位 eV。
         """
-        energy = self.lib.calculate_energy(
+        energy = self.lib.calculate_lj_energy(
             num_atoms,
             positions,
             epsilon,

@@ -51,7 +51,7 @@ extern "C"
         d = -((-F0 * pow(r0, 2) * pow(cutoff, 2)) + F0 * r0 * pow(cutoff, 3) - 3.0 * r0 * pow(cutoff, 2) * V0 + pow(cutoff, 3) * V0) / denom;
     }
 
-    void calculate_forces(
+    void calculate_lj_forces(
         int num_atoms,
         const double *positions,
         double *forces,
@@ -127,7 +127,7 @@ extern "C"
      * @param box_lengths 模拟盒子在每个维度的长度（长度为 3）
      * @return 总 Lennard-Jones 势能，单位为 eV
      */
-    double calculate_energy(
+    double calculate_lj_energy(
         int num_atoms,
         const double *positions,
         double epsilon,

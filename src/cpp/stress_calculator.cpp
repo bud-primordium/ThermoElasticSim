@@ -6,7 +6,7 @@
  * 包括原子速度和位置的贡献，以及通过力和位置的计算。
  *
  * @author Gilbert Young
- * @date 2024-10-20
+ * @date 2024-10-30
  */
 
 #include <cmath>
@@ -74,7 +74,7 @@ extern "C"
         // 归一化
         for (int i = 0; i < 9; ++i)
         {
-            stress_tensor[i] = (stress_tensor[i]) / volume;
+            stress_tensor[i] = -(stress_tensor[i]) / volume;
         }
     }
 }
