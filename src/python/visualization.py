@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 from .structure import Cell
+import logging
+
+logger = logging.getLogger(__name__)
 
 plt.ioff()  # 关闭交互模式，避免 GUI 启动警告
 
@@ -187,23 +190,17 @@ class Visualizer:
 
         def init():
             scatter._offsets3d = ([], [], [])
-            for quiver in quivers:
-                quiver.remove()
-            quivers[:] = [
-                ax.quiver(0, 0, 0, 0, 0, 0, color="r", arrow_length_ratio=0.1)
-                for _ in range(3)
-            ]
-            text_volume.set_text("")
-            text_lattice.set_text("")
-            text_atoms.set_text("")
             return scatter, *quivers, text_volume, text_lattice, text_atoms
 
         def update(frame):
             data = trajectory[frame]
-            positions = np.array(data["positions"])  # 确保 positions 是二维数组
+            positions = np.array(data["positions"])
             volume = data["volume"]
             lattice_vectors = np.array(data["lattice_vectors"])
             num_atoms = positions.shape[0]
+
+            # logger.debug(f"Frame {frame}: Number of atoms = {num_atoms}")
+            # logger.debug(f"Positions:\n{positions}")
 
             scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
 
@@ -211,18 +208,14 @@ class Visualizer:
             for i, vec in enumerate(lattice_vectors.T):
                 quivers[i].remove()
                 quivers[i] = ax.quiver(
-                    0,
-                    0,
-                    0,
-                    vec[0],
-                    vec[1],
-                    vec[2],
-                    color="r",
-                    arrow_length_ratio=0.1,
+                    0, 0, 0, vec[0], vec[1], vec[2], color="r", arrow_length_ratio=0.1
                 )
 
-            # 更新文本信息
+            # 更新文本信息，使用透明背景框减少重叠
             text_volume.set_text(f"Volume: {volume:.2f} Å³")
+            text_volume.set_position((0.05, 1.08))  # 将位置向上移出绘图区域
+            text_volume.set_bbox(dict(facecolor="white", alpha=0.6, edgecolor="none"))
+
             lattice_str = "\n".join(
                 [
                     f"v{i+1}: [{vec[0]:.2f}, {vec[1]:.2f}, {vec[2]:.2f}]"
@@ -230,12 +223,24 @@ class Visualizer:
                 ]
             )
             text_lattice.set_text(f"Lattice Vectors:\n{lattice_str}")
-            text_atoms.set_text(f"Number of Atoms: {num_atoms}")
+            text_lattice.set_position((0.05, 1.02))  # 调整 lattice 矢量文本框位置
+            text_lattice.set_bbox(dict(facecolor="white", alpha=0.6, edgecolor="none"))
 
+            text_atoms.set_text(f"Number of Atoms: {num_atoms}")
+            text_atoms.set_position((0.05, 0.96))  # 调整原子数信息的位置
+            text_atoms.set_bbox(dict(facecolor="white", alpha=0.6, edgecolor="none"))
+
+            # 保持标题设置不变
             ax.set_title(f"{title} - Step {frame + 1}/{len(trajectory)}")
 
             # 更新坐标轴范围
-            self.set_axes_equal(ax)
+            all_positions = positions
+            max_range = np.ptp(all_positions, axis=0).max()
+            mid_points = np.mean(all_positions, axis=0)
+
+            ax.set_xlim(mid_points[0] - max_range / 2, mid_points[0] + max_range / 2)
+            ax.set_ylim(mid_points[1] - max_range / 2, mid_points[1] + max_range / 2)
+            ax.set_zlim(mid_points[2] - max_range / 2, mid_points[2] + max_range / 2)
 
             return scatter, *quivers, text_volume, text_lattice, text_atoms
 
@@ -247,9 +252,6 @@ class Visualizer:
             blit=False,
             interval=200,
         )
-
-        # 设置相同的轴比例
-        self.set_axes_equal(ax)
 
         # 保存动画
         ani.save(filename, writer=PillowWriter(fps=5))

@@ -153,7 +153,7 @@ def test_zeroK_elastic_constants(configure_logging):
     elastic_calculator = ZeroKElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
-        delta=1,
+        delta=1e-3,
         optimizer_type="BFGS",  # 使用BFGS优化器
         save_path=log_directory,  # 将测试输出路径传入计算器
     )
