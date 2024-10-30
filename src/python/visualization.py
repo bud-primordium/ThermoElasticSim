@@ -47,9 +47,21 @@ class Visualizer:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
 
-        # 绘制原子位置
-        for atom in cell_structure.atoms:
-            ax.scatter(*atom.position, label=atom.symbol)  # 按符号标记不同原子
+        # 检查原子是否都是同一种元素
+        atom_symbols = {atom.symbol for atom in cell_structure.atoms}
+        single_element = len(atom_symbols) == 1
+        color = "b" if single_element else None  # 设置为蓝色，如果单一元素
+
+        if single_element:
+            # 如果只有一种元素，绘制为单一颜色
+            positions = [atom.position for atom in cell_structure.atoms]
+            ax.scatter(
+                *np.array(positions).T, color=color, label=next(iter(atom_symbols))
+            )
+        else:
+            # 不同元素使用不同颜色和标签
+            for atom in cell_structure.atoms:
+                ax.scatter(*atom.position, label=atom.symbol)
 
         # 绘制晶格矢量
         origin = [0, 0, 0]
@@ -66,7 +78,10 @@ class Visualizer:
         ax.set_zlabel("Z (Å)")
 
         plt.title("Crystal Structure")
-        plt.legend()
+
+        # 只有在多种元素情况下才显示图例
+        if not single_element:
+            plt.legend()
 
         # 显示或返回图形对象
         if show:
