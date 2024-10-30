@@ -54,6 +54,7 @@ class GradientDescentOptimizer(Optimizer):
         self.energy_tol = energy_tol
         self.beta = beta  # 动量项的系数
         self.converged = False  # 收敛标志
+        self.trajectory = []  # 记录轨迹数据
 
     def optimize(self, cell, potential):
         """
@@ -75,6 +76,19 @@ class GradientDescentOptimizer(Optimizer):
         for step in range(1, self.max_steps + 1):
             positions = cell.get_positions()
             forces = cell.get_forces()
+            volume = cell.volume
+            lattice_vectors = cell.lattice_vectors.copy()
+
+            # 记录当前状态
+            self.trajectory.append(
+                {
+                    "step": step,
+                    "positions": positions.copy(),
+                    "volume": volume,
+                    "lattice_vectors": lattice_vectors.copy(),
+                }
+            )
+
             logger.debug(f"Step {step} - Atom positions:\n{positions}")
             logger.debug(f"Step {step} - Atom forces:\n{forces}")
 
@@ -146,7 +160,19 @@ class GradientDescentOptimizer(Optimizer):
 
         # 输出最终原子位置
         final_positions = cell.get_positions()
+        volume = cell.volume
+        lattice_vectors = cell.lattice_vectors.copy()
+        self.trajectory.append(
+            {
+                "step": self.max_steps + 1,
+                "positions": final_positions.copy(),
+                "volume": volume,
+                "lattice_vectors": lattice_vectors.copy(),
+            }
+        )
         logger.debug(f"Gradient Descent Optimizer final positions:\n{final_positions}")
+
+        return self.converged, self.trajectory
 
 
 class BFGSOptimizer(Optimizer):
@@ -166,6 +192,7 @@ class BFGSOptimizer(Optimizer):
         self.tol = tol
         self.maxiter = maxiter
         self.converged = False
+        self.trajectory = []  # 记录轨迹数据
 
     def optimize(self, cell, potential):
         """
@@ -187,7 +214,19 @@ class BFGSOptimizer(Optimizer):
                 atom.position = positions[i * 3 : (i + 1) * 3]
                 # 应用 PBC
                 atom.position = cell.apply_periodic_boundary(atom.position)
-            return potential.calculate_energy(cell)
+            energy = potential.calculate_energy(cell)
+            volume = cell.volume
+            lattice_vectors = cell.lattice_vectors.copy()
+            # 记录轨迹数据
+            self.trajectory.append(
+                {
+                    "step": len(self.trajectory) + 1,
+                    "positions": cell.get_positions().copy(),
+                    "volume": volume,
+                    "lattice_vectors": lattice_vectors.copy(),
+                }
+            )
+            return energy
 
         # 定义梯度函数（力）
         def grad_fn(positions):
@@ -226,4 +265,16 @@ class BFGSOptimizer(Optimizer):
 
         # 输出最终原子位置
         final_positions = cell.get_positions()
+        volume = cell.volume
+        lattice_vectors = cell.lattice_vectors.copy()
+        self.trajectory.append(
+            {
+                "step": len(self.trajectory) + 1,
+                "positions": final_positions.copy(),
+                "volume": volume,
+                "lattice_vectors": lattice_vectors.copy(),
+            }
+        )
         logger.debug(f"BFGS Optimizer final positions:\n{final_positions}")
+
+        return self.converged, self.trajectory
