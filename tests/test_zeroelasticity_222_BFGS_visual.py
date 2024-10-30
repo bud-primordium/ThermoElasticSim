@@ -1,4 +1,4 @@
-# 文件名: test_zeroelasticity_444_BFGS_visual.py
+# 文件名: test_zeroelasticity_222_BFGS_visual.py
 # 作者: Gilbert Young
 # 修改日期: 2024-10-20
 # 文件描述: 测试用于计算零温弹性常数的求解器和计算类。
@@ -45,7 +45,7 @@ def configure_logging():
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 日志文件路径
-    log_directory = f"./output/test_444_{current_time}"
+    log_directory = f"./output/test_222_{current_time}"
     log_filename = os.path.join(log_directory, "test.log")  # 日志文件名
 
     # 确保日志目录存在
@@ -107,7 +107,7 @@ def test_zeroK_elastic_constants(configure_logging):
     logger.debug("Starting 0K Elastic Constants Calculator Test.")
 
     lattice_constant = 4.05  # Å
-    repetitions = 4
+    repetitions = 2
 
     # 生成 nxnxn 超胞的原子位置
     positions = generate_fcc_supercell(lattice_constant, repetitions)

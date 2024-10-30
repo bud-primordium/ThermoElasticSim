@@ -9,26 +9,27 @@
 包含 Visualizer 类，用于可视化晶胞结构和应力-应变关系
 """
 
-import matplotlib.pyplot as plt
+
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-import os
 from .structure import Cell
 from matplotlib.animation import FuncAnimation, PillowWriter
+import matplotlib.pyplot as plt
+
+plt.ioff()  # 关闭交互模式，避免 GUI 启动警告
 
 
 class Visualizer:
-    def __init__(self, save_path="./output"):
+    def __init__(self):
         """
         初始化可视化工具类
 
-        Parameters
+        Parameters(弃用)
         ----------
         save_path : str
             图片和动画的保存路径，默认为 './output'
         """
-        self.save_path = save_path
-        os.makedirs(self.save_path, exist_ok=True)  # 确保路径存在
+        pass
 
     def plot_cell_structure(self, cell_structure: Cell, show=True):
         """
@@ -162,7 +163,6 @@ class Visualizer:
     def create_optimization_animation(
         self, trajectory, filename, title="Optimization", pbc=True, show=True
     ):
-        filename = os.path.join(self.save_path, filename)  # 使用保存路径
         """
         创建优化过程的动画
 
