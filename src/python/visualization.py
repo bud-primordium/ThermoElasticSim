@@ -9,12 +9,10 @@
 包含 Visualizer 类，用于可视化晶胞结构和应力-应变关系
 """
 
-
-from mpl_toolkits.mplot3d import Axes3D
-import numpy as np
-from .structure import Cell
-from matplotlib.animation import FuncAnimation, PillowWriter
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.animation import FuncAnimation, PillowWriter
+from .structure import Cell
 
 plt.ioff()  # 关闭交互模式，避免 GUI 启动警告
 
@@ -23,11 +21,6 @@ class Visualizer:
     def __init__(self):
         """
         初始化可视化工具类
-
-        Parameters(弃用)
-        ----------
-        save_path : str
-            图片和动画的保存路径，默认为 './output'
         """
         pass
 
@@ -171,7 +164,7 @@ class Visualizer:
         trajectory : list of dict
             记录的轨迹数据，每个元素包含 'positions', 'volume', 'lattice_vectors'
         filename : str
-            保存动画的文件名（支持 .gif, .mp4 等格式）
+            保存动画的文件名（包含路径）
         title : str, optional
             动画标题，默认为 "Optimization"
         pbc : bool, optional
@@ -207,9 +200,9 @@ class Visualizer:
 
         def update(frame):
             data = trajectory[frame]
-            positions = data["positions"]
+            positions = np.array(data["positions"])  # 确保 positions 是二维数组
             volume = data["volume"]
-            lattice_vectors = data["lattice_vectors"]
+            lattice_vectors = np.array(data["lattice_vectors"])
             num_atoms = positions.shape[0]
 
             scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
@@ -218,7 +211,14 @@ class Visualizer:
             for i, vec in enumerate(lattice_vectors.T):
                 quivers[i].remove()
                 quivers[i] = ax.quiver(
-                    0, 0, 0, vec[0], vec[1], vec[2], color="r", arrow_length_ratio=0.1
+                    0,
+                    0,
+                    0,
+                    vec[0],
+                    vec[1],
+                    vec[2],
+                    color="r",
+                    arrow_length_ratio=0.1,
                 )
 
             # 更新文本信息
@@ -226,13 +226,16 @@ class Visualizer:
             lattice_str = "\n".join(
                 [
                     f"v{i+1}: [{vec[0]:.2f}, {vec[1]:.2f}, {vec[2]:.2f}]"
-                    for i, vec in enumerate(lattice_vectors)
+                    for i, vec in enumerate(lattice_vectors.T)
                 ]
             )
             text_lattice.set_text(f"Lattice Vectors:\n{lattice_str}")
             text_atoms.set_text(f"Number of Atoms: {num_atoms}")
 
             ax.set_title(f"{title} - Step {frame + 1}/{len(trajectory)}")
+
+            # 更新坐标轴范围
+            self.set_axes_equal(ax)
 
             return scatter, *quivers, text_volume, text_lattice, text_atoms
 
