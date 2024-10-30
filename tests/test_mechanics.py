@@ -29,8 +29,8 @@ def test_stress_calculation(two_atom_cell, lj_potential_with_neighbor_list):
     cell_volume = np.linalg.det(two_atom_cell.lattice_vectors)  # 计算晶胞的体积
     print(f"Cell volume: {cell_volume}")
 
-    # 应力张量的 x 分量（正应力）
-    expected_stress_xx = force_magnitude * sigma / cell_volume
+    # 应力张量的 x 分量（负应力）
+    expected_stress_xx = -force_magnitude * sigma / cell_volume
 
     # 设置预期应力张量，其他分量为零
     expected_stress = np.array(
