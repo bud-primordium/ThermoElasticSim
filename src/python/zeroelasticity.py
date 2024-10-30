@@ -17,6 +17,7 @@ from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
+from .visualization import Visualizer
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
@@ -186,6 +187,16 @@ class ZeroKElasticConstantsCalculator:
             f"Final atom positions for deformation #{deformation_index}:\n{final_positions}"
         )
 
+        # 创建 Visualizer 实例
+        visualizer = Visualizer()
+        # 绘制并保存变形后的晶胞结构
+        fig, ax = visualizer.plot_cell_structure(deformed_cell, show=False)
+        plot_filename = f"deformed_cell_{deformation_index}.png"
+        fig.savefig(plot_filename)
+        logger.info(
+            f"Saved deformed cell structure plot for deformation #{deformation_index} to {plot_filename}"
+        )
+
         return strain_voigt, stress_voigt
 
     def calculate_elastic_constants(self):
@@ -226,6 +237,17 @@ class ZeroKElasticConstantsCalculator:
         elastic_solver = ZeroKElasticConstantsSolver()
         C = elastic_solver.solve(strains, stresses)
         logger.info(f"Elastic constants matrix (eV/Å^3 / strain):\n{C}")
+
+        # 在计算弹性常数矩阵后，绘制应力-应变关系图
+        visualizer = Visualizer()
+        strain_data = np.array(strains)
+        stress_data = np.array(stresses)
+        fig, ax = visualizer.plot_stress_strain(strain_data, stress_data, show=False)
+        stress_strain_plot_filename = "stress_strain_relationship.png"
+        fig.savefig(stress_strain_plot_filename)
+        logger.info(
+            f"Saved stress-strain relationship plot to {stress_strain_plot_filename}"
+        )
 
         # 单位转换为 GPa
         C_in_GPa = C * EV_TO_GPA
