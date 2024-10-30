@@ -44,9 +44,14 @@ def configure_logging():
     # 获取当前时间并格式化为字符串
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # 获取当前文件名并替换扩展名
+    current_filename = os.path.basename(__file__)
+    # 提取文件名中的基名作为日志目录的一部分
+    base_name = os.path.splitext(current_filename)[0]
     # 日志文件路径
-    log_directory = f"./output/test_444_{current_time}"
-    log_filename = os.path.join(log_directory, "test.log")  # 日志文件名
+    log_directory = f"./output/{base_name}_{current_time}"
+    # 日志文件名
+    log_filename = os.path.join(log_directory, f"{base_name}_{current_time}.log")
 
     # 确保日志目录存在
     os.makedirs(log_directory, exist_ok=True)
@@ -153,7 +158,7 @@ def test_zeroK_elastic_constants(configure_logging):
     elastic_calculator = ZeroKElasticConstantsCalculator(
         cell=cell,
         potential=lj_potential,
-        delta=1,
+        delta=1e-1,
         optimizer_type="BFGS",  # 使用BFGS优化器
         save_path=log_directory,  # 将测试输出路径传入计算器
     )
