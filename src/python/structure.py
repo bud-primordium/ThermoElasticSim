@@ -104,11 +104,68 @@ class Cell:
     """
 
     def __init__(self, lattice_vectors, atoms, pbc_enabled=True):
+        # 验证晶格向量
+        if not self._validate_lattice_vectors(lattice_vectors):
+            raise ValueError("Invalid lattice vectors")
+
         self.lattice_vectors = np.array(lattice_vectors, dtype=np.float64)
-        self.atoms = atoms  # 原子列表
-        self.volume = self.calculate_volume()
+        self.atoms = atoms
         self.pbc_enabled = pbc_enabled
-        self.lattice_locked = False  # 添加晶格锁定标志
+        self.volume = self.calculate_volume()
+        self.lattice_locked = False
+
+        # 计算最小图像所需的辅助矩阵
+        self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
+
+        # 验证周期性边界条件的合理性
+        self._validate_pbc_conditions()
+
+    def _validate_lattice_vectors(self, lattice_vectors):
+        """验证晶格向量的有效性"""
+        if not isinstance(lattice_vectors, np.ndarray):
+            lattice_vectors = np.array(lattice_vectors)
+
+        # 检查维度
+        if lattice_vectors.shape != (3, 3):
+            return False
+
+        # 检查是否可逆
+        try:
+            np.linalg.inv(lattice_vectors)
+        except np.linalg.LinAlgError:
+            return False
+
+        # 检查体积是否为正
+        if np.linalg.det(lattice_vectors) <= 0:
+            return False
+
+        return True
+
+    def _validate_pbc_conditions(self):
+        """验证周期性边界条件的合理性"""
+        if not self.pbc_enabled:
+            return
+
+        # 检查盒子尺寸是否足够大
+        box_lengths = self.get_box_lengths()
+        min_length = np.min(box_lengths)
+
+        if min_length <= 0:
+            raise ValueError("Box dimensions must be positive")
+
+        # 警告可能的物理不合理情况
+        for atom1 in self.atoms:
+            for atom2 in self.atoms:
+                if atom1.id >= atom2.id:
+                    continue
+
+                rij = atom2.position - atom1.position
+                dist = np.linalg.norm(self.minimum_image(rij))
+
+                if dist < 0.1:  # 原子间距过小
+                    logger.warning(
+                        f"Atoms {atom1.id} and {atom2.id} are too close: {dist:.3f} Å"
+                    )
 
     def calculate_volume(self):
         """计算晶胞的体积"""
@@ -185,28 +242,49 @@ class Cell:
 
     def apply_periodic_boundary(self, positions):
         """
-        应用周期性边界条件，将原子位置限制在晶胞内
+        改进的周期性边界条件实现
 
         Parameters
         ----------
         positions : numpy.ndarray
-            原子的笛卡尔坐标位置，形状为 (3, N)
+            原子位置坐标，形状为 (3,) 或 (N, 3)
 
         Returns
         -------
         numpy.ndarray
-            应用 PBC 后的笛卡尔坐标位置，形状为 (3, N)
+            应用周期性边界条件后的位置
         """
-        if self.pbc_enabled:
-            # 转换到分数坐标
-            fractional = np.linalg.solve(self.lattice_vectors.T, positions)
-            # 确保在 [0, 1) 范围内
-            fractional = fractional % 1.0
-            # 转换回笛卡尔坐标
-            new_positions = np.dot(self.lattice_vectors.T, fractional)
-            return new_positions
-        else:
+        if not self.pbc_enabled:
             return positions
+
+        # 处理单个原子和多个原子的情况
+        single_pos = positions.ndim == 1
+        if single_pos:
+            positions = positions.reshape(1, -1)
+
+        # 确保输入的维度正确
+        if positions.shape[1] != 3:
+            raise ValueError("Positions must have shape (N, 3) or (3,)")
+
+        try:
+            # 转换到分数坐标
+            fractional = np.dot(positions, self.lattice_inv)
+
+            # 应用周期性边界条件
+            fractional = fractional % 1.0
+
+            # 转回笛卡尔坐标
+            new_positions = np.dot(fractional, self.lattice_vectors.T)
+
+            # 数值稳定性检查
+            if np.any(np.isnan(new_positions)):
+                raise ValueError("NaN values detected in position calculation")
+
+        except Exception as e:
+            logger.error(f"Error in periodic boundary application: {str(e)}")
+            raise
+
+        return new_positions[0] if single_pos else new_positions
 
     def copy(self):
         """创建 Cell 的深拷贝"""
@@ -255,32 +333,34 @@ class Cell:
 
     def minimum_image(self, displacement):
         """
-        应用最小镜像原则，计算两个原子间的最小位移。
+        改进的最小镜像约定实现
 
         Parameters
         ----------
         displacement : numpy.ndarray
-            两个原子间的位移向量。
+            原始位移向量
 
         Returns
         -------
         numpy.ndarray
-            最小镜像下的位移向量。
-
-        Raises
-        ------
-        ValueError
-            如果位移向量不是 3D 向量。
+            最小镜像位移向量
         """
-        # 检查位移向量是否为3D
         if displacement.shape != (3,):
-            raise ValueError("Displacement must be a 3-dimensional vector.")
+            raise ValueError("Displacement must be a 3-dimensional vector")
 
-        # logger.debug(f"Original displacement: {displacement}")
-        fractional = np.linalg.solve(self.lattice_vectors.T, displacement)
-        # logger.debug(f"Fractional displacement before adjustment: {fractional}")
-        fractional -= np.round(fractional)  # 将分数坐标限制在 [-0.5, 0.5)
-        # logger.debug(f"Fractional displacement after adjustment: {fractional}")
-        displacement = np.dot(self.lattice_vectors.T, fractional)
-        # logger.debug(f"Minimum image displacement: {displacement}")
-        return displacement
+        # 转换到分数坐标
+        try:
+            fractional = np.dot(self.lattice_inv, displacement)
+        except np.linalg.LinAlgError:
+            logger.error("Failed to compute fractional coordinates")
+            raise
+
+        # 应用最小镜像约定
+        fractional -= np.round(fractional)
+
+        # 数值稳定性检查
+        if np.any(np.abs(fractional) > 0.5 + 1e-10):
+            logger.warning("Possible numerical instability in minimum image convention")
+
+        # 转回笛卡尔坐标
+        return np.dot(self.lattice_vectors.T, fractional)
