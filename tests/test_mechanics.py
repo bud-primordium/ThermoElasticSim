@@ -76,3 +76,48 @@ def test_elastic_constants_solver():
     expected_C = np.diag([6900.0, 6900.0, 6900.0, 2300.0, 2300.0, 2300.0])
     # 检查弹性常数矩阵是否接近预期值
     np.testing.assert_array_almost_equal(C, expected_C, decimal=2)
+
+
+def test_elastic_constants_fcc_aluminum(
+    large_fcc_cell, lj_potential_with_neighbor_list_fcc
+):
+    """
+    测试FCC铝的弹性常数计算
+    """
+    from python.zeroelasticity import ZeroKElasticConstantsCalculator
+
+    # 添加一些调试信息
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Number of atoms in cell: {large_fcc_cell.num_atoms}")
+    logger.debug(f"Cell volume: {large_fcc_cell.volume}")
+    logger.debug(f"Neighbor list cutoff: {lj_potential_with_neighbor_list_fcc.cutoff}")
+
+    # 创建弹性常数计算器
+    calculator = ZeroKElasticConstantsCalculator(
+        cell=large_fcc_cell,
+        potential=lj_potential_with_neighbor_list_fcc,
+        delta=0.001,  # 0.1% 应变
+        num_steps=5,
+    )
+
+    # 计算弹性常数
+    C = calculator.calculate_elastic_constants()
+
+    # 输出计算结果
+    logger.info(f"Calculated elastic constants:\n{C}")
+
+    # FCC铝的实验弹性常数 (GPa)
+    C11_exp = 108.0
+    C12_exp = 62.0
+    C44_exp = 28.0
+
+    # 检查基本的对称性
+    np.testing.assert_almost_equal(C[0, 0], C[1, 1], decimal=1)
+    np.testing.assert_almost_equal(C[0, 0], C[2, 2], decimal=1)
+    np.testing.assert_almost_equal(C[3, 3], C[4, 4], decimal=1)
+    np.testing.assert_almost_equal(C[3, 3], C[5, 5], decimal=1)
+
+    # 检查数值范围的合理性
+    assert 50 < C[0, 0] < 200, f"C11 = {C[0,0]} GPa is out of reasonable range"
+    assert 20 < C[0, 1] < 100, f"C12 = {C[0,1]} GPa is out of reasonable range"
+    assert 10 < C[3, 3] < 50, f"C44 = {C[3,3]} GPa is out of reasonable range"
