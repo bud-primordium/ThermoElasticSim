@@ -84,8 +84,8 @@ class ZeroKElasticConstantsCalculator:
         self,
         cell,
         potential,
-        delta=1e-2,
-        num_steps=5,
+        delta=1e-1,
+        num_steps=10,
         optimizer_type="BFGS",
         save_path="./output",
     ):

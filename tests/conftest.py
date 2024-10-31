@@ -173,7 +173,7 @@ def fcc_cell():
 def large_fcc_cell():
     """创建一个较大的FCC铝晶胞，用于弹性常数计算"""
     lattice_constant = 4.05  # Å (铝的实验晶格常数)
-    repetitions = 2  # 2x2x2 超胞
+    repetitions = 3  # 3x3x3 超胞
     positions = generate_fcc_positions(lattice_constant, repetitions)
 
     atoms = []

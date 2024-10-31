@@ -13,7 +13,7 @@ import numpy as np
 
 
 class Deformer:
-    def __init__(self, delta=0.002, num_steps=5):  # 将默认 delta 从 0.01 减小到 0.002
+    def __init__(self, delta=0.01, num_steps=10):  # 将默认 delta 改回 0.01
         self.delta = delta
         self.num_steps = num_steps  # 每个应变分量的步数
 
