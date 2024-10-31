@@ -34,6 +34,7 @@ src/lib/*.dylib
 logs/
 all.txt
 src.txt
+src_min.txt
 tests.txt
 
 # IDE 配置文件
