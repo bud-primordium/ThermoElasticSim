@@ -147,7 +147,7 @@ class ZeroKElasticConstantsCalculator:
                 self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "BFGS"
         elif optimizer_type == "LBFGS":
-            self.optimizer_params = {"tol": 1e-8, "maxiter": 1000000}
+            self.optimizer_params = {"tol": 1e-10, "maxiter": 1000000}
             if optimizer_params:
                 self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "LBFGS"
@@ -413,7 +413,7 @@ class ZeroKElasticConstantsCalculator:
         logger.debug("Solving for elastic constants.")
         solver = ZeroKElasticConstantsSolver()
         # 可选：使用正则化来提高求解的稳定性
-        C = solver.solve(strain_data, stress_data, regularization=True, alpha=1e-5)
+        C = solver.solve(strain_data, stress_data, regularization=False, alpha=1e-5)
         C_in_GPa = C * EV_TO_GPA
         logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
 
