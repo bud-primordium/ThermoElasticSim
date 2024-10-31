@@ -112,14 +112,46 @@ class NeighborList:
         skin : float, optional
             皮肤厚度（skin width），默认值为 0.3 Å。
         """
+        if cutoff <= 0:
+            raise ValueError("Cutoff radius must be positive")
+        if skin < 0:
+            raise ValueError("Skin distance must be non-negative")
+
         self.cutoff = cutoff
         self.skin = skin
         self.cutoff_with_skin = cutoff + skin
         self.neighbor_list = None
         self.last_positions = None
-        self.cell = None  # 之后再引用到 Cell 对象
+        self.cell = None
+        self.last_update_step = 0
+
+    def _validate_cutoff(self, box_size):
+        """验证截断半径的合理性"""
+        min_box_length = np.min(box_size)
+        if self.cutoff_with_skin > min_box_length / 2:
+            raise ValueError(
+                f"Cutoff radius ({self.cutoff_with_skin:.3f}) exceeds half of minimum box length ({min_box_length/2:.3f})"
+            )
+
+    def _compute_optimal_grid_size(self, box_size, num_atoms):
+        """计算最优的网格大小"""
+        # 根据原子密度和截断半径估算最优网格大小
+        volume = np.prod(box_size)
+        density = num_atoms / volume
+        mean_atomic_spacing = (1 / density) ** (1 / 3)
+
+        # 网格大小应该在截断半径和平均原子间距之间
+        return min(self.cutoff_with_skin, max(mean_atomic_spacing, self.cutoff))
 
     def build(self, cell):
+        """
+        构建邻居列表。
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象。
+        """
         positions = cell.get_positions()
         num_atoms = cell.num_atoms
         box_size = cell.get_box_lengths()
@@ -155,40 +187,60 @@ class NeighborList:
 
     def _build_with_grid(self, cell, positions, num_atoms, box_size, cutoff):
         """
-        使用网格划分构建大系统的邻居列表。
+        改进的基于网格的邻居列表构建。
         """
-        grid_size = cutoff
-        grid_dims = np.floor(box_size / grid_size).astype(int)
-        grid_dims[grid_dims == 0] = 1  # 防止出现0，至少为1
+        # 验证截断半径
+        self._validate_cutoff(box_size)
 
-        # 初始化网格
+        # 计算最优网格大小
+        grid_size = self._compute_optimal_grid_size(box_size, num_atoms)
+        grid_dims = np.maximum(np.floor(box_size / grid_size).astype(int), 1)
+
+        # 初始化网格和邻居列表
         grid = {}
+        self.neighbor_list = [[] for _ in range(num_atoms)]
+        cutoff_squared = cutoff * cutoff
+
+        # 将原子分配到网格
         for idx, pos in enumerate(positions):
             grid_idx = tuple(((pos / grid_size) % grid_dims).astype(int))
             grid.setdefault(grid_idx, []).append(idx)
 
         # 构建邻居列表
-        self.neighbor_list = [[] for _ in range(num_atoms)]
-        cutoff_squared = cutoff**2
-
         for grid_idx, atom_indices in grid.items():
-            # 检查当前网格及其相邻网格
-            for offset in itertools.product(
-                *[[-1, 0, 1] if dim > 1 else [0] for dim in grid_dims]
-            ):
-                neighbor_grid_idx = tuple((np.array(grid_idx) + offset) % grid_dims)
-                neighbor_atom_indices = grid.get(neighbor_grid_idx, [])
-                for i in atom_indices:
-                    for j in neighbor_atom_indices:
-                        if j > i:
-                            rij = positions[j] - positions[i]
-                            # 应用最小镜像原则
-                            if cell.pbc_enabled:
-                                rij = cell.minimum_image(rij)
-                            distance_squared = np.dot(rij, rij)
-                            if distance_squared < cutoff_squared:
-                                self.neighbor_list[i].append(j)
-                                self.neighbor_list[j].append(i)
+            # 获取相邻网格（考虑周期性边界条件）
+            neighbor_cells = self._get_neighbor_cells(grid_idx, grid_dims)
+
+            for i in atom_indices:
+                pos_i = positions[i]
+                # 检查相邻网格中的原子
+                for neighbor_idx in neighbor_cells:
+                    for j in grid.get(neighbor_idx, []):
+                        if j <= i:
+                            continue
+
+                        rij = positions[j] - pos_i
+                        if cell.pbc_enabled:
+                            rij = cell.minimum_image(rij)
+
+                        dist_squared = np.dot(rij, rij)
+                        if dist_squared < cutoff_squared:
+                            self.neighbor_list[i].append(j)
+                            self.neighbor_list[j].append(i)
+
+    def _get_neighbor_cells(self, grid_idx, grid_dims):
+        """获取相邻网格索引（考虑周期性边界条件）"""
+        neighbor_cells = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                for dz in [-1, 0, 1]:
+                    if dx == dy == dz == 0:
+                        continue
+                    neighbor_idx = tuple(
+                        (np.array(grid_idx) + [dx, dy, dz]) % grid_dims
+                    )
+                    neighbor_cells.append(neighbor_idx)
+        return neighbor_cells
 
     def need_refresh(self):
         """
