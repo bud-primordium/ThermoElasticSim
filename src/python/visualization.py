@@ -145,7 +145,9 @@ class Visualizer:
 
         # 循环绘制每个应力分量的应力-应变关系
         for i in range(6):
-            ax.plot(strain_data[:, i], stress_data[:, i], label=f"Stress {i+1}")
+            ax.scatter(
+                strain_data[:, i], stress_data[:, i], label=f"Component {i+1}", s=50
+            )
 
         # 设置坐标轴标签和图形标题
         ax.set_xlabel("Strain")
