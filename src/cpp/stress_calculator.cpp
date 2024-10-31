@@ -66,7 +66,7 @@ extern "C"
             {
                 for (int beta = 0; beta < 3; ++beta)
                 {
-                    stress_tensor[3 * alpha + beta] += ri[beta] * fi[alpha];
+                    stress_tensor[3 * alpha + beta] += ri[alpha] * fi[beta];
                 }
             }
         }
@@ -74,7 +74,7 @@ extern "C"
         // 归一化
         for (int i = 0; i < 9; ++i)
         {
-            stress_tensor[i] = -(stress_tensor[i]) / volume;
+            stress_tensor[i] = +(stress_tensor[i]) / volume;
         }
     }
 }
