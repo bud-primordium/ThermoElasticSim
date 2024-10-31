@@ -13,22 +13,22 @@ import numpy as np
 
 
 class Deformer:
-    def __init__(self, delta=0.01, num_steps=10):  # 将默认 delta 改回 0.01
+    def __init__(self, delta=0.01, num_steps=10):
         self.delta = delta
-        self.num_steps = num_steps  # 每个应变分量的步数
+        self.num_steps = num_steps
 
     def generate_deformation_matrices(self):
         delta_values = np.linspace(-self.delta, self.delta, self.num_steps)
         F_list = []
 
-        # 六个独立的应变分量
+        # 六个独立的应变分量（不需要在这里处理2倍关系）
         strain_components = [
             np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]]),  # εxx
             np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]),  # εyy
             np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]]),  # εzz
-            np.array([[0, 0.5, 0], [0.5, 0, 0], [0, 0, 0]]),  # εxy/2
-            np.array([[0, 0, 0.5], [0, 0, 0], [0.5, 0, 0]]),  # εxz/2
-            np.array([[0, 0, 0], [0, 0, 0.5], [0, 0.5, 0]]),  # εyz/2
+            np.array([[0, 0, 0], [0, 0, 1], [0, 0, 0]]),  # εyz
+            np.array([[0, 0, 1], [0, 0, 0], [0, 0, 0]]),  # εxz
+            np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]),  # εxy
         ]
 
         for epsilon in strain_components:

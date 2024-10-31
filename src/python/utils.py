@@ -15,11 +15,11 @@ import logging
 
 class TensorConverter:
     """
-    张量转换工具类，用于 3x3 张量和 Voigt 表示的 6 元素向量之间的转换
+    张量转换工具类，正确处理应力和应变的 Voigt 表示
     """
 
     @staticmethod
-    def to_voigt(tensor):
+    def to_voigt(tensor, tensor_type=None):
         """
         将 3x3 张量转换为 Voigt 表示的 6 元素向量
 
@@ -27,26 +27,29 @@ class TensorConverter:
         ----------
         tensor : numpy.ndarray
             形状为 (3, 3) 的张量
+        tensor_type : str, optional
+            张量类型，可以是 'stress' 或 'strain'
 
         Returns
         -------
         numpy.ndarray
             形状为 (6,) 的 Voigt 表示向量
         """
+        factor = 2.0 if tensor_type == "strain" else 1.0
         voigt = np.array(
             [
                 tensor[0, 0],  # xx
                 tensor[1, 1],  # yy
                 tensor[2, 2],  # zz
-                tensor[1, 2],  # yz
-                tensor[0, 2],  # xz
-                tensor[0, 1],  # xy
+                tensor[1, 2] * factor,  # yz
+                tensor[0, 2] * factor,  # xz
+                tensor[0, 1] * factor,  # xy
             ]
         )
         return voigt
 
     @staticmethod
-    def from_voigt(voigt):
+    def from_voigt(voigt, tensor_type=None):
         """
         将 Voigt 表示的 6 元素向量转换为 3x3 张量
 
@@ -54,17 +57,20 @@ class TensorConverter:
         ----------
         voigt : numpy.ndarray
             形状为 (6,) 的 Voigt 表示向量
+        tensor_type : str, optional
+            张量类型，可以是 'stress' 或 'strain'
 
         Returns
         -------
         numpy.ndarray
             形状为 (3, 3) 的张量
         """
+        factor = 0.5 if tensor_type == "strain" else 1.0
         tensor = np.array(
             [
-                [voigt[0], voigt[5], voigt[4]],  # xx, xy, xz
-                [voigt[5], voigt[1], voigt[3]],  # xy, yy, yz
-                [voigt[4], voigt[3], voigt[2]],  # xz, yz, zz
+                [voigt[0], voigt[5] * factor, voigt[4] * factor],
+                [voigt[5] * factor, voigt[1], voigt[3] * factor],
+                [voigt[4] * factor, voigt[3] * factor, voigt[2]],
             ]
         )
         return tensor
@@ -312,7 +318,7 @@ class NeighborList:
         positions = self.cell.get_positions()
         box_lengths = self.cell.get_box_lengths()
         for i, pos in enumerate(positions):
-            is_boundary = any(abs(p / l - 0.5) > 0.4 for p, l in zip(pos, box_lengths))
+            is_boundary = any(abs(p / l - 0.5) > 0.35 for p, l in zip(pos, box_lengths))
             if is_boundary:
                 logger.info(f"Boundary atom {i}:")
                 logger.info(f"  Position: {pos}")
