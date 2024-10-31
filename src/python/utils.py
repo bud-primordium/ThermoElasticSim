@@ -127,21 +127,25 @@ class NeighborList:
 
     def _validate_cutoff(self, box_size):
         """验证截断半径的合理性"""
+        logger = logging.getLogger(__name__)
         min_box_length = np.min(box_size)
         if self.cutoff_with_skin > min_box_length / 2:
-            raise ValueError(
-                f"Cutoff radius ({self.cutoff_with_skin:.3f}) exceeds half of minimum box length ({min_box_length/2:.3f})"
+            logger.warning(
+                f"Cutoff radius ({self.cutoff_with_skin:.3f}) is too large compared to box size ({min_box_length/2:.3f})"
             )
+            # 自动调整截断半径
+            self.cutoff = min_box_length / 3
+            self.cutoff_with_skin = self.cutoff + self.skin
+            logger.info(f"Adjusted cutoff radius to {self.cutoff:.3f}")
 
     def _compute_optimal_grid_size(self, box_size, num_atoms):
-        """计算最优的网格大小"""
-        # 根据原子密度和截断半径估算最优网格大小
+        """优化网格大小的计算"""
         volume = np.prod(box_size)
         density = num_atoms / volume
         mean_atomic_spacing = (1 / density) ** (1 / 3)
 
-        # 网格大小应该在截断半径和平均原子间距之间
-        return min(self.cutoff_with_skin, max(mean_atomic_spacing, self.cutoff))
+        # 确保网格大小略大于截断半径
+        return max(self.cutoff + 0.5, mean_atomic_spacing)
 
     def build(self, cell):
         """
