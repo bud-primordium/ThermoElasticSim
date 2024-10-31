@@ -81,12 +81,19 @@ class ZeroKElasticConstantsCalculator:
     """
 
     def __init__(
-        self, cell, potential, delta=1e-3, optimizer_type="GD", save_path="./output"
+        self,
+        cell,
+        potential,
+        delta=1e-2,
+        num_steps=5,
+        optimizer_type="GD",
+        save_path="./output",
     ):
         self.cell = cell
         self.potential = potential
         self.delta = delta  # 指的是形变
-        self.deformer = Deformer(delta)
+        self.num_steps = num_steps  # 每个应变分量的步数
+        self.deformer = Deformer(delta, num_steps)
         self.stress_calculator = StressCalculatorLJ()
         self.strain_calculator = StrainCalculator()
         self.visualizer = Visualizer()  # 初始化 Visualizer 实例
@@ -241,7 +248,7 @@ class ZeroKElasticConstantsCalculator:
         # 优化初始结构并保存
         self.optimize_initial_structure()
 
-        # 生成六个变形矩阵
+        # 生成更多变形矩阵
         F_list = self.deformer.generate_deformation_matrices()
         strains, stresses = [], []
 

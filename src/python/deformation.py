@@ -13,44 +13,29 @@ import numpy as np
 
 
 class Deformer:
-    """
-    施加微小应变以生成变形矩阵的类
-
-    Parameters
-    ----------
-    delta : float
-        微小应变量
-    """
-
-    def __init__(self, delta):
-        """初始化 Deformer 对象"""
+    def __init__(self, delta, num_steps=5):
         self.delta = delta
+        self.num_steps = num_steps  # 每个应变分量的步数
 
     def generate_deformation_matrices(self):
-        """
-        生成用于施加应变的变形矩阵列表
-
-        Returns
-        -------
-        list of numpy.ndarray
-            变形矩阵列表
-        """
-        delta = self.delta
+        delta_values = np.linspace(-self.delta, self.delta, self.num_steps)
         F_list = []
 
         # 六个独立的应变分量
         strain_components = [
-            np.array([[delta, 0, 0], [0, 0, 0], [0, 0, 0]]),  # ε_xx
-            np.array([[0, 0, 0], [0, delta, 0], [0, 0, 0]]),  # ε_yy
-            np.array([[0, 0, 0], [0, 0, 0], [0, 0, delta]]),  # ε_zz
-            np.array([[0, delta / 2, 0], [delta / 2, 0, 0], [0, 0, 0]]),  # ε_xy
-            np.array([[0, 0, delta / 2], [0, 0, 0], [delta / 2, 0, 0]]),  # ε_xz
-            np.array([[0, 0, 0], [0, 0, delta / 2], [0, delta / 2, 0]]),  # ε_yz
+            np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]]),  # ε_xx
+            np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]),  # ε_yy
+            np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]]),  # ε_zz
+            np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]),  # ε_xy
+            np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]]),  # ε_xz
+            np.array([[0, 0, 0], [0, 0, 1], [0, 1, 0]]),  # ε_yz
         ]
 
         for epsilon in strain_components:
-            F = np.identity(3) + epsilon
-            F_list.append(F)
+            for delta in delta_values:
+                strain = delta * epsilon
+                F = np.identity(3) + strain
+                F_list.append(F)
 
         return F_list
 
