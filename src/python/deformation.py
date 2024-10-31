@@ -13,7 +13,7 @@ import numpy as np
 
 
 class Deformer:
-    def __init__(self, delta, num_steps=5):
+    def __init__(self, delta=0.002, num_steps=5):  # 将默认 delta 从 0.01 减小到 0.002
         self.delta = delta
         self.num_steps = num_steps  # 每个应变分量的步数
 
@@ -23,12 +23,12 @@ class Deformer:
 
         # 六个独立的应变分量
         strain_components = [
-            np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]]),  # ε_xx
-            np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]),  # ε_yy
-            np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]]),  # ε_zz
-            np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]),  # ε_xy
-            np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]]),  # ε_xz
-            np.array([[0, 0, 0], [0, 0, 1], [0, 1, 0]]),  # ε_yz
+            np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]]),  # εxx
+            np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]),  # εyy
+            np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]]),  # εzz
+            np.array([[0, 0.5, 0], [0.5, 0, 0], [0, 0, 0]]),  # εxy/2
+            np.array([[0, 0, 0.5], [0, 0, 0], [0.5, 0, 0]]),  # εxz/2
+            np.array([[0, 0, 0], [0, 0, 0.5], [0, 0.5, 0]]),  # εyz/2
         ]
 
         for epsilon in strain_components:

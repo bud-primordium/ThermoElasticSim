@@ -75,7 +75,7 @@ class ZeroKElasticConstantsCalculator:
     delta : float, optional
         变形大小，默认为 1e-3
     optimizer_type : str, optional
-        优化器类型，支持 'GD'（梯度下降）和 'BFGS'，默认为 'GD'
+        优化器类型，支持 'GD'（梯度下降）和 'BFGS'，默认为 'BFGS'
     save_path : str, optional
         保存文件的路径，默认为 './output'
     """
@@ -86,7 +86,7 @@ class ZeroKElasticConstantsCalculator:
         potential,
         delta=1e-2,
         num_steps=5,
-        optimizer_type="GD",
+        optimizer_type="BFGS",
         save_path="./output",
     ):
         self.cell = cell
@@ -102,10 +102,10 @@ class ZeroKElasticConstantsCalculator:
 
         if optimizer_type == "GD":
             self.optimizer = GradientDescentOptimizer(
-                max_steps=100000, tol=1e-5, step_size=1e-3, energy_tol=1e-5
+                max_steps=200000, tol=1e-5, step_size=1e-4, energy_tol=1e-6
             )
         elif optimizer_type == "BFGS":
-            self.optimizer = BFGSOptimizer(tol=1e-5, maxiter=100000)
+            self.optimizer = BFGSOptimizer(tol=1e-6, maxiter=200000)
         else:
             raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
 
