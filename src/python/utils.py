@@ -10,7 +10,7 @@
 """
 
 import numpy as np
-import itertools
+import logging
 
 
 class TensorConverter:
@@ -287,6 +287,33 @@ class NeighborList:
         if self.neighbor_list is None:
             self.build(self.cell)
         return self.neighbor_list[atom_index]
+
+    def debug_neighbor_distribution(self):
+        """
+        分析和打印邻居分布情况
+        """
+        logger = logging.getLogger(__name__)
+
+        if self.neighbor_list is None:
+            logger.warning("Neighbor list not built yet")
+            return
+
+        neighbor_counts = [len(neighbors) for neighbors in self.neighbor_list]
+        logger.info(f"Neighbor distribution:")
+        logger.info(f"Min neighbors: {min(neighbor_counts)}")
+        logger.info(f"Max neighbors: {max(neighbor_counts)}")
+        logger.info(f"Average neighbors: {np.mean(neighbor_counts):.2f}")
+
+        # 检查边界原子
+        positions = self.cell.get_positions()
+        box_lengths = self.cell.get_box_lengths()
+        for i, pos in enumerate(positions):
+            is_boundary = any(abs(p / l - 0.5) > 0.4 for p, l in zip(pos, box_lengths))
+            if is_boundary:
+                logger.info(f"Boundary atom {i}:")
+                logger.info(f"  Position: {pos}")
+                logger.info(f"  Number of neighbors: {len(self.neighbor_list[i])}")
+                logger.info(f"  Neighbors: {self.neighbor_list[i]}")
 
 
 # 单位转换常量

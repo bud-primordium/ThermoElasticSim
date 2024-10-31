@@ -14,6 +14,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 from .structure import Cell
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,12 @@ class Visualizer:
         初始化可视化工具类
         """
         pass
+
+    def _ensure_directory_exists(self, filepath):
+        """确保文件目录存在"""
+        directory = os.path.dirname(filepath)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
 
     def plot_cell_structure(self, cell_structure: Cell, show=True):
         """
@@ -175,6 +182,7 @@ class Visualizer:
         show : bool, optional
             是否立即显示动画，默认为 True
         """
+        self._ensure_directory_exists(filename)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
 
@@ -187,6 +195,16 @@ class Visualizer:
         text_volume = ax.text2D(0.05, 0.95, "", transform=ax.transAxes)
         text_lattice = ax.text2D(0.05, 0.90, "", transform=ax.transAxes)
         text_atoms = ax.text2D(0.05, 0.85, "", transform=ax.transAxes)
+
+        # 同时创建一个日志文件
+        log_filename = os.path.splitext(filename)[0] + "_trajectory.log"
+        with open(log_filename, "w") as f:
+            for i, frame in enumerate(trajectory):
+                f.write(f"Frame {i}:\n")
+                f.write(f"Positions:\n{frame['positions']}\n")
+                f.write(f"Volume: {frame['volume']:.3f}\n")
+                f.write(f"Lattice vectors:\n{frame['lattice_vectors']}\n")
+                f.write("-" * 50 + "\n")
 
         def init():
             scatter._offsets3d = ([], [], [])
