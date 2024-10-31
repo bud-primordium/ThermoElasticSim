@@ -181,7 +181,7 @@ def generate_fcc_positions(lattice_constant, repetitions):
 @pytest.fixture
 def fcc_cell():
     """
-    创建一个包含多个原子的面心立方 (FCC) 晶胞，用于优化测试。
+    创建一个包含8原子的面心立方 (FCC) 晶胞，用于优化测试。
 
     @return Cell 实例
     """
@@ -208,4 +208,31 @@ def fcc_cell():
     lattice_vectors = np.eye(3) * lattice_constant * repetitions
 
     cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+    return cell
+
+
+@pytest.fixture
+def large_fcc_cell():
+    """
+    创建一个较大的FCC铝晶胞，用于弹性常数计算
+    """
+    lattice_constant = 4.05  # Å (铝的实验晶格常数)
+    repetitions = 4  # 4x4x4 超胞
+
+    # 生成FCC结构的原子位置
+    positions = generate_fcc_positions(lattice_constant, repetitions)
+
+    # 创建Atom实例列表
+    atoms = []
+    for idx, pos in enumerate(positions):
+        atoms.append(
+            Atom(id=idx, symbol="Al", mass_amu=26.9815, position=np.array(pos))
+        )
+
+    # 定义晶格矢量
+    lattice_vectors = np.eye(3) * lattice_constant * repetitions
+
+    # 创建晶胞
+    cell = Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
+
     return cell
