@@ -201,40 +201,43 @@ class Cell:
             )
             # 批量更新原子坐标
             positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
+            # 直接计算分数坐标
             fractional = np.linalg.solve(self.lattice_vectors.T, positions.T)  # (3, N)
+            # 应用变形
             fractional = np.dot(deformation_matrix, fractional)  # (3, N)
+            # 转回笛卡尔坐标
             new_positions = np.dot(self.lattice_vectors.T, fractional).T  # (N, 3)
 
             if self.pbc_enabled:
-                # 这里确保新的坐标经过周期性边界条件处理
+                # 应用周期性边界条件
                 new_positions = self.apply_periodic_boundary(new_positions)
 
-            # 更新所有原子的位置信息
+            # 更新原子位置
             for i, atom in enumerate(self.atoms):
                 atom.position = new_positions[i]
         else:
             logger.debug(
                 "Applying deformation to lattice vectors and atomic positions."
             )
+
+            # 先获取当前分数坐标
+            positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
+            fractional = np.linalg.solve(self.lattice_vectors.T, positions.T)  # (3, N)
+
             # 更新晶格矢量
             self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
             logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
-            # 更新原子坐标
-            positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
-            # 先计算原始分数坐标
-            original_lattice = np.dot(
-                self.lattice_vectors, np.linalg.inv(deformation_matrix).T
-            )
-            fractional = np.linalg.solve(original_lattice.T, positions.T)  # (3, N)
-            # 在新的晶格矢量下计算新的笛卡尔坐标
+            # 重新计算逆晶格矢量矩阵
+            self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
+
+            # 直接使用原始分数坐标计算新的笛卡尔坐标
             new_positions = np.dot(self.lattice_vectors.T, fractional).T  # (N, 3)
 
             if self.pbc_enabled:
-                # 确保周期性边界条件生效，将原子坐标映射回晶胞内
                 new_positions = self.apply_periodic_boundary(new_positions)
 
-            # 更新所有原子的位置信息
+            # 更新原子位置
             for i, atom in enumerate(self.atoms):
                 atom.position = new_positions[i]
 
