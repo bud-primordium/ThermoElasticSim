@@ -124,9 +124,7 @@ def test_invalid_minimum_image(cell):
     """
     @brief 测试 Cell 类的 minimum_image 方法，确保在传入错误形状的位移向量时抛出异常。
     """
-    with pytest.raises(
-        ValueError, match="Displacement must be a 3-dimensional vector."
-    ):
+    with pytest.raises(ValueError, match="Displacement must be a 3-dimensional vector"):
         cell.minimum_image(np.array([1.0, 2.0]))  # 非3D向量
 
 
