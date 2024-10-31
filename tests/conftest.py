@@ -246,3 +246,20 @@ def two_atom_neighbor_list(two_atom_cell, lj_potential):
 def lj_interface():
     """创建 Lennard-Jones C++ 接口实例"""
     return CppInterface("lennard_jones")
+
+
+#################################################
+# 字体相关 fixtures
+#################################################
+@pytest.fixture(scope="session", autouse=True)
+def configure_matplotlib():
+    """配置 matplotlib 的全局设置"""
+    from matplotlib import rcParams
+    import matplotlib.pyplot as plt
+
+    # 设置默认字体和日志级别
+    rcParams["font.family"] = "DejaVu Sans"
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
+
+    # 关闭交互模式
+    plt.ioff()
