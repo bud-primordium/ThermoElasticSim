@@ -15,7 +15,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
-from .optimizers import GradientDescentOptimizer, BFGSOptimizer
+from .optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
 from .visualization import Visualizer
 import os
@@ -112,7 +112,7 @@ class ZeroKElasticConstantsCalculator:
         potential,
         delta=1e-1,
         num_steps=10,
-        optimizer_type="BFGS",
+        optimizer_type="LBFGS",
         optimizer_params=None,
         save_path="./output",
     ):
@@ -139,12 +139,22 @@ class ZeroKElasticConstantsCalculator:
                 self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "GD"
         elif optimizer_type == "BFGS":
-            self.optimizer_params = {"tol": 1e-6, "maxiter": 500000}
+            self.optimizer_params = {
+                "tol": 1e-8,
+                "maxiter": 1000000,
+            }  # 增加 maxiter，减小 tol
             if optimizer_params:
                 self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "BFGS"
+        elif optimizer_type == "LBFGS":
+            self.optimizer_params = {"tol": 1e-8, "maxiter": 1000000}
+            if optimizer_params:
+                self.optimizer_params.update(optimizer_params)
+            self.optimizer_type = "LBFGS"
         else:
-            raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
+            raise ValueError(
+                "Unsupported optimizer type. Choose 'GD', 'BFGS', or 'LBFGS'."
+            )
 
     def calculate_initial_stress(self):
         """
@@ -171,8 +181,12 @@ class ZeroKElasticConstantsCalculator:
         logger.debug("Starting initial structure optimization.")
         if self.optimizer_type == "GD":
             optimizer = GradientDescentOptimizer(**self.optimizer_params)
-        else:
+        elif self.optimizer_type == "BFGS":
             optimizer = BFGSOptimizer(**self.optimizer_params)
+        elif self.optimizer_type == "LBFGS":
+            optimizer = LBFGSOptimizer(**self.optimizer_params)
+        else:
+            raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
 
         converged, trajectory = optimizer.optimize(self.cell, self.potential)
         logger.debug("Initial structure optimization completed.")
@@ -222,8 +236,12 @@ class ZeroKElasticConstantsCalculator:
         # 为每个任务创建独立的优化器实例
         if self.optimizer_type == "GD":
             optimizer = GradientDescentOptimizer(**self.optimizer_params)
-        else:
+        elif self.optimizer_type == "BFGS":
             optimizer = BFGSOptimizer(**self.optimizer_params)
+        elif self.optimizer_type == "LBFGS":
+            optimizer = LBFGSOptimizer(**self.optimizer_params)
+        else:
+            raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
 
         # 对变形后的结构进行优化并生成轨迹
         converged, trajectory = optimizer.optimize(deformed_cell, self.potential)
@@ -395,7 +413,7 @@ class ZeroKElasticConstantsCalculator:
         logger.debug("Solving for elastic constants.")
         solver = ZeroKElasticConstantsSolver()
         # 可选：使用正则化来提高求解的稳定性
-        C = solver.solve(strain_data, stress_data, regularization=False, alpha=1e-5)
+        C = solver.solve(strain_data, stress_data, regularization=True, alpha=1e-5)
         C_in_GPa = C * EV_TO_GPA
         logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
 
@@ -407,18 +425,18 @@ class ZeroKElasticConstantsCalculator:
         )
 
         # 保存应力-应变关系图
-        fig, ax = self.visualizer.plot_stress_strain(
+        fig, ax = self.visualizer.plot_stress_strain_multiple(
             strain_data, stress_data, show=False
         )
         fig.savefig(os.path.join(self.save_path, "stress_strain_relationship.png"))
         plt.close(fig)  # 关闭图形，释放内存
 
         # 可选：创建应力-应变关系的动画
-        # self.visualizer.create_stress_strain_animation(
-        #     strain_data,
-        #     stress_data,
-        #     os.path.join(self.save_path, "stress_strain_relationship.gif"),
-        #     show=False,
-        # )
+        self.visualizer.create_stress_strain_animation(
+            strain_data,
+            stress_data,
+            os.path.join(self.save_path, "stress_strain_relationship.gif"),
+            show=False,
+        )
 
         return C_in_GPa

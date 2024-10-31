@@ -289,3 +289,124 @@ class BFGSOptimizer(Optimizer):
         logger.debug(f"BFGS Optimizer final positions:\n{cell.get_positions()}")
 
         return self.converged, self.trajectory
+
+
+class LBFGSOptimizer(Optimizer):
+    """
+    L-BFGS 优化器，基于 scipy.optimize.minimize
+
+    Parameters
+    ----------
+    tol : float
+        收敛阈值
+    maxiter : int
+        最大迭代步数
+    """
+
+    def __init__(self, tol=1e-6, maxiter=10000):
+        """初始化 L-BFGS 优化器"""
+        self.tol = tol
+        self.maxiter = maxiter
+        self.converged = False
+        self.trajectory = []  # 记录轨迹数据
+
+    def optimize(self, cell, potential):
+        """
+        执行 L-BFGS 优化
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象，用于计算作用力和能量
+
+        Returns
+        -------
+        tuple
+            (converged: bool, trajectory: list)
+        """
+        logger = logging.getLogger(__name__)
+
+        # 定义能量函数
+        def energy_fn(positions):
+            # 更新所有原子的位置
+            for i, atom in enumerate(cell.atoms):
+                atom.position = positions[i * 3 : (i + 1) * 3]
+                # 应用 PBC
+                atom.position = cell.apply_periodic_boundary(atom.position)
+            energy = potential.calculate_energy(cell)
+            return energy
+
+        # 定义梯度函数（力）
+        def grad_fn(positions):
+            # 更新所有原子的位置
+            for i, atom in enumerate(cell.atoms):
+                atom.position = positions[i * 3 : (i + 1) * 3]
+                # 应用 PBC
+                atom.position = cell.apply_periodic_boundary(atom.position)
+            potential.calculate_forces(cell)
+            forces = cell.get_forces()
+            return -forces.flatten()  # 修正符号为 -forces
+
+        # 获取初始位置
+        initial_positions = cell.get_positions().flatten()
+
+        # 定义回调函数，在每次迭代结束后记录轨迹
+        def callback(xk):
+            positions = xk.reshape((-1, 3))
+            for i, atom in enumerate(cell.atoms):
+                atom.position = positions[i]
+                # 应用 PBC
+                atom.position = cell.apply_periodic_boundary(atom.position)
+            volume = cell.volume
+            lattice_vectors = cell.lattice_vectors.copy()
+            # 记录轨迹数据
+            self.trajectory.append(
+                {
+                    "step": len(self.trajectory) + 1,
+                    "positions": positions.copy(),
+                    "volume": volume,
+                    "lattice_vectors": lattice_vectors.copy(),
+                }
+            )
+            logger.debug(f"Callback at iteration {len(self.trajectory)}")
+
+        # 执行 L-BFGS-B 优化
+        result = minimize(
+            energy_fn,
+            initial_positions,
+            method="L-BFGS-B",
+            jac=grad_fn,
+            tol=self.tol,
+            options={"maxiter": self.maxiter, "disp": False},
+            callback=callback,  # 设置回调函数
+        )
+
+        if result.success:
+            self.converged = True
+            # 更新原子的位置
+            optimized_positions = result.x.reshape((-1, 3))
+            for i, atom in enumerate(cell.atoms):
+                atom.position = optimized_positions[i]
+                # 应用 PBC
+                atom.position = cell.apply_periodic_boundary(atom.position)
+            logger.info("L-BFGS Optimizer converged successfully.")
+        else:
+            self.converged = False
+            logger.warning(f"L-BFGS Optimizer did not converge: {result.message}")
+
+        # 在优化结束后，记录最终状态
+        volume = cell.volume
+        lattice_vectors = cell.lattice_vectors.copy()
+        self.trajectory.append(
+            {
+                "step": len(self.trajectory) + 1,
+                "positions": cell.get_positions().copy(),
+                "volume": volume,
+                "lattice_vectors": lattice_vectors.copy(),
+            }
+        )
+        logger.debug(f"L-BFGS Optimizer final positions:\n{cell.get_positions()}")
+
+        return self.converged, self.trajectory

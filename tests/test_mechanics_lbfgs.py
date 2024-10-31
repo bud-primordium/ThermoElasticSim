@@ -4,11 +4,11 @@ import os
 from datetime import datetime
 
 
-def test_elastic_constants_fcc_aluminum_bfgs(
+def test_elastic_constants_fcc_aluminum_lbfgs(
     large_fcc_cell, lj_potential_with_neighbor_list_fcc
 ):
     """
-    使用 BFGS 优化器测试 FCC 铝的弹性常数计算
+    使用 LBFGS 优化器测试 FCC 铝的弹性常数计算
     """
     from python.zeroelasticity import ZeroKElasticConstantsCalculator
 
@@ -74,7 +74,7 @@ def test_elastic_constants_fcc_aluminum_bfgs(
         potential=lj_potential_with_neighbor_list_fcc,
         delta=0.001,  # 0.1% 应变
         num_steps=5,
-        optimizer_type="BFGS",  # 使用 BFGS 优化器
+        optimizer_type="LBFGS",  # 使用 LBFGS 优化器
         save_path=output_dir,  # 使用时间戳目录
     )
 

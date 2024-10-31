@@ -119,11 +119,11 @@ class Visualizer:
         ax.set_ylim3d(origin[1], origin[1] + max_size)
         ax.set_zlim3d(origin[2], origin[2] + max_size)
 
-    def plot_stress_strain(
+    def plot_stress_strain_multiple(
         self, strain_data: np.ndarray, stress_data: np.ndarray, show=True
     ):
         """
-        绘制应力-应变关系图
+        绘制多个应力-应变关系图，每个应力分量对应一个子图
 
         Parameters
         ----------
@@ -138,32 +138,38 @@ class Visualizer:
         -------
         fig : matplotlib.figure.Figure
             绘制的图形对象
-        ax : matplotlib.axes._subplots.AxesSubplot
-            2D 子图对象
+        axes : numpy.ndarray
+            子图对象数组
         """
-        fig, ax = plt.subplots(figsize=(10, 6))
+        import matplotlib.pyplot as plt
 
-        # 循环绘制每个应力分量的应力-应变关系
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+        axes = axes.flatten()
+
+        # 使用颜色映射
+        cmap = plt.get_cmap("tab10")
+
         for i in range(6):
+            ax = axes[i]
             ax.scatter(
-                strain_data[:, i], stress_data[:, i], label=f"Component {i+1}", s=50
+                strain_data[:, i],
+                stress_data[:, i],
+                color=cmap(i),
+                s=50,
+                label=f"Component {i+1}",
             )
-
-        # 设置坐标轴标签和图形标题
-        ax.set_xlabel("Strain")
-        ax.set_ylabel("Stress (eV/Å³)")
-        ax.set_title("Stress-Strain Relationship")
-
-        ax.legend()  # 显示图例
-        ax.grid(True)  # 显示网格
+            ax.set_xlabel(f"Strain {i+1}")
+            ax.set_ylabel(f"Stress {i+1} (GPa)")
+            ax.set_title(f"Stress {i+1} vs Strain {i+1}")
+            ax.legend()
+            ax.grid(True)
 
         plt.tight_layout()
 
-        # 显示或返回图形对象
         if show:
             plt.show()
 
-        return fig, ax
+        return fig, axes
 
     def create_optimization_animation(
         self, trajectory, filename, title="Optimization", pbc=True, show=True
