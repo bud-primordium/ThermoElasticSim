@@ -200,45 +200,47 @@ class Cell:
                 "Lattice vectors are locked. Only applying deformation to atomic positions."
             )
             # 批量更新原子坐标
-            positions = self.get_positions().T  # (3, N)
-            fractional = np.linalg.solve(self.lattice_vectors.T, positions)
-            fractional = np.dot(deformation_matrix, fractional)
-            new_positions = np.dot(self.lattice_vectors.T, fractional)
+            positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
+            fractional = np.linalg.solve(self.lattice_vectors.T, positions.T)  # (3, N)
+            fractional = np.dot(deformation_matrix, fractional)  # (3, N)
+            new_positions = np.dot(self.lattice_vectors.T, fractional).T  # (N, 3)
+
             if self.pbc_enabled:
                 # 这里确保新的坐标经过周期性边界条件处理
                 new_positions = self.apply_periodic_boundary(new_positions)
+
             # 更新所有原子的位置信息
             for i, atom in enumerate(self.atoms):
-                atom.position = new_positions[:, i]
-                # logger.debug(f"Atom {atom.id} position changed to {atom.position}")
+                atom.position = new_positions[i]
         else:
             logger.debug(
                 "Applying deformation to lattice vectors and atomic positions."
             )
             # 更新晶格矢量
-            self.lattice_vectors = self.lattice_vectors @ deformation_matrix.T
+            self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
             logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
             # 更新原子坐标
-            positions = self.get_positions().T  # (3, N)
+            positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
             # 先计算原始分数坐标
-            fractional = np.linalg.solve(
-                np.dot(self.lattice_vectors, np.linalg.inv(deformation_matrix).T).T,
-                positions,
+            original_lattice = np.dot(
+                self.lattice_vectors, np.linalg.inv(deformation_matrix).T
             )
+            fractional = np.linalg.solve(original_lattice.T, positions.T)  # (3, N)
             # 在新的晶格矢量下计算新的笛卡尔坐标
-            new_positions = self.lattice_vectors.T @ fractional
+            new_positions = np.dot(self.lattice_vectors.T, fractional).T  # (N, 3)
+
             if self.pbc_enabled:
                 # 确保周期性边界条件生效，将原子坐标映射回晶胞内
                 new_positions = self.apply_periodic_boundary(new_positions)
+
             # 更新所有原子的位置信息
             for i, atom in enumerate(self.atoms):
-                atom.position = new_positions[:, i]
-                # logger.debug(f"Atom {atom.id} position changed to {atom.position}")
+                atom.position = new_positions[i]
 
-        # 更新体积
-        self.volume = self.calculate_volume()
-        logger.debug(f"Updated cell volume: {self.volume}")
+            # 更新体积
+            self.volume = self.calculate_volume()
+            logger.debug(f"Updated cell volume: {self.volume}")
 
     def apply_periodic_boundary(self, positions):
         """
