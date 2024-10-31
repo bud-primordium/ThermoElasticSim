@@ -207,8 +207,12 @@ class ZeroKElasticConstantsCalculator:
         stress_tensor = self.stress_calculator.compute_stress(
             deformed_cell, self.potential
         )
-        strain_voigt = self.strain_calculator.compute_strain(F)
-        stress_voigt = TensorConverter.to_voigt(stress_tensor)
+        # 计算应变
+        strain_tensor = 0.5 * (F + F.T) - np.eye(3)
+
+        # 使用正确的 Voigt 转换
+        strain_voigt = TensorConverter.to_voigt(strain_tensor, tensor_type="strain")
+        stress_voigt = TensorConverter.to_voigt(stress_tensor, tensor_type="stress")
 
         # 日志记录
         logger.info(
@@ -248,11 +252,11 @@ class ZeroKElasticConstantsCalculator:
         # 优化初始结构并保存
         self.optimize_initial_structure()
 
-        # 生成更多变形矩阵
+        # 生成变形矩阵
         F_list = self.deformer.generate_deformation_matrices()
         strains, stresses = [], []
 
-        # 并行计算每个变形的应力和应变
+        # 并行计算应力和应变
         with ThreadPoolExecutor() as executor:
             results = executor.map(
                 lambda i_F: self.calculate_stress_strain(i_F[1], i_F[0]),
@@ -260,36 +264,40 @@ class ZeroKElasticConstantsCalculator:
             )
 
         for strain, stress in results:
-            strains.append(strain)
-            stresses.append(stress)
+            if strain is not None and stress is not None:  # 检查优化是否成功
+                strains.append(strain)
+                stresses.append(stress)
 
-        # 计算并保存弹性常数矩阵
+        # 保存原始数据用于验证
+        strain_data = np.array(strains)
+        stress_data = np.array(stresses)
+        np.savetxt(os.path.join(self.save_path, "strain_data.txt"), strain_data)
+        np.savetxt(os.path.join(self.save_path, "stress_data.txt"), stress_data)
+
+        logger.info(f"Total strain-stress pairs: {len(strains)}")
+        logger.info(f"Strain range: [{strain_data.min():.6f}, {strain_data.max():.6f}]")
+        logger.info(f"Stress range: [{stress_data.min():.6f}, {stress_data.max():.6f}]")
+
+        # 计算弹性常数矩阵
         logger.debug("Solving for elastic constants.")
         C = ZeroKElasticConstantsSolver().solve(strains, stresses)
         C_in_GPa = C * EV_TO_GPA
         logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
 
         # 保存应力-应变关系图和动画
-        strain_data, stress_data = np.array(strains), np.array(stresses)
         fig, ax = self.visualizer.plot_stress_strain(
             strain_data, stress_data, show=False
         )
-        stress_strain_plot_filename = os.path.join(
-            self.save_path, "stress_strain_relationship.png"
-        )
-        fig.savefig(stress_strain_plot_filename)
-        logger.info(
-            f"Saved stress-strain relationship plot to {stress_strain_plot_filename}"
+        fig.savefig(os.path.join(self.save_path, "stress_strain_relationship.png"))
+
+        self.visualizer.create_stress_strain_animation(
+            strain_data,
+            stress_data,
+            os.path.join(self.save_path, "stress_strain_relationship.gif"),
+            show=False,
         )
 
-        animation_filename = os.path.join(
-            self.save_path, "stress_strain_relationship.gif"
-        )
-        self.visualizer.create_stress_strain_animation(
-            strain_data, stress_data, animation_filename, show=False
-        )
-        logger.info(
-            f"Saved stress-strain relationship animation to {animation_filename}"
-        )
+        # 保存最终的弹性常数矩阵
+        np.savetxt(os.path.join(self.save_path, "elastic_constants_GPa.txt"), C_in_GPa)
 
         return C_in_GPa
