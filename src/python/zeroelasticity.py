@@ -12,16 +12,16 @@
 
 import numpy as np
 import logging
-import csv
 from concurrent.futures import ThreadPoolExecutor
 from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
 from .visualization import Visualizer
-from sklearn.linear_model import Ridge
 import os
-import matplotlib.pyplot as plt  # 添加 plt 的导入
+import matplotlib.pyplot as plt  # 确保导入了 plt
+import csv  # 导入 csv 模块
+from sklearn.linear_model import Ridge  # 导入 Ridge 模型用于正则化
 
 # 配置日志记录，移除 threadName
 logging.basicConfig(
@@ -72,10 +72,10 @@ class ZeroKElasticConstantsSolver:
             logger.debug(
                 "Solving elastic constants using Ridge regression with regularization."
             )
-
             model = Ridge(alpha=alpha, fit_intercept=False)
             model.fit(strains, stresses)
             C = model.coef_.T  # Ridge 回归的 coef_ 属性形状为 (6, 6)
+            logger.debug(f"Elastic constants matrix (Ridge):\n{C}")
         else:
             logger.debug("Solving elastic constants using least squares.")
             C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
@@ -95,9 +95,13 @@ class ZeroKElasticConstantsCalculator:
     potential : Potential
         势能对象
     delta : float, optional
-        变形大小，默认为 1e-3
+        变形大小，默认为 1e-1
+    num_steps : int, optional
+        每个应变分量的步数，默认为 10
     optimizer_type : str, optional
         优化器类型，支持 'GD'（梯度下降）和 'BFGS'，默认为 'BFGS'
+    optimizer_params : dict, optional
+        优化器的参数，默认为 None。若提供，将覆盖默认参数。
     save_path : str, optional
         保存文件的路径，默认为 './output'
     """
@@ -109,6 +113,7 @@ class ZeroKElasticConstantsCalculator:
         delta=1e-1,
         num_steps=10,
         optimizer_type="BFGS",
+        optimizer_params=None,
         save_path="./output",
     ):
         self.cell = cell
@@ -122,6 +127,7 @@ class ZeroKElasticConstantsCalculator:
         self.save_path = save_path
         os.makedirs(self.save_path, exist_ok=True)
 
+        # 设置优化器参数，允许外部传入
         if optimizer_type == "GD":
             self.optimizer_params = {
                 "max_steps": 200000,
@@ -129,9 +135,13 @@ class ZeroKElasticConstantsCalculator:
                 "step_size": 1e-4,
                 "energy_tol": 1e-6,
             }
+            if optimizer_params:
+                self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "GD"
         elif optimizer_type == "BFGS":
             self.optimizer_params = {"tol": 1e-6, "maxiter": 500000}
+            if optimizer_params:
+                self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "BFGS"
         else:
             raise ValueError("Unsupported optimizer type. Choose 'GD' or 'BFGS'.")
@@ -151,8 +161,9 @@ class ZeroKElasticConstantsCalculator:
         )
         logger.debug(f"Initial stress tensor before optimization:\n{initial_stress}")
 
-        # **保存初始应力张量**
+        # 保存初始应力张量
         self.initial_stress_tensor = initial_stress
+
         return initial_stress
 
     def optimize_initial_structure(self):
@@ -223,7 +234,7 @@ class ZeroKElasticConstantsCalculator:
                 f"Optimization did not converge for deformation #{deformation_index}"
             )
 
-        # 计算应力张量
+        # 计算变形后的应力张量
         stress_tensor = self.stress_calculator.compute_stress(
             deformed_cell, self.potential
         )
@@ -252,6 +263,42 @@ class ZeroKElasticConstantsCalculator:
 
         # 返回需要的数据，稍后在主线程中处理可视化和文件保存
         return strain_voigt, stress_voigt, trajectory, deformed_cell, deformation_index
+
+    def save_stress_strain_data(self, strain_data, stress_data):
+        """
+        将应力和应变数据合并保存到一个 CSV 文件中
+
+        Parameters
+        ----------
+        strain_data : numpy.ndarray
+            应变数据，形状为 (N, 6)
+        stress_data : numpy.ndarray
+            应力数据，形状为 (N, 6)
+        """
+        combined_data = np.hstack((strain_data, stress_data))
+        headers = [
+            "strain_11",
+            "strain_22",
+            "strain_33",
+            "strain_23",
+            "strain_13",
+            "strain_12",
+            "stress_11",
+            "stress_22",
+            "stress_33",
+            "stress_23",
+            "stress_13",
+            "stress_12",
+        ]
+        filename = os.path.join(self.save_path, "stress_strain_data.csv")
+        with open(filename, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for row in combined_data:
+                # 格式化每个数值，保留 6 位有效数字
+                formatted_row = [f"{value:.6e}" for value in row]
+                writer.writerow(formatted_row)
+        logger.info(f"Stress-strain data saved to {filename}")
 
     def calculate_elastic_constants(self):
         """
@@ -375,39 +422,3 @@ class ZeroKElasticConstantsCalculator:
         # )
 
         return C_in_GPa
-
-    def save_stress_strain_data(self, strain_data, stress_data):
-        """
-        将应力和应变数据合并保存到一个 CSV 文件中
-
-        Parameters
-        ----------
-        strain_data : numpy.ndarray
-            应变数据，形状为 (N, 6)
-        stress_data : numpy.ndarray
-            应力数据，形状为 (N, 6)
-        """
-        combined_data = np.hstack((strain_data, stress_data))
-        headers = [
-            "strain_11",
-            "strain_22",
-            "strain_33",
-            "strain_23",
-            "strain_13",
-            "strain_12",
-            "stress_11",
-            "stress_22",
-            "stress_33",
-            "stress_23",
-            "stress_13",
-            "stress_12",
-        ]
-        filename = os.path.join(self.save_path, "stress_strain_data.csv")
-        with open(filename, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            for row in combined_data:
-                # 格式化每个数值，保留 6 位有效数字
-                formatted_row = [f"{value:.6e}" for value in row]
-                writer.writerow(formatted_row)
-        logger.info(f"Stress-strain data saved to {filename}")
