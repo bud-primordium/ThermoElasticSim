@@ -9,14 +9,21 @@
 包含 Visualizer 类，用于可视化晶胞结构和应力-应变关系
 """
 
-import matplotlib.pyplot as plt
-import numpy as np
-from sklearn.metrics import r2_score
-from matplotlib.animation import FuncAnimation, PillowWriter
-from .structure import Cell
-import logging
 import os
+import logging
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
+from sklearn.metrics import r2_score
 
+from .structure import Cell
+
+# 配置日志记录
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 plt.ioff()  # 关闭交互模式，避免 GUI 启动警告
@@ -30,10 +37,18 @@ class Visualizer:
         pass
 
     def _ensure_directory_exists(self, filepath):
-        """确保文件目录存在"""
+        """
+        确保文件目录存在
+
+        Parameters
+        ----------
+        filepath : str
+            文件路径
+        """
         directory = os.path.dirname(filepath)
         if directory:
             os.makedirs(directory, exist_ok=True)
+            logger.debug(f"Ensured directory exists: {directory}")
 
     def plot_cell_structure(self, cell_structure: Cell, show=True):
         """
@@ -53,7 +68,8 @@ class Visualizer:
         ax : matplotlib.axes._subplots.Axes3DSubplot
             3D 子图对象
         """
-        fig = plt.figure()
+        logger.info("Plotting crystal structure.")
+        fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot(111, projection="3d")
 
         # 检查原子是否都是同一种元素
@@ -63,23 +79,39 @@ class Visualizer:
 
         if single_element:
             # 如果只有一种元素，绘制为单一颜色
-            positions = [atom.position for atom in cell_structure.atoms]
+            positions = np.array([atom.position for atom in cell_structure.atoms])
             ax.scatter(
-                *np.array(positions).T, color=color, label=next(iter(atom_symbols))
+                positions[:, 0],
+                positions[:, 1],
+                positions[:, 2],
+                color=color,
+                label=next(iter(atom_symbols)),
+                s=50,
+            )
+            logger.debug(
+                f"Plotted atoms with single element: {next(iter(atom_symbols))}"
             )
         else:
             # 不同元素使用不同颜色和标签
             for atom in cell_structure.atoms:
-                ax.scatter(*atom.position, label=atom.symbol)
+                ax.scatter(
+                    atom.position[0],
+                    atom.position[1],
+                    atom.position[2],
+                    label=atom.symbol,
+                    s=50,
+                )
+            logger.debug("Plotted atoms with multiple elements.")
 
         # 绘制晶格矢量
-        origin = [0, 0, 0]
+        origin = np.array([0, 0, 0])
         lattice_vectors = cell_structure.lattice_vectors
         for i in range(3):
             vec = lattice_vectors[:, i]
             ax.quiver(
-                *origin, *vec, color="r", arrow_length_ratio=0.1
+                *origin, *vec, color="r", arrow_length_ratio=0.1, linewidth=1.5
             )  # 使用箭头表示晶格矢量
+            logger.debug(f"Plotted lattice vector v{i+1}: {vec}")
 
         # 设置坐标轴标签
         ax.set_xlabel("X (Å)")
@@ -90,7 +122,9 @@ class Visualizer:
 
         # 只有在多种元素情况下才显示图例
         if not single_element:
-            plt.legend()
+            handles, labels = ax.get_legend_handles_labels()
+            by_label = dict(zip(labels, handles))
+            ax.legend(by_label.values(), by_label.keys())
 
         # 设置相同的轴比例
         self.set_axes_equal(ax)
@@ -99,12 +133,19 @@ class Visualizer:
         if show:
             plt.show()
 
+        logger.info("Crystal structure plot completed.")
         return fig, ax
 
     def set_axes_equal(self, ax):
         """
         使3D坐标轴比例相同
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes3DSubplot
+            3D 子图对象
         """
+        logger.debug("Setting equal aspect ratio for axes.")
         limits = np.array(
             [
                 ax.get_xlim3d(),
@@ -119,6 +160,7 @@ class Visualizer:
         ax.set_xlim3d(origin[0], origin[0] + max_size)
         ax.set_ylim3d(origin[1], origin[1] + max_size)
         ax.set_zlim3d(origin[2], origin[2] + max_size)
+        logger.debug(f"Axes limits set to origin: {origin}, size: {max_size}")
 
     def plot_stress_strain_multiple(
         self, strain_data: np.ndarray, stress_data: np.ndarray, show=True
@@ -142,13 +184,14 @@ class Visualizer:
         axes : numpy.ndarray
             子图对象数组
         """
-        import matplotlib.pyplot as plt
-
+        logger.info("Plotting multiple stress-strain relationships.")
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         axes = axes.flatten()
 
         # 使用颜色映射
         cmap = plt.get_cmap("tab10")
+
+        components = ["11", "22", "33", "23", "13", "12"]
 
         for i in range(6):
             ax = axes[i]
@@ -157,19 +200,22 @@ class Visualizer:
                 stress_data[:, i],
                 color=cmap(i),
                 s=50,
-                label=f"Component {i+1}",
+                label=f"Component {components[i]}",
+                alpha=0.7,
             )
-            ax.set_xlabel(f"Strain {i+1}")
-            ax.set_ylabel(f"Stress {i+1} (GPa)")
-            ax.set_title(f"Stress {i+1} vs Strain {i+1}")
+            ax.set_xlabel(f"Strain {components[i]}")
+            ax.set_ylabel(f"Stress {components[i]} (GPa)")
+            ax.set_title(f"Stress {components[i]} vs Strain {components[i]}")
             ax.legend()
             ax.grid(True)
+            logger.debug(f"Plotted stress-strain for component {components[i]}.")
 
         plt.tight_layout()
 
         if show:
             plt.show()
 
+        logger.info("Multiple stress-strain plots completed.")
         return fig, axes
 
     def plot_deformation_stress_strain(
@@ -189,8 +235,9 @@ class Visualizer:
         save_path : str
             保存路径
         show : bool, optional
-            是否显示图像
+            是否显示图像，默认为 False
         """
+        logger.info(f"Plotting deformation stress-strain for mode index {mode_index}.")
         components = ["11", "22", "33", "23", "13", "12"]
         mode_labels = {
             "11": "ε₁₁",
@@ -228,36 +275,53 @@ class Visualizer:
                 color="blue",
                 alpha=0.6,
                 label="Data",
+                s=30,
             )
 
             # 添加拟合线
-            coeffs = np.polyfit(strains[:, mode_index], stresses[:, i], 1)
-            fit_line = np.poly1d(coeffs)
-            strain_range = np.array(
-                [strains[:, mode_index].min(), strains[:, mode_index].max()]
-            )
-            ax.plot(strain_range, fit_line(strain_range), "r-", alpha=0.8, label="Fit")
+            if len(strains[:, mode_index]) > 1:
+                coeffs = np.polyfit(strains[:, mode_index], stresses[:, i], 1)
+                fit_line = np.poly1d(coeffs)
+                strain_range = np.linspace(
+                    strains[:, mode_index].min(),
+                    strains[:, mode_index].max(),
+                    100,
+                )
+                ax.plot(
+                    strain_range, fit_line(strain_range), "r-", alpha=0.8, label="Fit"
+                )
 
-            # 计算并显示R²
-            y_pred = fit_line(strains[:, mode_index])
-            r2 = r2_score(stresses[:, i], y_pred)
+                # 计算并显示R^2
+                y_pred = fit_line(strains[:, mode_index])
+                r2 = r2_score(stresses[:, i], y_pred)
+                logger.debug(
+                    f"Mode {mode_index}, Component {component}: R^2 = {r2:.4f}"
+                )
+            else:
+                r2 = 1.0  # 单点时R^2默认1
 
             # 设置标签和标题
             ax.set_xlabel(f"{mode_labels[current_mode]} (Strain)")
-            ax.set_ylabel(f"{stress_labels[component]} (eV/Å³)")
+            ax.set_ylabel(f"{stress_labels[component]} (GPa)")
             ax.set_title(
-                f"{stress_labels[component]} vs {mode_labels[current_mode]}\nR² = {r2:.4f}"
+                f"{stress_labels[component]} vs {mode_labels[current_mode]}\nR^2 = {r2:.4f}"
             )
             ax.grid(True, alpha=0.3)
             if i == 0:  # 只在第一个子图显示图例
                 ax.legend()
 
+            logger.debug(
+                f"Plotted deformation stress-strain for component {component}."
+            )
+
         plt.tight_layout()
 
         # 保存图片
         filename = os.path.join(save_path, f"deformation_{components[mode_index]}.png")
+        self._ensure_directory_exists(filename)
         fig.savefig(filename, dpi=300, bbox_inches="tight")
         plt.close(fig)
+        logger.info(f"Saved deformation stress-strain plot to {filename}")
 
     def create_optimization_animation(
         self, trajectory, filename, title="Optimization", pbc=True, show=True
@@ -278,8 +342,9 @@ class Visualizer:
         show : bool, optional
             是否立即显示动画，默认为 True
         """
+        logger.info(f"Creating optimization animation: {filename}")
         self._ensure_directory_exists(filename)
-        fig = plt.figure()
+        fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot(111, projection="3d")
 
         # 初始化图像
@@ -301,9 +366,20 @@ class Visualizer:
                 f.write(f"Volume: {frame['volume']:.3f}\n")
                 f.write(f"Lattice vectors:\n{frame['lattice_vectors']}\n")
                 f.write("-" * 50 + "\n")
+        logger.debug(f"Saved trajectory log to {log_filename}")
 
         def init():
             scatter._offsets3d = ([], [], [])
+            for quiver in quivers:
+                quiver.remove()
+            quivers.clear()
+            for _ in range(3):
+                quivers.append(
+                    ax.quiver(0, 0, 0, 0, 0, 0, color="r", arrow_length_ratio=0.1)
+                )
+            text_volume.set_text("")
+            text_lattice.set_text("")
+            text_atoms.set_text("")
             return scatter, *quivers, text_volume, text_lattice, text_atoms
 
         def update(frame):
@@ -312,9 +388,6 @@ class Visualizer:
             volume = data["volume"]
             lattice_vectors = np.array(data["lattice_vectors"])
             num_atoms = positions.shape[0]
-
-            # logger.debug(f"Frame {frame}: Number of atoms = {num_atoms}")
-            # logger.debug(f"Positions:\n{positions}")
 
             scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
 
@@ -369,6 +442,8 @@ class Visualizer:
 
         # 保存动画
         ani.save(filename, writer=PillowWriter(fps=5))
+        logger.info(f"Saved optimization animation to {filename}")
+
         if show:
             plt.show()
         plt.close(fig)
@@ -390,13 +465,16 @@ class Visualizer:
         show : bool, optional
             是否立即显示动画，默认为 True
         """
+        logger.info(f"Creating stress-strain animation: {filename}")
+        self._ensure_directory_exists(filename)
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        lines = [ax.plot([], [], label=f"Stress {i+1}")[0] for i in range(6)]
-        ax.set_xlim(strain_data.min(), strain_data.max())
-        ax.set_ylim(stress_data.min(), stress_data.max())
+        components = ["11", "22", "33", "23", "13", "12"]
+        lines = [ax.plot([], [], label=f"Stress {comp}")[0] for comp in components]
+        ax.set_xlim(strain_data.min() * 1.05, strain_data.max() * 1.05)
+        ax.set_ylim(stress_data.min() * 1.05, stress_data.max() * 1.05)
         ax.set_xlabel("Strain")
-        ax.set_ylabel("Stress (eV/Å³)")
+        ax.set_ylabel("Stress (GPa)")
         ax.set_title("Stress-Strain Relationship Animation")
         ax.legend()
         ax.grid(True)
@@ -409,6 +487,9 @@ class Visualizer:
         def update(frame):
             for i, line in enumerate(lines):
                 line.set_data(strain_data[:frame, i], stress_data[:frame, i])
+            ax.set_title(
+                f"Stress-Strain Relationship Animation - Frame {frame}/{len(strain_data)}"
+            )
             return lines
 
         ani = FuncAnimation(
@@ -422,6 +503,8 @@ class Visualizer:
 
         plt.tight_layout()
         ani.save(filename, writer=PillowWriter(fps=5))
+        logger.info(f"Saved stress-strain relationship animation to {filename}")
+
         if show:
             plt.show()
         plt.close(fig)

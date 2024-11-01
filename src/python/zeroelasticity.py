@@ -10,20 +10,21 @@
 用于通过应力应变数据计算材料的弹性常数
 """
 
-import numpy as np
+import os
+import csv
 import logging
-from concurrent.futures import ThreadPoolExecutor
-import concurrent.futures as futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
+from sklearn.linear_model import Ridge
+
 from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA
 from .visualization import Visualizer
-import os
-import matplotlib.pyplot as plt
-import csv
-from sklearn.linear_model import Ridge
 
 # 配置日志记录
 logging.basicConfig(
@@ -59,7 +60,7 @@ class ZeroKElasticConstantsSolver:
         tuple
             (elastic_constants, r2_score)
             - elastic_constants: 弹性常数矩阵，形状为 (6, 6)
-            - r2_score: 整体拟合的 R² 值
+            - r2_score: 整体拟合的 R^2 值
         """
         strains = np.array(strains)
         stresses = np.array(stresses)
@@ -88,9 +89,88 @@ class ZeroKElasticConstantsSolver:
 
         # 使用sklearn的r2_score计算拟合优度
         r2_value = r2_score(stresses.flatten(), predictions.flatten())
-        logger.debug(f"Overall R² score for elastic constants fitting: {r2_value:.6f}")
+        logger.debug(f"Overall R^2 score for elastic constants fitting: {r2_value:.6f}")
 
         return C, r2_value
+
+    def perform_individual_fits(self, strains, stresses, save_path):
+        """
+        对每一对应变和应力分量进行线性拟合，并保存拟合结果。
+
+        Parameters
+        ----------
+        strains : numpy.ndarray
+            应变数据，形状为 (N, 6)
+        stresses : numpy.ndarray
+            应力数据，形状为 (N, 6)
+        save_path : str
+            保存拟合结果的文件路径
+
+        Returns
+        -------
+        None
+        """
+        logger.info(
+            "Performing individual linear fits for each stress-strain component."
+        )
+
+        components = ["11", "22", "33", "23", "13", "12"]
+        results = []
+
+        with open(save_path, "w") as f:
+            # 写入表头
+            f.write(
+                "Deformation_Type\tDependent_Variable\tIndependent_Variable\tSlope\tIntercept\tR^2\n"
+            )
+            logger.debug("Written header to the fit results file.")
+
+            for i, strain_comp in enumerate(components):
+                for j, stress_comp in enumerate(components):
+                    # 应用与绘图相同的筛选逻辑
+                    mask = np.abs(strains[:, i]) > 1e-10
+                    x = strains[mask, i]
+                    y = stresses[mask, j]
+
+                    logger.debug(
+                        f"Fitting Stress {stress_comp} (dependent) vs Strain {strain_comp} (independent)."
+                    )
+                    logger.debug(f"Strain {strain_comp} data (x): {x}")
+                    logger.debug(f"Stress {stress_comp} data (y): {y}")
+
+                    if len(x) < 2:
+                        logger.warning(
+                            f"Not enough data points for fit: Strain {strain_comp} vs Stress {stress_comp}"
+                        )
+                        slope, intercept, r2 = np.nan, np.nan, np.nan
+                    else:
+                        try:
+                            # 进行线性拟合
+                            coeffs = np.polyfit(x, y, 1)
+                            slope, intercept = coeffs
+                            fit_line = np.poly1d(coeffs)
+                            y_pred = fit_line(x)
+                            r2 = r2_score(y, y_pred)
+
+                            logger.debug(
+                                f"Fitted {strain_comp} vs {stress_comp}: "
+                                f"Slope={slope:.6f}, Intercept={intercept:.6f}, R^2={r2:.6f}"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Error fitting {strain_comp} vs {stress_comp}: {e}"
+                            )
+                            slope, intercept, r2 = np.nan, np.nan, np.nan
+
+                    # 写入结果，保留6位小数
+                    f.write(
+                        f"{strain_comp}\t{stress_comp}\t{strain_comp}\t{slope:.6f}\t{intercept:.6f}\t{r2:.6f}\n"
+                    )
+                    logger.debug(
+                        f"Written fit to file: {strain_comp} vs {stress_comp}, "
+                        f"Slope={slope:.6f}, Intercept={intercept:.6f}, R^2={r2:.6f}"
+                    )
+
+        logger.info(f"Individual fit results saved to {save_path}")
 
 
 class ZeroKElasticConstantsCalculator:
@@ -108,7 +188,7 @@ class ZeroKElasticConstantsCalculator:
     num_steps : int, optional
         每个应变分量的步数，默认为 10
     optimizer_type : str, optional
-        优化器类型，支持 'GD'（梯度下降）和 'BFGS'，默认为 'BFGS'
+        优化器类型，支持 'GD'（梯度下降）、'BFGS'、'LBFGS'，默认为 'LBFGS'
     optimizer_params : dict, optional
         优化器的参数，默认为 None。若提供，将覆盖默认参数。
     save_path : str, optional
@@ -136,39 +216,82 @@ class ZeroKElasticConstantsCalculator:
         self.save_path = save_path
         os.makedirs(self.save_path, exist_ok=True)
 
-        # 设置优化器参数，允许外部传入
-        if optimizer_type == "GD":
-            self.optimizer_params = {
+        self.optimizer_type = optimizer_type
+        self.optimizer_params = self._get_optimizer_params(
+            optimizer_type, optimizer_params
+        )
+
+    def _get_optimizer_params(self, optimizer_type, optimizer_params):
+        """
+        获取优化器参数，允许外部传入并覆盖默认参数。
+
+        Parameters
+        ----------
+        optimizer_type : str
+            优化器类型
+        optimizer_params : dict or None
+            外部传入的优化器参数
+
+        Returns
+        -------
+        dict
+            优化器参数
+        """
+        default_params = {
+            "GD": {
                 "max_steps": 200000,
                 "tol": 1e-5,
                 "step_size": 1e-4,
                 "energy_tol": 1e-6,
-            }
-            if optimizer_params:
-                self.optimizer_params.update(optimizer_params)
-            self.optimizer_type = "GD"
-        elif optimizer_type == "BFGS":
-            self.optimizer_params = {
+            },
+            "BFGS": {
                 "tol": 1e-8,
                 "maxiter": 1000000,
-            }  # 增加 maxiter，减小 tol
-            if optimizer_params:
-                self.optimizer_params.update(optimizer_params)
-            self.optimizer_type = "BFGS"
-        elif optimizer_type == "LBFGS":
-            self.optimizer_params = {
+            },
+            "LBFGS": {
                 "ftol": 1e-8,
                 "gtol": 1e-5,
                 "maxls": 100,
                 "maxiter": 10000,
-            }
-            if optimizer_params:
-                self.optimizer_params.update(optimizer_params)
-            self.optimizer_type = "LBFGS"
-        else:
+            },
+        }
+
+        if optimizer_type not in default_params:
             raise ValueError(
                 "Unsupported optimizer type. Choose 'GD', 'BFGS', or 'LBFGS'."
             )
+
+        params = default_params[optimizer_type].copy()
+        if optimizer_params:
+            params.update(optimizer_params)
+
+        logger.debug(f"Optimizer parameters for {optimizer_type}: {params}")
+        return params
+
+    def _get_optimizer_instance(self):
+        """
+        根据优化器类型返回相应的优化器实例。
+
+        Returns
+        -------
+        Optimizer
+            优化器实例
+        """
+        optimizer_mapping = {
+            "GD": GradientDescentOptimizer,
+            "BFGS": BFGSOptimizer,
+            "LBFGS": LBFGSOptimizer,
+        }
+
+        optimizer_class = optimizer_mapping.get(self.optimizer_type)
+        if not optimizer_class:
+            raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
+
+        optimizer = optimizer_class(**self.optimizer_params)
+        logger.debug(
+            f"Initialized optimizer: {self.optimizer_type} with params: {self.optimizer_params}"
+        )
+        return optimizer
 
     def calculate_initial_stress(self):
         """
@@ -191,16 +314,11 @@ class ZeroKElasticConstantsCalculator:
         return initial_stress
 
     def optimize_initial_structure(self):
-        """在施加变形前对结构进行一次优化，并保存优化过程的动画。"""
+        """
+        在施加变形前对结构进行一次优化，并保存优化过程的动画。
+        """
         logger.debug("Starting initial structure optimization.")
-        if self.optimizer_type == "GD":
-            optimizer = GradientDescentOptimizer(**self.optimizer_params)
-        elif self.optimizer_type == "BFGS":
-            optimizer = BFGSOptimizer(**self.optimizer_params)
-        elif self.optimizer_type == "LBFGS":
-            optimizer = LBFGSOptimizer(**self.optimizer_params)
-        else:
-            raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
+        optimizer = self._get_optimizer_instance()
 
         converged, trajectory = optimizer.optimize(self.cell, self.potential)
         logger.debug("Initial structure optimization completed.")
@@ -209,7 +327,7 @@ class ZeroKElasticConstantsCalculator:
         animation_filename = os.path.join(self.save_path, "initial_optimization.gif")
         self.visualizer.create_optimization_animation(
             trajectory,
-            filename=animation_filename,  # 明确传入文件路径
+            filename=animation_filename,
             title="Initial Structure Optimization",
             pbc=self.cell.pbc_enabled,
             show=False,
@@ -247,15 +365,8 @@ class ZeroKElasticConstantsCalculator:
         deformed_cell.apply_deformation(F)
         logger.debug(f"Applied deformation to cell #{deformation_index}.")
 
-        # 为每个任务创建独立的优化器实例
-        if self.optimizer_type == "GD":
-            optimizer = GradientDescentOptimizer(**self.optimizer_params)
-        elif self.optimizer_type == "BFGS":
-            optimizer = BFGSOptimizer(**self.optimizer_params)
-        elif self.optimizer_type == "LBFGS":
-            optimizer = LBFGSOptimizer(**self.optimizer_params)
-        else:
-            raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
+        # 获取优化器实例
+        optimizer = self._get_optimizer_instance()
 
         # 对变形后的结构进行优化并生成轨迹
         converged, trajectory = optimizer.optimize(deformed_cell, self.potential)
@@ -271,11 +382,10 @@ class ZeroKElasticConstantsCalculator:
             deformed_cell, self.potential
         )
 
-        # **减去初始应力张量**
+        # 减去初始应力张量
         stress_tensor -= self.initial_stress_tensor
-        # # 计算应变张量，使用 Green-Lagrange 应变定义
-        # strain_tensor = 0.5 * (F.T @ F - np.eye(3))
-        # 还使用小形变理论
+
+        # 计算应变张量，使用小形变理论
         strain_tensor = 0.5 * (F + F.T) - np.eye(3)
 
         # 使用正确的 Voigt 转换
@@ -335,7 +445,15 @@ class ZeroKElasticConstantsCalculator:
     def process_deformation_visualization(self, strain_data, stress_data):
         """
         处理所有变形模式的可视化，为每种变形生成单独的PNG
+
+        Parameters
+        ----------
+        strain_data : numpy.ndarray
+            应变数据，形状为 (N, 6)
+        stress_data : numpy.ndarray
+            应力数据，形状为 (N, 6)
         """
+        logger.info("Processing deformation visualizations.")
         # 创建可视化保存目录
         vis_dir = os.path.join(self.save_path, "deformation_analysis")
         os.makedirs(vis_dir, exist_ok=True)
@@ -355,6 +473,58 @@ class ZeroKElasticConstantsCalculator:
                 self.visualizer.plot_deformation_stress_strain(
                     mode_strains, mode_stresses, i, vis_dir, show=False
                 )
+                logger.debug(f"Plotted deformation stress-strain for mode {i}.")
+
+    def _save_deformation_results(self, result):
+        """
+        保存单个变形的优化动画和晶胞结构图。
+
+        Parameters
+        ----------
+        result : tuple
+            包含应变、应力、优化轨迹、变形后的晶胞和变形索引的元组
+
+        Returns
+        -------
+        tuple
+            应变和应力的 Voigt 表示
+        """
+        (
+            strain_voigt,
+            stress_voigt,
+            trajectory,
+            deformed_cell,
+            deformation_index,
+        ) = result
+
+        deformation_dir = os.path.join(
+            self.save_path, f"deformation_{deformation_index}"
+        )
+        os.makedirs(deformation_dir, exist_ok=True)
+
+        # 保存优化轨迹动画
+        animation_filename = os.path.join(
+            deformation_dir, f"deformation_{deformation_index}_optimization.gif"
+        )
+        self.visualizer.create_optimization_animation(
+            trajectory,
+            animation_filename,
+            title=f"Deformation #{deformation_index} Optimization",
+            pbc=deformed_cell.pbc_enabled,
+            show=False,
+        )
+        logger.info(f"Saved deformation optimization animation to {animation_filename}")
+
+        # 保存变形后的晶胞结构图
+        plot_filename = os.path.join(
+            deformation_dir, f"deformed_cell_{deformation_index}.png"
+        )
+        fig, ax = self.visualizer.plot_cell_structure(deformed_cell, show=False)
+        fig.savefig(plot_filename)
+        plt.close(fig)
+        logger.info(f"Saved deformed cell structure plot to {plot_filename}")
+
+        return strain_voigt, stress_voigt
 
     def calculate_elastic_constants(self):
         """
@@ -375,7 +545,7 @@ class ZeroKElasticConstantsCalculator:
 
         # 生成变形矩阵
         F_list = self.deformer.generate_deformation_matrices()
-        results = []
+        results = [None] * len(F_list)  # 预分配结果列表，确保顺序
 
         # 并行计算应力和应变
         with ThreadPoolExecutor() as executor:
@@ -385,11 +555,8 @@ class ZeroKElasticConstantsCalculator:
                 for i, F in enumerate(F_list)
             }
 
-            # 预分配结果列表，确保顺序
-            results = [None] * len(F_list)
-
             # 按完成顺序处理结果
-            for future in futures.as_completed(future_to_idx):
+            for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]
                 try:
                     result = future.result()
@@ -397,105 +564,79 @@ class ZeroKElasticConstantsCalculator:
                     logger.debug(f"Completed deformation {idx}")
                 except Exception as e:
                     logger.error(f"Error in deformation {idx}: {e}")
-                    raise  # 如果有错误，立即停止计算
+                    raise RuntimeError(f"Deformation {idx} failed") from e
 
         # 检查是否所有计算都完成
         if any(r is None for r in results):
             raise RuntimeError("Some deformations failed to complete")
 
-        # 初始化存储数组
-        strains = []
-        stresses = []
+        strains, stresses = [], []
 
-        # 处理结果
-        for (
-            strain_voigt,
-            stress_voigt,
-            trajectory,
-            deformed_cell,
-            deformation_index,
-        ) in results:
-            # 保存优化过程的动画
-            deformation_dir = os.path.join(
-                self.save_path, f"deformation_{deformation_index}"
-            )
-            os.makedirs(deformation_dir, exist_ok=True)
-
-            # 保存优化轨迹动画
-            animation_filename = os.path.join(
-                deformation_dir, f"deformation_{deformation_index}_optimization.gif"
-            )
-            self.visualizer.create_optimization_animation(
-                trajectory,
-                animation_filename,
-                title=f"Deformation #{deformation_index} Optimization",
-                pbc=deformed_cell.pbc_enabled,
-                show=False,
-            )
-            logger.info(
-                f"Saved deformation optimization animation to {animation_filename}"
-            )
-
-            # 保存变形后的晶胞结构图
-            plot_filename = os.path.join(
-                deformation_dir, f"deformed_cell_{deformation_index}.png"
-            )
-            fig, ax = self.visualizer.plot_cell_structure(deformed_cell, show=False)
-            fig.savefig(plot_filename)
-            plt.close(fig)
-            logger.info(f"Saved deformed cell structure plot to {plot_filename}")
-
-            # 收集应力应变数据
+        # 处理结果并保存相关文件
+        for result in results:
+            strain_voigt, stress_voigt = self._save_deformation_results(result)
             strains.append(strain_voigt)
             stresses.append(stress_voigt)
 
-            # 转换为numpy数组
-            strain_data = np.array(strains)
-            stress_data = np.array(stresses)
+        strain_data = np.array(strains)
+        stress_data = np.array(stresses)
 
-            # 添加: 生成每种变形模式的PNG
-            self.process_deformation_visualization(strain_data, stress_data)
+        # 生成每种变形模式的PNG
+        self.process_deformation_visualization(strain_data, stress_data)
 
-            # 保存应力应变数据
-            self.save_stress_strain_data(strain_data, stress_data)
+        # 保存应力应变数据
+        self.save_stress_strain_data(strain_data, stress_data)
 
         logger.info(f"Total strain-stress pairs: {len(strains)}")
         logger.info(f"Strain range: [{strain_data.min():.6e}, {strain_data.max():.6e}]")
         logger.info(f"Stress range: [{stress_data.min():.6e}, {stress_data.max():.6e}]")
 
-        # 计算弹性常数矩阵和R²
+        # 计算弹性常数矩阵和R^2
         logger.debug("Solving for elastic constants.")
         solver = ZeroKElasticConstantsSolver()
-        C, r2_score = solver.solve(
-            strain_data, stress_data, regularization=False, alpha=1e-5
-        )
+        C, r2 = solver.solve(strain_data, stress_data, regularization=False, alpha=1e-5)
         C_in_GPa = C * EV_TO_GPA
 
-        # 记录R²值
+        # 记录R^2值和弹性常数矩阵
         logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
-        logger.info(f"Overall R² score: {r2_score:.6f}")
+        logger.info(f"Overall R^2 score: {r2:.6f}")
 
-        # 保存弹性常数矩阵和R²到文件
+        # 保存弹性常数矩阵和R^2到文件
         results_file = os.path.join(self.save_path, "elastic_constants_GPa.txt")
         with open(results_file, "w") as f:
             f.write("Elastic Constants Matrix (GPa):\n")
             np.savetxt(f, C_in_GPa, fmt="%.6e")
-            f.write(f"\nOverall R² score: {r2_score:.6f}")
-            f.write("\nNote: R² closer to 1 indicates better fit quality")
+            f.write(f"\nOverall R^2 score: {r2:.6f}")
+            f.write("\nNote: R^2 closer to 1 indicates better fit quality")
+        logger.info(f"Elastic constants and R^2 saved to {results_file}")
+
+        # 创建并保存拟合结果到统一的txt文件
+        fit_results_file = os.path.join(self.save_path, "individual_fits.txt")
+        solver.perform_individual_fits(strain_data, stress_data, fit_results_file)
 
         # 保存应力-应变关系图
         fig, ax = self.visualizer.plot_stress_strain_multiple(
             strain_data, stress_data, show=False
         )
-        fig.savefig(os.path.join(self.save_path, "stress_strain_relationship.png"))
+        stress_strain_plot = os.path.join(
+            self.save_path, "stress_strain_relationship.png"
+        )
+        fig.savefig(stress_strain_plot)
         plt.close(fig)
+        logger.info(f"Saved stress-strain relationship plot to {stress_strain_plot}")
 
         # 保留应力-应变关系动画的创建
+        animation_filename = os.path.join(
+            self.save_path, "stress_strain_relationship.gif"
+        )
         self.visualizer.create_stress_strain_animation(
             strain_data,
             stress_data,
-            os.path.join(self.save_path, "stress_strain_relationship.gif"),
+            animation_filename,
             show=False,
+        )
+        logger.info(
+            f"Saved stress-strain relationship animation to {animation_filename}"
         )
 
         return C_in_GPa

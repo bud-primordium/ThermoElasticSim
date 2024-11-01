@@ -82,7 +82,6 @@ def test_elastic_constants_bcc_aluminum_eam():
     logger.info(f"Bulk modulus: {B:.1f} GPa")
 
     # 力学稳定性检查
-    logger.info("\n力学稳定性检查:")
     logger.info(f"C11 > 0: {C[0,0] > 0}")
     logger.info(f"C44 > 0: {C[3,3] > 0}")
     logger.info(f"C11 > |C12|: {C[0,0] > abs(C[0,1])}")
