@@ -14,6 +14,7 @@ import numpy as np
 import logging
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures as futures
+from sklearn.metrics import r2_score
 from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
@@ -78,25 +79,18 @@ class ZeroKElasticConstantsSolver:
             model = Ridge(alpha=alpha, fit_intercept=False)
             model.fit(strains, stresses)
             C = model.coef_.T
-
-            # 计算整体R²
             predictions = strains @ C.T
-            ss_tot = np.sum((stresses - np.mean(stresses, axis=0)) ** 2)
-            ss_res = np.sum((stresses - predictions) ** 2)
-            r2_score = 1 - (ss_res / ss_tot)
         else:
             logger.debug("Solving elastic constants using least squares.")
             C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
             C = C.T
-
-            # 计算整体R²
             predictions = strains @ C
-            ss_tot = np.sum((stresses - np.mean(stresses, axis=0)) ** 2)
-            ss_res = np.sum((stresses - predictions) ** 2)
-            r2_score = 1 - (ss_res / ss_tot)
 
-        logger.debug(f"Overall R² score for elastic constants fitting: {r2_score:.6f}")
-        return C, r2_score
+        # 使用sklearn的r2_score计算拟合优度
+        r2_value = r2_score(stresses.flatten(), predictions.flatten())
+        logger.debug(f"Overall R² score for elastic constants fitting: {r2_value:.6f}")
+
+        return C, r2_value
 
 
 class ZeroKElasticConstantsCalculator:
@@ -338,6 +332,30 @@ class ZeroKElasticConstantsCalculator:
                 writer.writerow(formatted_row)
         logger.info(f"Stress-strain data saved to {filename}")
 
+    def process_deformation_visualization(self, strain_data, stress_data):
+        """
+        处理所有变形模式的可视化，为每种变形生成单独的PNG
+        """
+        # 创建可视化保存目录
+        vis_dir = os.path.join(self.save_path, "deformation_analysis")
+        os.makedirs(vis_dir, exist_ok=True)
+
+        # 对每种变形模式分别处理
+        num_modes = 6
+        for i in range(num_modes):
+            # 找出对应于这种变形模式的数据点
+            # 通过检查该模式的应变是否为主导应变来筛选
+            # 使用一个小阈值来避免数值误差
+            mask = np.abs(strain_data[:, i]) > 1e-10
+            mode_strains = strain_data[mask]
+            mode_stresses = stress_data[mask]
+
+            # 确保找到了有效的数据点
+            if len(mode_strains) > 0:
+                self.visualizer.plot_deformation_stress_strain(
+                    mode_strains, mode_stresses, i, vis_dir, show=False
+                )
+
     def calculate_elastic_constants(self):
         """
         计算弹性常数矩阵
@@ -431,12 +449,15 @@ class ZeroKElasticConstantsCalculator:
             strains.append(strain_voigt)
             stresses.append(stress_voigt)
 
-        # 转换为numpy数组
-        strain_data = np.array(strains)
-        stress_data = np.array(stresses)
+            # 转换为numpy数组
+            strain_data = np.array(strains)
+            stress_data = np.array(stresses)
 
-        # 保存应力应变数据
-        self.save_stress_strain_data(strain_data, stress_data)
+            # 添加: 生成每种变形模式的PNG
+            self.process_deformation_visualization(strain_data, stress_data)
+
+            # 保存应力应变数据
+            self.save_stress_strain_data(strain_data, stress_data)
 
         logger.info(f"Total strain-stress pairs: {len(strains)}")
         logger.info(f"Strain range: [{strain_data.min():.6e}, {strain_data.max():.6e}]")

@@ -11,6 +11,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.metrics import r2_score
 from matplotlib.animation import FuncAnimation, PillowWriter
 from .structure import Cell
 import logging
@@ -170,6 +171,93 @@ class Visualizer:
             plt.show()
 
         return fig, axes
+
+    def plot_deformation_stress_strain(
+        self, strains, stresses, mode_index, save_path, show=False
+    ):
+        """
+        为特定变形方式绘制所有应力分量的响应图
+
+        Parameters
+        ----------
+        strains : numpy.ndarray
+            该变形方式下的应变数据
+        stresses : numpy.ndarray
+            该变形方式下的应力数据
+        mode_index : int
+            变形模式索引 (0-5)
+        save_path : str
+            保存路径
+        show : bool, optional
+            是否显示图像
+        """
+        components = ["11", "22", "33", "23", "13", "12"]
+        mode_labels = {
+            "11": "ε₁₁",
+            "22": "ε₂₂",
+            "33": "ε₃₃",
+            "23": "ε₂₃",
+            "13": "ε₁₃",
+            "12": "ε₁₂",
+        }
+        stress_labels = {
+            "11": "σ₁₁",
+            "22": "σ₂₂",
+            "33": "σ₃₃",
+            "23": "σ₂₃",
+            "13": "σ₁₃",
+            "12": "σ₁₂",
+        }
+
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
+
+        current_mode = components[mode_index]
+        fig.suptitle(
+            f"Deformation Mode: {mode_labels[current_mode]}", fontsize=14, y=1.02
+        )
+
+        # 对每个应力分量绘制其对该变形的响应
+        for i, component in enumerate(components):
+            ax = axes[i]
+
+            # 绘制散点
+            ax.scatter(
+                strains[:, mode_index],
+                stresses[:, i],
+                color="blue",
+                alpha=0.6,
+                label="Data",
+            )
+
+            # 添加拟合线
+            coeffs = np.polyfit(strains[:, mode_index], stresses[:, i], 1)
+            fit_line = np.poly1d(coeffs)
+            strain_range = np.array(
+                [strains[:, mode_index].min(), strains[:, mode_index].max()]
+            )
+            ax.plot(strain_range, fit_line(strain_range), "r-", alpha=0.8, label="Fit")
+
+            # 计算并显示R²
+            y_pred = fit_line(strains[:, mode_index])
+            r2 = r2_score(stresses[:, i], y_pred)
+
+            # 设置标签和标题
+            ax.set_xlabel(f"{mode_labels[current_mode]} (Strain)")
+            ax.set_ylabel(f"{stress_labels[component]} (eV/Å³)")
+            ax.set_title(
+                f"{stress_labels[component]} vs {mode_labels[current_mode]}\nR² = {r2:.4f}"
+            )
+            ax.grid(True, alpha=0.3)
+            if i == 0:  # 只在第一个子图显示图例
+                ax.legend()
+
+        plt.tight_layout()
+
+        # 保存图片
+        filename = os.path.join(save_path, f"deformation_{components[mode_index]}.png")
+        fig.savefig(filename, dpi=300, bbox_inches="tight")
+        plt.close(fig)
 
     def create_optimization_animation(
         self, trajectory, filename, title="Optimization", pbc=True, show=True
