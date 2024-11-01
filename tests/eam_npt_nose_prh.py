@@ -90,7 +90,7 @@ def create_aluminum_fcc(a=4.05):
         )
 
     cell = Cell(lattice_vectors, atoms)
-    return cell.build_supercell((4, 4, 4))
+    return cell.build_supercell((3, 3, 3))
 
 
 def initialize_velocities(cell: Cell, target_temp: float) -> None:
@@ -442,8 +442,8 @@ def plot_npt_results(
 if __name__ == "__main__":
     history, final_cell = run_npt_simulation(
         target_temp=300.0,  # 300K
-        target_pressure=0.02,  # 3GPa
-        n_steps=20,  # 增加模拟步数以获得更有意义的数据
+        target_pressure=0.03,  # 0.03*160GPa
+        n_steps=10,  # 增加模拟步数以获得更有意义的数据
         dt=0.01,  # 0.01 fs 时间步长
         record_every=1,  # 每5步记录一次
     )
