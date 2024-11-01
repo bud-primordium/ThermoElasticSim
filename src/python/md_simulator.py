@@ -144,7 +144,7 @@ class MDSimulator:
 
             # 应用压强控制器（如果存在）
             if self.barostat is not None:
-                self.barostat.apply(self.cell, dt)
+                self.barostat.apply(self.cell, self.potential, dt)
 
             # 记录温度
             temp = self.cell.calculate_temperature()

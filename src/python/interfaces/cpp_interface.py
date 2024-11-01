@@ -14,6 +14,9 @@ import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 # from ..utils import AMU_TO_EVFSA2  # 如果需要，确保导入单位转换常量
 
@@ -152,8 +155,8 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # total_stress
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # target_pressure
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # virial_stress
                 ctypes.c_double,  # W
             ]
             self.lib.parrinello_rahman_hoover.restype = None
@@ -174,37 +177,15 @@ class CppInterface:
     ):
         """
         计算应力张量。
-
-        Parameters
-        ----------
-        num_atoms : int
-            原子数。
-        positions : numpy.ndarray
-            原子位置数组，形状为 (num_atoms, 3)。
-        velocities : numpy.ndarray
-            原子速度数组，形状为 (num_atoms, 3)。
-        forces : numpy.ndarray
-            原子受力数组，形状为 (num_atoms, 3)。
-        masses : numpy.ndarray
-            原子质量数组，形状为 (num_atoms,)。
-        volume : float
-            系统体积。
-        box_lengths : numpy.ndarray
-            盒子长度数组，形状为 (3,)。
-        stress_tensor : numpy.ndarray
-            输出的应力张量，形状为 (3, 3)。
-
-        Returns
-        -------
-        None
         """
-        # 确保传递的 stress_tensor 是连续的并且是浮点类型
-        # 将 (3,3) 的 stress_tensor 转换为 (9,) 的扁平数组
-        stress_tensor_flat = np.ascontiguousarray(
-            stress_tensor.ravel(), dtype=np.float64
-        )
+        logger.debug(f"Input stress_tensor shape: {stress_tensor.shape}")
+        logger.debug(f"Input stress_tensor type: {type(stress_tensor)}")
 
-        # 调用 C++ 函数，假设 C++ 函数会修改 stress_tensor_flat
+        # 确保传递的 stress_tensor 是连续的并且是浮点类型
+        stress_tensor_flat = np.ascontiguousarray(stress_tensor, dtype=np.float64)
+        logger.debug(f"Flattened stress_tensor shape: {stress_tensor_flat.shape}")
+
+        # 调用 C++ 函数
         self.lib.compute_stress(
             num_atoms,
             positions,
@@ -216,8 +197,20 @@ class CppInterface:
             stress_tensor_flat,
         )
 
-        # 将修改后的扁平数组重新形状为 (3,3)
-        stress_tensor[:, :] = stress_tensor_flat.reshape((3, 3))
+        logger.debug(
+            f"After C++ call, stress_tensor_flat shape: {stress_tensor_flat.shape}"
+        )
+        logger.debug(
+            f"After C++ call, stress_tensor_flat content: {stress_tensor_flat}"
+        )
+
+        # 如果stress_tensor是一维的，我们直接将计算结果赋值给它
+        if len(stress_tensor.shape) == 1:
+            stress_tensor[:] = stress_tensor_flat[:]
+        else:
+            # 如果是二维的，我们需要reshape
+            reshaped = stress_tensor_flat.reshape((3, 3))
+            stress_tensor[:, :] = reshaped
 
     def calculate_lj_forces(
         self,
@@ -484,8 +477,8 @@ class CppInterface:
         lattice_vectors: np.ndarray,
         xi: np.ndarray,
         Q: np.ndarray,
+        total_stress: np.ndarray,  # From StressCalculator
         target_pressure: np.ndarray,
-        virial_stress: np.ndarray,
         W: float,
     ):
         """
@@ -509,10 +502,10 @@ class CppInterface:
             热浴变量数组(长度为6)
         Q : numpy.ndarray
             热浴质量参数数组(长度为6)
+        total_stress : numpy.ndarray
+            当前总应力张量(从StressCalculator获得)
         target_pressure : numpy.ndarray
-            目标压力张量(3x3矩阵)
-        virial_stress : numpy.ndarray
-            维里应力张量(3x3矩阵)
+            目标压力张量
         W : float
             晶胞质量参数
         """
@@ -522,8 +515,8 @@ class CppInterface:
         lattice_vectors = np.ascontiguousarray(lattice_vectors, dtype=np.float64)
         xi = np.ascontiguousarray(xi, dtype=np.float64)
         Q = np.ascontiguousarray(Q, dtype=np.float64)
+        total_stress = np.ascontiguousarray(total_stress, dtype=np.float64)
         target_pressure = np.ascontiguousarray(target_pressure, dtype=np.float64)
-        virial_stress = np.ascontiguousarray(virial_stress, dtype=np.float64)
 
         self.lib.parrinello_rahman_hoover(
             dt,
@@ -534,7 +527,7 @@ class CppInterface:
             lattice_vectors,
             xi,
             Q,
+            total_stress,
             target_pressure,
-            virial_stress,
             W,
         )

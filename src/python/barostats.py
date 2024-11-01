@@ -6,8 +6,7 @@
 import numpy as np
 from typing import Optional, List, Tuple
 from .interfaces.cpp_interface import CppInterface
-from .mechanics import StressCalculatorLJ
-from .structure import Cell
+from .mechanics import StressCalculator
 
 
 class Barostat:
@@ -19,8 +18,19 @@ class Barostat:
         self.volume_history = []
         self.stress_tensor_history = []
 
-    def apply(self, cell, dt: float):
-        """应用恒压器，更新晶胞参数"""
+    def apply(self, cell, potential, dt):
+        """
+        应用恒压器，更新晶胞参数
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象，用于计算应力
+        dt : float
+            时间步长
+        """
         raise NotImplementedError
 
     def calculate_internal_pressure(self, stress_tensor: np.ndarray) -> float:
@@ -36,103 +46,94 @@ class Barostat:
 
 class ParrinelloRahmanHooverBarostat(Barostat):
     """
-    增强版 Parrinello-Rahman-Hoover 恒压器
+    Parrinello-Rahman-Hoover (PRH) 恒压器的实现
 
     Parameters
     ----------
-    target_pressure : float
-        目标压力 (GPa)
+    target_pressure : array_like
+        目标压力张量，3x3矩阵
     time_constant : float
-        控制压力调节的时间常数
-    Qp : Optional[np.ndarray]
-        压力热浴质量矩阵，shape=(6,)
-    separate_stress_control : bool
-        是否独立控制各个应力分量
+        控制压力调节的时间常数，单位fs
+    W : float, optional
+        晶胞质量参数，如果为None则自动计算
+    Q : array_like, optional
+        压力热浴质量参数数组，长度为6，如果为None则自动计算
     """
 
-    def __init__(
-        self,
-        target_pressure: float,
-        time_constant: float,
-        Qp: Optional[np.ndarray] = None,
-        separate_stress_control: bool = False,
-    ):
-        super().__init__(target_pressure)
+    def __init__(self, target_pressure, time_constant, W=None, Q=None):
+        self.target_pressure = np.asarray(target_pressure)
         self.time_constant = time_constant
-        self.separate_stress_control = separate_stress_control
-
-        # 初始化压力热浴质量
-        if Qp is None:
-            self.Qp = np.ones(6) * (time_constant**2)
-        else:
-            self.Qp = Qp
-
-        # 初始化热浴变量
-        self.xi = np.zeros(6)
+        self.xi = np.zeros(6)  # 热浴变量数组
         self.cpp_interface = CppInterface("parrinello_rahman_hoover")
+        self.stress_calculator = StressCalculator()
 
-        # 用于各向异性控制
-        if separate_stress_control:
-            self.target_stress = np.diag([target_pressure] * 3)
-
-    def calculate_stress_difference(self, stress_tensor: np.ndarray) -> np.ndarray:
-        """计算应力差异"""
-        if self.separate_stress_control:
-            return stress_tensor - self.target_stress
+        # 设置默认参数
+        if W is None:
+            # 根据时间常数自动计算晶胞质量
+            # W应该足够大以确保晶胞振荡周期大于time_constant
+            self.W = (
+                (time_constant * time_constant) * np.trace(self.target_pressure) / 3.0
+            )
         else:
-            P_int = self.calculate_internal_pressure(stress_tensor)
-            return np.full_like(stress_tensor, P_int - self.target_pressure)
+            self.W = W
 
-    def apply(self, cell, dt: float):
+        if Q is None:
+            # 自动计算热浴质量参数
+            self.Q = np.ones(6) * (time_constant * time_constant)
+        else:
+            self.Q = np.asarray(Q)
+
+    def apply(self, cell, potential, dt):
         """
-        应用 PRH 恒压器
+        应用PRH恒压器，更新晶胞参数和原子速度
 
         Parameters
         ----------
         cell : Cell
             包含原子的晶胞对象
+        potential : Potential
+            势能对象，用于计算应力
         dt : float
             时间步长
         """
+        # 计算当前应力张量
+        stress_components = self.stress_calculator.calculate_total_stress(
+            cell, potential
+        )
+        total_stress = stress_components["total"]
+
         # 准备数据
         num_atoms = len(cell.atoms)
-        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
-        velocities = np.array(
-            [atom.velocity for atom in cell.atoms], dtype=np.float64
-        ).flatten()
-        forces = np.array(
-            [atom.force for atom in cell.atoms], dtype=np.float64
-        ).flatten()
+        masses = np.array([atom.mass for atom in cell.atoms])
+        velocities = cell.get_velocities().flatten()
+        forces = cell.get_forces().flatten()
         lattice_vectors = cell.lattice_vectors.flatten()
 
-        try:
-            # 调用 C++ PRH 函数
-            self.cpp_interface.parrinello_rahman_hoover(
-                dt,
-                num_atoms,
-                masses,
-                velocities,
-                forces,
-                lattice_vectors,
-                self.xi,
-                self.Qp,
-                self.target_pressure,
-            )
+        # 调用C++ PRH实现
+        self.cpp_interface.parrinello_rahman_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            lattice_vectors,
+            self.xi,
+            self.Q,
+            total_stress.flatten(),
+            self.target_pressure.flatten(),
+            self.W,
+        )
 
-            # 更新晶格矢量和原子速度
-            cell.lattice_vectors = lattice_vectors.reshape((3, 3))
-            cell.update_volume()  # 更新体积
+        # 更新晶格矢量
+        cell.lattice_vectors = lattice_vectors.reshape(3, 3)
 
-            for i, atom in enumerate(cell.atoms):
-                atom.velocity = velocities[3 * i : 3 * i + 3]
+        # 更新原子速度
+        velocities = velocities.reshape(-1, 3)
+        for i, atom in enumerate(cell.atoms):
+            atom.velocity = velocities[i]
 
-            # 记录状态
-            stress_tensor = cell.calculate_stress_tensor()
-            current_pressure = self.calculate_internal_pressure(stress_tensor)
-            self.record_state(current_pressure, cell.Volume, stress_tensor)
-
-        except Exception as e:
-            raise RuntimeError(f"PRH barostat error: {e}")
+        # 更新体积
+        cell.volume = cell.calculate_volume()
 
 
 class BerendsenBarostat(Barostat):

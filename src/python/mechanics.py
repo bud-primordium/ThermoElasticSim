@@ -3,19 +3,20 @@
 # 修改日期: 2024-10-20
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
-"""
-力学模块
-
-包含 StressCalculator 和 StrainCalculator 类，
-用于计算应力和应变
-"""
-
 import numpy as np
 from .utils import TensorConverter
 from typing import Dict
 from .interfaces.cpp_interface import CppInterface
 import logging
 
+import logging
+import matplotlib as mpl
+
+# 设置matplotlib的日志级别为WARNING，屏蔽字体调试信息
+mpl.set_loglevel("WARNING")
+
+# 配置我们自己的日志
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -29,74 +30,90 @@ class StressCalculator:
     """
 
     def __init__(self):
+        """初始化应力计算器"""
         self.cpp_interface = CppInterface("stress_calculator")
+        logger.debug("Initialized StressCalculator with C++ interface")
 
     def calculate_stress_components(self, cell) -> Dict[str, np.ndarray]:
-        """
-        计算应力张量的各个组成部分
+        """计算应力张量的各个组成部分"""
+        try:
+            # 设置输入数据
+            num_atoms = len(cell.atoms)
+            positions = np.ascontiguousarray(
+                cell.get_positions(), dtype=np.float64
+            ).flatten()
+            velocities = np.ascontiguousarray(
+                cell.get_velocities(), dtype=np.float64
+            ).flatten()
+            forces = np.ascontiguousarray(cell.get_forces(), dtype=np.float64).flatten()
+            masses = np.ascontiguousarray(
+                [atom.mass for atom in cell.atoms], dtype=np.float64
+            )
+            volume = cell.volume
+            box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
 
-        Returns
-        -------
-        Dict[str, np.ndarray]
-            包含各个3x3张量的字典：
-            - 'kinetic': 动能张量
-            - 'virial': 维里张量
-            - 'total_basic': C++计算的总张量
-        """
-        # 设置输入数据
-        num_atoms = len(cell.atoms)
-        positions = np.array(
-            [cell.lattice_vectors @ atom.position for atom in cell.atoms],
-            dtype=np.float64,
-        ).flatten()
-        velocities = np.array(
-            [atom.velocity for atom in cell.atoms], dtype=np.float64
-        ).flatten()
-        forces = np.array(
-            [atom.force for atom in cell.atoms], dtype=np.float64
-        ).flatten()
-        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
-        volume = cell.Volume
-        box_lengths = np.diagonal(cell.lattice_vectors)
+            logger.debug(f"Number of atoms: {num_atoms}")
+            logger.debug(f"Volume: {volume}")
+            logger.debug(f"Box lengths: {box_lengths}")
 
-        # C++计算应力张量
-        stress_tensor = np.zeros(9, dtype=np.float64)
-        self.cpp_interface.compute_stress(
-            num_atoms,
-            positions,
-            velocities,
-            forces,
-            masses,
-            volume,
-            box_lengths,
-            stress_tensor,
-        )
-        stress_tensor = stress_tensor.reshape(3, 3)
+            # 初始化一维应力张量数组
+            stress_tensor = np.zeros(9, dtype=np.float64)
+            logger.debug(f"Initial stress_tensor shape: {stress_tensor.shape}")
 
-        # 分别计算动能和维里贡献（用于验证）
-        kinetic_tensor = np.zeros((3, 3))
-        virial_tensor = np.zeros((3, 3))
+            # 调用接口
+            self.cpp_interface.compute_stress(
+                num_atoms,
+                positions,
+                velocities,
+                forces,
+                masses,
+                volume,
+                box_lengths,
+                stress_tensor,
+            )
 
-        # 动能张量 Σ(p_i⊗p_i/m_i)
-        for i in range(num_atoms):
-            p = velocities[3 * i : 3 * i + 3] * masses[i]
-            kinetic_tensor += np.outer(p, p) / masses[i]
+            logger.debug(
+                f"After compute_stress call, stress_tensor shape: {stress_tensor.shape}"
+            )
+            logger.debug(f"Stress tensor content: {stress_tensor}")
 
-        # 维里张量 Σ(r_i⊗f_i)
-        for i in range(num_atoms):
-            r = positions[3 * i : 3 * i + 3]
-            f = forces[3 * i : 3 * i + 3]
-            virial_tensor += np.outer(r, f)
+            # 重塑为3x3矩阵
+            stress_matrix = stress_tensor.reshape((3, 3))
+            logger.debug(f"Reshaped stress matrix shape: {stress_matrix.shape}")
+            logger.debug(f"Reshaped stress matrix content:\n{stress_matrix}")
 
-        # 归一化
-        kinetic_tensor /= volume
-        virial_tensor /= volume
+            # 计算动能张量
+            kinetic_tensor = np.zeros((3, 3))
+            velocities = velocities.reshape((num_atoms, 3))
+            for i in range(num_atoms):
+                p = velocities[i] * masses[i]
+                kinetic_tensor += np.outer(p, p) / masses[i]
 
-        return {
-            "kinetic": kinetic_tensor,
-            "virial": virial_tensor,
-            "total_basic": stress_tensor,
-        }
+            # 计算维里张量
+            virial_tensor = np.zeros((3, 3))
+            positions = positions.reshape((num_atoms, 3))
+            forces = forces.reshape((num_atoms, 3))
+            for i in range(num_atoms):
+                virial_tensor += np.outer(positions[i], forces[i])
+
+            # 归一化
+            kinetic_tensor /= volume
+            virial_tensor /= volume
+
+            return {
+                "kinetic": kinetic_tensor,
+                "virial": virial_tensor,
+                "total_basic": stress_matrix,
+            }
+
+        except Exception as e:
+            logger.error(f"Error in stress calculation: {e}")
+            logger.error(f"Current state of arrays:")
+            logger.error(f"positions shape: {positions.shape}")
+            logger.error(f"velocities shape: {velocities.shape}")
+            logger.error(f"forces shape: {forces.shape}")
+            logger.error(f"masses shape: {masses.shape}")
+            raise
 
     def calculate_dUdh_tensor(self, cell, potential, dr: float = 1e-8) -> np.ndarray:
         """
@@ -129,12 +146,19 @@ class StressCalculator:
                 dUdh[i, j] = (energy_plus - energy_minus) / (2 * dr)
 
         # 转换为应力张量
-        stress_tensor = np.dot(dUdh, lattice.T) / cell.Volume
+        stress_tensor = np.dot(dUdh, lattice.T) / cell.volume
         return stress_tensor
 
     def calculate_total_stress(self, cell, potential) -> Dict[str, np.ndarray]:
         """
         计算总应力张量及其组成
+
+        Parameters
+        ----------
+        cell : Cell
+            模拟晶胞对象
+        potential : Potential
+            势能对象
 
         Returns
         -------

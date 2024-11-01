@@ -1,12 +1,8 @@
 /**
  * @file parrinello_rahman_hoover.cpp
- * @brief Parrinello-Rahman-Hoover 恒压器的实现
+ * @brief Parrinello-Rahman-Hoover barostat implementation
  *
- * 该文件实现了 Parrinello-Rahman-Hoover 恒压器，主要用于分子动力学模拟中的压力控制。
- * 通过更新晶格矢量和原子速度，实现对系统压力的调节。
- *
- * @author Gilbert Young
- * @date 2024-10-20
+ * This implementation uses the total stress tensor calculated by StressCalculator
  */
 
 #include <cmath>
@@ -49,39 +45,6 @@ extern "C"
         }
     }
 
-    void calculate_kinetic_stress(
-        int num_atoms,
-        const double *masses,
-        const double *velocities,
-        const double volume,
-        double *kinetic_stress)
-    {
-        // Initialize kinetic stress tensor
-        for (int i = 0; i < 9; ++i)
-        {
-            kinetic_stress[i] = 0.0;
-        }
-
-        // Calculate kinetic contribution to stress
-        for (int i = 0; i < num_atoms; ++i)
-        {
-            for (int a = 0; a < 3; ++a)
-            {
-                for (int b = 0; b < 3; ++b)
-                {
-                    kinetic_stress[3 * a + b] += masses[i] *
-                                                 velocities[3 * i + a] * velocities[3 * i + b];
-                }
-            }
-        }
-
-        // Scale by volume
-        for (int i = 0; i < 9; ++i)
-        {
-            kinetic_stress[i] /= volume;
-        }
-    }
-
     void parrinello_rahman_hoover(
         double dt,
         int num_atoms,
@@ -91,8 +54,8 @@ extern "C"
         double *lattice_vectors,       // 3x3 matrix, row-major
         double *xi,                    // Thermostat variable array length 6
         const double *Q,               // Thermostat mass parameters array length 6
-        const double *target_pressure, // 3x3 matrix
-        double *virial_stress,         // 3x3 matrix
+        const double *total_stress,    // Current total stress tensor from StressCalculator
+        const double *target_pressure, // Target pressure tensor
         double W)                      // Cell mass parameter
     {
         double volume = lattice_vectors[0] * (lattice_vectors[4] * lattice_vectors[8] -
@@ -102,21 +65,11 @@ extern "C"
                         lattice_vectors[2] * (lattice_vectors[3] * lattice_vectors[7] -
                                               lattice_vectors[4] * lattice_vectors[6]);
 
-        // Calculate stress tensors
-        double kinetic_stress[9];
-        calculate_kinetic_stress(num_atoms, masses, velocities, volume, kinetic_stress);
-
-        // Calculate pressure tensor: P = (K + V)/V
-        double pressure[9];
-        for (int i = 0; i < 9; ++i)
-        {
-            pressure[i] = (kinetic_stress[i] + virial_stress[i]) / volume;
-        }
-
         // Update cell velocities (represented by xi)
+        // Now using the total stress directly from StressCalculator
         for (int i = 0; i < 6; ++i)
         {
-            double delta_P = pressure[i] - target_pressure[i];
+            double delta_P = total_stress[i] - target_pressure[i];
             xi[i] += (volume * delta_P / W) * dt;
         }
 
