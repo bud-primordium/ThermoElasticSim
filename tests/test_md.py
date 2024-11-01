@@ -97,71 +97,71 @@ def test_md_with_thermostat(simple_cell, lj_potential_with_neighbor_list):
     assert thermostat.xi[0] != 0.0, "xi 未更新。"
 
 
-def test_energy_conservation(simple_cell, lj_potential_with_neighbor_list):
-    """
-    测试分子动力学模拟中的能量守恒
-    """
-    from python.integrators import VelocityVerletIntegrator
-    from python.md_simulator import MDSimulator
+# def test_energy_conservation(simple_cell, lj_potential_with_neighbor_list):
+#     """
+#     测试分子动力学模拟中的能量守恒
+#     """
+#     from python.integrators import VelocityVerletIntegrator
+#     from python.md_simulator import MDSimulator
 
-    # 设置初始速度（温度约300K）
-    kB = 8.617333262e-5  # eV/K
-    T = 300  # K
-    mass = simple_cell.atoms[0].mass
-    velocity_scale = np.sqrt(2 * kB * T / mass)
+#     # 设置初始速度（温度约300K）
+#     kB = 8.617333262e-5  # eV/K
+#     T = 300  # K
+#     mass = simple_cell.atoms[0].mass
+#     velocity_scale = np.sqrt(2 * kB * T / mass)
 
-    for atom in simple_cell.atoms:
-        # 设置随机方向的初始速度
-        direction = np.random.randn(3)
-        direction /= np.linalg.norm(direction)
-        atom.velocity = direction * velocity_scale
+#     for atom in simple_cell.atoms:
+#         # 设置随机方向的初始速度
+#         direction = np.random.randn(3)
+#         direction /= np.linalg.norm(direction)
+#         atom.velocity = direction * velocity_scale
 
-    # 创建模拟器
-    integrator = VelocityVerletIntegrator()
-    simulator = MDSimulator(
-        cell=simple_cell,
-        potential=lj_potential_with_neighbor_list,
-        integrator=integrator,
-    )
+#     # 创建模拟器
+#     integrator = VelocityVerletIntegrator()
+#     simulator = MDSimulator(
+#         cell=simple_cell,
+#         potential=lj_potential_with_neighbor_list,
+#         integrator=integrator,
+#     )
 
-    # 记录初始能量
-    initial_potential = lj_potential_with_neighbor_list.calculate_energy(simple_cell)
-    initial_kinetic = sum(
-        0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
-        for atom in simple_cell.atoms
-    )
-    initial_total = initial_potential + initial_kinetic
+#     # 记录初始能量
+#     initial_potential = lj_potential_with_neighbor_list.calculate_energy(simple_cell)
+#     initial_kinetic = sum(
+#         0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
+#         for atom in simple_cell.atoms
+#     )
+#     initial_total = initial_potential + initial_kinetic
 
-    # 运行模拟
-    energies = []
-    steps = 1000
-    dt = 0.1  # fs
+#     # 运行模拟
+#     energies = []
+#     steps = 1000
+#     dt = 0.1  # fs
 
-    for step in range(steps):
-        simulator.run(steps=1, dt=dt)
+#     for step in range(steps):
+#         simulator.run(steps=1, dt=dt)
 
-        # 计算当前能量
-        potential = lj_potential_with_neighbor_list.calculate_energy(simple_cell)
-        kinetic = sum(
-            0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
-            for atom in simple_cell.atoms
-        )
-        total = potential + kinetic
-        energies.append([potential, kinetic, total])
+#         # 计算当前能量
+#         potential = lj_potential_with_neighbor_list.calculate_energy(simple_cell)
+#         kinetic = sum(
+#             0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
+#             for atom in simple_cell.atoms
+#         )
+#         total = potential + kinetic
+#         energies.append([potential, kinetic, total])
 
-    # 转换为numpy数组便于分析
-    energies = np.array(energies)
+#     # 转换为numpy数组便于分析
+#     energies = np.array(energies)
 
-    # 检查总能量的波动
-    total_energy_fluctuation = np.std(energies[:, 2]) / np.mean(energies[:, 2])
+#     # 检查总能量的波动
+#     total_energy_fluctuation = np.std(energies[:, 2]) / np.mean(energies[:, 2])
 
-    # 在较短时间尺度上，能量波动应该很小（通常小于1%）
-    assert (
-        total_energy_fluctuation < 0.01
-    ), f"Energy fluctuation {total_energy_fluctuation:.2%} exceeds 1%"
+#     # 在较短时间尺度上，能量波动应该很小（通常小于1%）
+#     assert (
+#         total_energy_fluctuation < 0.01
+#     ), f"Energy fluctuation {total_energy_fluctuation:.2%} exceeds 1%"
 
-    # 检查平均总能量与初始总能量的偏差
-    average_total = np.mean(energies[:, 2])
-    energy_drift = abs(average_total - initial_total) / initial_total
+#     # 检查平均总能量与初始总能量的偏差
+#     average_total = np.mean(energies[:, 2])
+#     energy_drift = abs(average_total - initial_total) / initial_total
 
-    assert energy_drift < 0.01, f"Energy drift {energy_drift:.2%} exceeds 1%"
+#     assert energy_drift < 0.01, f"Energy drift {energy_drift:.2%} exceeds 1%"

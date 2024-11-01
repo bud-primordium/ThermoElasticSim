@@ -298,10 +298,29 @@ class Cell:
         cell_copy.lattice_locked = self.lattice_locked  # 复制锁定状态
         return cell_copy
 
-    @property
-    def num_atoms(self):
-        """返回原子数量"""
-        return len(self.atoms)
+    def calculate_temperature(self):
+        """
+        计算当前系统的温度，扣除质心运动。
+
+        Returns
+        -------
+        float
+            当前温度，单位K。
+        """
+        kb = 8.617333262e-5  # eV/K
+        total_mass = sum(atom.mass for atom in self.atoms)
+        total_momentum = sum(atom.mass * atom.velocity for atom in self.atoms)
+        com_velocity = total_momentum / total_mass
+
+        kinetic = sum(
+            0.5
+            * atom.mass
+            * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
+            for atom in self.atoms
+        )
+        dof = 3 * len(self.atoms) - 3  # 考虑质心运动约束
+        temperature = 2.0 * kinetic / (dof * kb)
+        return temperature
 
     def get_positions(self):
         """
@@ -434,3 +453,8 @@ class Cell:
             pbc_enabled=self.pbc_enabled,
         )
         return super_cell
+
+    @property
+    def num_atoms(self):
+        """返回原子数量"""
+        return len(self.atoms)

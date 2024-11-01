@@ -508,3 +508,94 @@ class Visualizer:
         if show:
             plt.show()
         plt.close(fig)
+
+    def create_simulation_animation(self, trajectory_data, filename, interval=100):
+        """
+        创建分子动力学模拟过程的动画
+
+        Parameters
+        ----------
+        trajectory_data : list of dict
+            轨迹数据列表，每个字典包含:
+            - positions: array_like, 原子位置
+            - cell: Cell object, 晶胞对象
+            - time: float, 时间
+            - temperature: float, 温度
+            - energy: float, 能量
+        filename : str
+            保存动画的文件名
+        interval : int, optional
+            帧之间的时间间隔(毫秒)，默认100
+        """
+        fig = plt.figure(figsize=(15, 8))
+
+        # 创建子图
+        ax_structure = fig.add_subplot(121, projection="3d")
+        ax_props = fig.add_subplot(122)
+
+        # 初始化原子散点图
+        scatter = ax_structure.scatter([], [], [], c="b", marker="o")
+
+        # 初始化晶格箭头
+        quivers = [ax_structure.quiver(0, 0, 0, 0, 0, 0, color="r") for _ in range(3)]
+
+        # 初始化属性图
+        (temp_line,) = ax_props.plot([], [], "r-", label="Temperature (K)")
+        (energy_line,) = ax_props.plot([], [], "b-", label="Energy (eV)")
+
+        # 存储时间数据
+        times = [frame["time"] for frame in trajectory_data]
+        temperatures = [frame["temperature"] for frame in trajectory_data]
+        energies = [frame["energy"] for frame in trajectory_data]
+
+        def init():
+            scatter._offsets3d = ([], [], [])
+            temp_line.set_data([], [])
+            energy_line.set_data([], [])
+            return scatter, temp_line, energy_line
+
+        def update(frame):
+            # 更新结构视图
+            positions = trajectory_data[frame]["positions"]
+            cell = trajectory_data[frame]["cell"]
+
+            # 更新原子位置
+            scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
+
+            # 更新晶格向量
+            for i, quiver in enumerate(quivers):
+                quiver.remove()
+                vec = cell.lattice_vectors[:, i]
+                quivers[i] = ax_structure.quiver(
+                    0, 0, 0, vec[0], vec[1], vec[2], color="r"
+                )
+
+            # 更新属性图
+            temp_line.set_data(times[:frame], temperatures[:frame])
+            energy_line.set_data(times[:frame], energies[:frame])
+
+            return scatter, temp_line, energy_line, *quivers
+
+        # 设置坐标轴标签
+        ax_structure.set_xlabel("X (Å)")
+        ax_structure.set_ylabel("Y (Å)")
+        ax_structure.set_zlabel("Z (Å)")
+
+        ax_props.set_xlabel("Time (ps)")
+        ax_props.set_ylabel("Value")
+        ax_props.legend()
+        ax_props.grid(True)
+
+        # 创建动画
+        anim = FuncAnimation(
+            fig,
+            update,
+            frames=len(trajectory_data),
+            init_func=init,
+            blit=True,
+            interval=interval,
+        )
+
+        # 保存动画
+        anim.save(filename, writer="pillow")
+        plt.close()

@@ -120,7 +120,9 @@ class CppInterface:
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
                 ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ctypes.POINTER(ctypes.c_double),  # xi (input/output)
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # xi_array (修改为 ndpointer)
                 ctypes.c_double,  # Q
                 ctypes.c_double,  # target_temperature
             ]
@@ -368,7 +370,7 @@ class CppInterface:
         self, dt, num_atoms, masses, velocities, forces, xi_array, Q, target_temperature
     ):
         """
-        实现 Nose-Hoover 恒温器算法。
+        实现 Nose-Hoover 恒温器算法。!!!没有去除质心运动
 
         Parameters
         ----------
@@ -402,7 +404,7 @@ class CppInterface:
             masses,
             velocities,
             forces,
-            xi_array.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            xi_array,
             Q,
             target_temperature,
         )

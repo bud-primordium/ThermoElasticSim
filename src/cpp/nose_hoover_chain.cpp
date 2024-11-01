@@ -5,12 +5,26 @@
  * 该文件包含 Nose-Hoover 链恒温器的实现，主要用于分子动力学模拟中的温度控制。
  * 它通过引入多个热浴变量，递推更新系统的速度和热浴变量，从而实现温度调节。
  *
- * @author Gilbert Young
+ * @autor Gilbert Young
  * @date 2024-10-20
  */
 
 #include <cmath>
-#include <vector>
+#include <cstddef>
+
+// 内联函数用于计算动能
+inline double compute_kinetic_energy(int num_atoms, const double *masses, const double *velocities)
+{
+    double kinetic_energy = 0.0;
+    for (int i = 0; i < num_atoms; ++i)
+    {
+        double vx = velocities[3 * i];
+        double vy = velocities[3 * i + 1];
+        double vz = velocities[3 * i + 2];
+        kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
+    }
+    return kinetic_energy;
+}
 
 extern "C"
 {
@@ -38,45 +52,42 @@ extern "C"
         int chain_length,
         double target_temperature)
     {
-        // 使用 std::vector 代替动态数组
-        std::vector<double> G_chain(chain_length, 0.0);
+        if (chain_length <= 0)
+            return; // 简单的参数检查
 
-        double dt_half = dt * 0.5;
-        double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
+        const double dt_half = dt * 0.5;
+        const double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
 
         // 计算动能
-        double kinetic_energy = 0.0;
-        for (int i = 0; i < num_atoms; ++i)
-        {
-            double vx = velocities[3 * i];
-            double vy = velocities[3 * i + 1];
-            double vz = velocities[3 * i + 2];
-            kinetic_energy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz);
-        }
+        double kinetic_energy = compute_kinetic_energy(num_atoms, masses, velocities);
 
-        // 递推更新 Nose-Hoover 链
+        // 计算 G_chain
+        // 预分配数组以避免 std::vector 的构造开销
+        double *G_chain = new double[chain_length];
+
         G_chain[0] = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q[0];
         for (int i = 1; i < chain_length; ++i)
         {
             G_chain[i] = (Q[i - 1] * xi[i - 1] * xi[i - 1] - kB * target_temperature) / Q[i];
         }
 
-        // 更新 xi
+        // 更新 xi - 第一半步（从链末端到开始）
         for (int i = chain_length - 1; i >= 0; --i)
         {
             xi[i] += G_chain[i] * dt_half;
         }
 
         // 缩放速度
-        double scale = exp(-xi[0] * dt);
+        double scale = std::exp(-xi[0] * dt_half);
         for (int i = 0; i < num_atoms; ++i)
         {
-            velocities[3 * i] *= scale;
-            velocities[3 * i + 1] *= scale;
-            velocities[3 * i + 2] *= scale;
+            int idx = 3 * i;
+            velocities[idx] *= scale;
+            velocities[idx + 1] *= scale;
+            velocities[idx + 2] *= scale;
         }
 
-        // 更新 xi
+        // 更新 xi - 第二半步（从开始到链末端）
         for (int i = 0; i < chain_length; ++i)
         {
             xi[i] += G_chain[i] * dt_half;
@@ -85,9 +96,14 @@ extern "C"
         // 更新速度，考虑力
         for (int i = 0; i < num_atoms; ++i)
         {
-            velocities[3 * i] += dt * forces[3 * i] / masses[i];
-            velocities[3 * i + 1] += dt * forces[3 * i + 1] / masses[i];
-            velocities[3 * i + 2] += dt * forces[3 * i + 2] / masses[i];
+            int idx = 3 * i;
+            double inv_mass = 1.0 / masses[i];
+            velocities[idx] += dt * forces[idx] * inv_mass;
+            velocities[idx + 1] += dt * forces[idx + 1] * inv_mass;
+            velocities[idx + 2] += dt * forces[idx + 2] * inv_mass;
         }
+
+        // 清理动态分配的内存
+        delete[] G_chain;
     }
 }

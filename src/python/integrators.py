@@ -21,6 +21,12 @@ class Integrator:
         """应用积分器，更新晶胞和原子状态"""
         raise NotImplementedError
 
+    def calculate_kinetic_energy(self, atoms):
+        """计算系统总动能"""
+        return sum(
+            0.5 * atom.mass * np.dot(atom.velocity, atom.velocity) for atom in atoms
+        )
+
 
 class VelocityVerletIntegrator(Integrator):
     """
