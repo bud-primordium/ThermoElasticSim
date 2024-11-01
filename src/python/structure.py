@@ -454,6 +454,47 @@ class Cell:
         )
         return super_cell
 
+    def get_com_velocity(self):
+        """
+        计算系统质心速度。
+
+        Returns
+        -------
+        numpy.ndarray
+            质心速度向量
+        """
+        masses = np.array([atom.mass for atom in self.atoms])
+        velocities = np.array([atom.velocity for atom in self.atoms])
+        total_mass = np.sum(masses)
+        com_velocity = np.sum(masses[:, np.newaxis] * velocities, axis=0) / total_mass
+        return com_velocity
+
+    def remove_com_motion(self):
+        """
+        移除系统的质心运动。
+
+        该方法计算并移除系统的净平动，保证总动量为零。
+        在应用恒温器和恒压器时应该调用此方法。
+        """
+        com_velocity = self.get_com_velocity()
+        for atom in self.atoms:
+            atom.velocity -= com_velocity
+
+    def get_com_position(self):
+        """
+        计算系统质心位置。
+
+        Returns
+        -------
+        numpy.ndarray
+            质心位置向量
+        """
+        masses = np.array([atom.mass for atom in self.atoms])
+        positions = np.array([atom.position for atom in self.atoms])
+        total_mass = np.sum(masses)
+        com_position = np.sum(masses[:, np.newaxis] * positions, axis=0) / total_mass
+        return com_position
+
     @property
     def num_atoms(self):
         """返回原子数量"""
