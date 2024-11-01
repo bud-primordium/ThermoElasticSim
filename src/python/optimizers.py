@@ -311,12 +311,14 @@ class LBFGSOptimizer(Optimizer):
 
     def __init__(
         self,
+        tol=1e-6,  # 防止有傻瓜两个都写
         ftol=1e-6,  # 保持与原来的 tol 一致
         gtol=1e-5,  # scipy 默认值
         maxcor=10,  # scipy 默认值
         maxls=20,  # scipy 默认值
         maxiter=10000,  # 保持与原来一致
     ):
+        self.tol = tol
         self.ftol = ftol
         self.gtol = gtol
         self.maxcor = maxcor
@@ -392,6 +394,7 @@ class LBFGSOptimizer(Optimizer):
             energy_fn,
             initial_positions,
             method="L-BFGS-B",
+            tol=self.ftol,  # 替代之前未使用的 tol 参数
             jac=grad_fn,
             options={
                 "ftol": self.ftol,  # 替代之前未使用的 tol 参数
