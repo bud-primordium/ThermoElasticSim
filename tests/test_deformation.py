@@ -65,7 +65,7 @@ def test_generate_deformation_matrices():
             strain_tensor = 0.5 * (F + F.T) - np.eye(3)
             strain_voigt = TensorConverter.to_voigt(strain_tensor, tensor_type="strain")
 
-            expected_strain = np.zeros(6)
+            expected_strain = np.zeros(9)
             voigt_idx = voigt_mapping[(i, j)]
             if i == j:
                 expected_strain[voigt_idx] = strain

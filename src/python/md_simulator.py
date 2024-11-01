@@ -148,12 +148,12 @@ class MDSimulator:
 
             # 记录温度
             temp = self.cell.calculate_temperature()
-            self.time.append(current_time)
-            self.temperature.append(temp)
+            self.time = np.append(self.time, current_time)
+            self.temperature = np.append(self.temperature, temp)
 
             # 记录能量
             total_energy = self.calculate_total_energy()
-            self.energy.append(total_energy)
+            self.energy = np.append(self.energy, total_energy)
 
             # 数据收集日志（每1000步）
             if (step + 1) % 1000 == 0 or step == steps - 1:

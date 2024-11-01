@@ -63,13 +63,19 @@ class CppInterface:
         if lib_name == "stress_calculator":
             self.lib.compute_stress.argtypes = [
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # positions (3*num_atoms)
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # velocities (3*num_atoms)
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # forces (3*num_atoms)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (num_atoms)
                 ctypes.c_double,  # volume
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # stress_tensor
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths (3,)
+                ndpointer(ctypes.c_double, flags="WRITEABLE"),  # stress_tensor (9,)
             ]
             self.lib.compute_stress.restype = None
 
@@ -149,14 +155,18 @@ class CppInterface:
             self.lib.parrinello_rahman_hoover.argtypes = [
                 ctypes.c_double,  # dt
                 ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # total_stress
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # target_pressure
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (num_atoms)
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # velocities (3*num_atoms)
+                ndpointer(
+                    ctypes.c_double, flags="C_CONTIGUOUS"
+                ),  # forces (3*num_atoms)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors (9)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi (9)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q (9)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # total_stress (9)
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # target_pressure (9)
                 ctypes.c_double,  # W
             ]
             self.lib.parrinello_rahman_hoover.restype = None
@@ -166,24 +176,70 @@ class CppInterface:
 
     def compute_stress(
         self,
-        num_atoms,
-        positions,
-        velocities,
-        forces,
-        masses,
-        volume,
-        box_lengths,
-        stress_tensor,
+        num_atoms: int,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        forces: np.ndarray,
+        masses: np.ndarray,
+        volume: float,
+        box_lengths: np.ndarray,
+        stress_tensor: np.ndarray,
     ):
         """
         计算应力张量。
-        """
-        logger.debug(f"Input stress_tensor shape: {stress_tensor.shape}")
-        logger.debug(f"Input stress_tensor type: {type(stress_tensor)}")
 
-        # 确保传递的 stress_tensor 是连续的并且是浮点类型
-        stress_tensor_flat = np.ascontiguousarray(stress_tensor, dtype=np.float64)
-        logger.debug(f"Flattened stress_tensor shape: {stress_tensor_flat.shape}")
+        Parameters
+        ----------
+        num_atoms : int
+            原子数量
+        positions : numpy.ndarray
+            原子位置数组 (3*num_atoms,)
+        velocities : numpy.ndarray
+            原子速度数组 (3*num_atoms,)
+        forces : numpy.ndarray
+            原子受力数组 (3*num_atoms,)
+        masses : numpy.ndarray
+            原子质量数组 (num_atoms,)
+        volume : float
+            晶胞体积
+        box_lengths : numpy.ndarray
+            晶胞长度数组 (3,)
+        stress_tensor : numpy.ndarray
+            输出应力张量数组 (9,)
+        """
+        # 检查输入数组的形状
+        if positions.shape != (3 * num_atoms,):
+            raise ValueError(
+                f"Expected positions shape {(3 * num_atoms,)}, got {positions.shape}"
+            )
+        if velocities.shape != (3 * num_atoms,):
+            raise ValueError(
+                f"Expected velocities shape {(3 * num_atoms,)}, got {velocities.shape}"
+            )
+        if forces.shape != (3 * num_atoms,):
+            raise ValueError(
+                f"Expected forces shape {(3 * num_atoms,)}, got {forces.shape}"
+            )
+        if masses.shape != (num_atoms,):
+            raise ValueError(
+                f"Expected masses shape {(num_atoms,)}, got {masses.shape}"
+            )
+        if box_lengths.shape != (3,):
+            raise ValueError(
+                f"Expected box_lengths shape {(3,)}, got {box_lengths.shape}"
+            )
+        if stress_tensor.shape != (9,):
+            raise ValueError(
+                f"Expected stress_tensor shape {(9,)}, got {stress_tensor.shape}"
+            )
+
+        # 确保所有数组是连续的并且是浮点类型
+        positions = np.ascontiguousarray(positions, dtype=np.float64)
+        velocities = np.ascontiguousarray(velocities, dtype=np.float64)
+        forces = np.ascontiguousarray(forces, dtype=np.float64)
+        masses = np.ascontiguousarray(masses, dtype=np.float64)
+        box_lengths = np.ascontiguousarray(box_lengths, dtype=np.float64)
+        stress_tensor = np.ascontiguousarray(stress_tensor, dtype=np.float64)
 
         # 调用 C++ 函数
         self.lib.compute_stress(
@@ -194,23 +250,11 @@ class CppInterface:
             masses,
             volume,
             box_lengths,
-            stress_tensor_flat,
+            stress_tensor,
         )
 
-        logger.debug(
-            f"After C++ call, stress_tensor_flat shape: {stress_tensor_flat.shape}"
-        )
-        logger.debug(
-            f"After C++ call, stress_tensor_flat content: {stress_tensor_flat}"
-        )
-
-        # 如果stress_tensor是一维的，我们直接将计算结果赋值给它
-        if len(stress_tensor.shape) == 1:
-            stress_tensor[:] = stress_tensor_flat[:]
-        else:
-            # 如果是二维的，我们需要reshape
-            reshaped = stress_tensor_flat.reshape((3, 3))
-            stress_tensor[:, :] = reshaped
+        # 将结果赋值回原数组
+        stress_tensor[:] = stress_tensor
 
     def calculate_lj_forces(
         self,
@@ -477,38 +521,41 @@ class CppInterface:
         lattice_vectors: np.ndarray,
         xi: np.ndarray,
         Q: np.ndarray,
-        total_stress: np.ndarray,  # From StressCalculator
-        target_pressure: np.ndarray,
+        total_stress: np.ndarray,  # 9 components
+        target_pressure: np.ndarray,  # 9 components
         W: float,
     ):
-        """
-        应用 Parrinello-Rahman-Hoover 恒压器。
+        # 检查输入数组的形状
+        if masses.shape != (num_atoms,):
+            raise ValueError(
+                f"Expected masses shape {(num_atoms,)}, got {masses.shape}"
+            )
+        if velocities.shape != (num_atoms * 3,):
+            raise ValueError(
+                f"Expected velocities shape {(num_atoms * 3,)}, got {velocities.shape}"
+            )
+        if forces.shape != (num_atoms * 3,):
+            raise ValueError(
+                f"Expected forces shape {(num_atoms * 3,)}, got {forces.shape}"
+            )
+        if lattice_vectors.shape != (9,):
+            raise ValueError(
+                f"Expected lattice_vectors shape {(9,)}, got {lattice_vectors.shape}"
+            )
+        if xi.shape != (9,):
+            raise ValueError(f"Expected xi shape {(9,)}, got {xi.shape}")
+        if Q.shape != (9,):
+            raise ValueError(f"Expected Q shape {(9,)}, got {Q.shape}")
+        if total_stress.shape != (9,):
+            raise ValueError(
+                f"Expected total_stress shape {(9,)}, got {total_stress.shape}"
+            )
+        if target_pressure.shape != (9,):
+            raise ValueError(
+                f"Expected target_pressure shape {(9,)}, got {target_pressure.shape}"
+            )
 
-        Parameters
-        ----------
-        dt : float
-            时间步长
-        num_atoms : int
-            原子数量
-        masses : numpy.ndarray
-            原子质量数组
-        velocities : numpy.ndarray
-            原子速度数组
-        forces : numpy.ndarray
-            原子受力数组
-        lattice_vectors : numpy.ndarray
-            晶格矢量(3x3矩阵)
-        xi : numpy.ndarray
-            热浴变量数组(长度为6)
-        Q : numpy.ndarray
-            热浴质量参数数组(长度为6)
-        total_stress : numpy.ndarray
-            当前总应力张量(从StressCalculator获得)
-        target_pressure : numpy.ndarray
-            目标压力张量
-        W : float
-            晶胞质量参数
-        """
+        # 确保所有数组是连续的并且是浮点类型
         masses = np.ascontiguousarray(masses, dtype=np.float64)
         velocities = np.ascontiguousarray(velocities, dtype=np.float64)
         forces = np.ascontiguousarray(forces, dtype=np.float64)
@@ -518,16 +565,19 @@ class CppInterface:
         total_stress = np.ascontiguousarray(total_stress, dtype=np.float64)
         target_pressure = np.ascontiguousarray(target_pressure, dtype=np.float64)
 
-        self.lib.parrinello_rahman_hoover(
-            dt,
-            num_atoms,
-            masses,
-            velocities,
-            forces,
-            lattice_vectors,
-            xi,
-            Q,
-            total_stress,
-            target_pressure,
-            W,
-        )
+        try:
+            self.lib.parrinello_rahman_hoover(
+                dt,
+                num_atoms,
+                masses,
+                velocities,
+                forces,
+                lattice_vectors,
+                xi,
+                Q,
+                total_stress,
+                target_pressure,
+                W,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error in C++ parrinello_rahman_hoover: {e}")

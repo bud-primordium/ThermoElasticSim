@@ -174,7 +174,7 @@ class MTKIntegrator(Integrator):
             current_pressure = self.barostat.calculate_internal_pressure(stress_tensor)
 
             # 更新压浴动量
-            dp = (current_pressure - self.barostat.target_pressure) * cell.Volume
+            dp = (current_pressure - self.barostat.target_pressure) * cell.volume
             self.barostat.xi += dp * dt / 4
 
     def _update_particle_momenta_half_step(self, cell, potential, dt):

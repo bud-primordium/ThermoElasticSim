@@ -9,15 +9,34 @@ from python.potentials import EAMAl1Potential
 import matplotlib.pyplot as plt
 import logging
 from typing import Dict, Any, Tuple
+import os
 
-logging.basicConfig(level=logging.INFO)
+# 获取脚本所在的绝对路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+logs_dir = os.path.join(script_dir, "logs")
+
+# 创建 logs 目录
+os.makedirs(logs_dir, exist_ok=True)
+
+log_file = os.path.join(logs_dir, "simulation_debug.log")
+print(f"日志文件将被写入到: {log_file}")  # 打印日志文件的绝对路径
+
+# 配置日志记录
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler(),
+    ],
+)
+
 logger = logging.getLogger(__name__)
 
 
 def create_aluminum_fcc(a=4.05):
     """创建FCC铝晶胞"""
-    # 保持原有实现不变
-    lattice_vectors = np.array([[a, 0, 0], [0, a, 0], [0, 0, a]])
+    lattice_vectors = np.array([[a, 0, 0], [0, a, 0], [0, 0, a]]) * 2
     basis_positions = [
         [0.0, 0.0, 0.0],
         [0.0, 0.5, 0.5],
@@ -26,20 +45,19 @@ def create_aluminum_fcc(a=4.05):
     ]
 
     atoms = []
-    mass_al = 26.98
     for idx, pos in enumerate(basis_positions):
         atoms.append(
             Atom(
                 id=idx,
                 symbol="Al",
-                mass_amu=mass_al,
+                mass_amu=26.98,
                 position=np.array(pos) * a,
                 velocity=np.zeros(3),
             )
         )
 
     cell = Cell(lattice_vectors, atoms)
-    return cell.build_supercell((2, 2, 2))
+    return cell.build_supercell((3, 3, 3))
 
 
 def initialize_velocities(cell: Cell, target_temp: float) -> None:
@@ -47,13 +65,23 @@ def initialize_velocities(cell: Cell, target_temp: float) -> None:
     kb = 8.617333262e-5  # eV/K
     np.random.seed(42)
 
-    # 使用cell的方法初始化速度
     for atom in cell.atoms:
         sigma = np.sqrt(kb * target_temp / atom.mass)
         atom.velocity = np.random.normal(0, sigma, 3)
+        if np.any(np.isnan(atom.velocity)):
+            logger.error(f"NaN detected in initial velocity for atom {atom.id}")
+            raise ValueError("NaN in initial velocity")
+        logger.debug(f"Atom {atom.id} initial velocity: {atom.velocity}")
 
     # 使用cell的方法移除质心运动
     cell.remove_com_motion()
+
+    # 检查质心运动是否移除成功
+    com_velocity = cell.get_com_velocity()
+    if np.any(np.isnan(com_velocity)):
+        logger.error("NaN detected in center-of-mass velocity")
+        raise ValueError("NaN in center-of-mass velocity")
+    logger.debug(f"Center-of-mass velocity after removal: {com_velocity}")
 
 
 def setup_npt_simulation(
@@ -62,14 +90,14 @@ def setup_npt_simulation(
     """设置NPT模拟"""
     # 设置势能
     potential = EAMAl1Potential(cutoff=6.5)
+    logger.debug(f"EAMAl1Potential initialized with cutoff {potential.cutoff}")
 
     # 设置热浴配置
     thermostat_config = {
         "type": "NoseHoover",
         "params": {
             "target_temperature": target_temp,
-            "time_constant": 100.0,  # fs
-            "chain_length": 3,
+            "time_constant": 0.1,
         },
     }
 
@@ -77,20 +105,34 @@ def setup_npt_simulation(
     pressure_tensor = np.eye(3) * target_pressure  # 等静压
     barostat_config = {
         "target_pressure": pressure_tensor,
-        "time_constant": 500.0,  # fs
+        "time_constant": 0.3,
+        "compressibility": 4.57e-5,
         "W": None,  # 自动计算晶胞质量
+        # "Q": np.ones(9) * (0.3 ** 2),  # 如果需要手动设置Q，可以取消注释并确保长度为9
     }
 
-    # 创建模拟器和应力计算器
+    # 创建应力计算器
+    stress_calculator = StressCalculator()
+
+    # 创建压浴实例，传入应力计算器
+    barostat = ParrinelloRahmanHooverBarostat(
+        target_pressure=barostat_config["target_pressure"],
+        time_constant=barostat_config["time_constant"],
+        compressibility=barostat_config["compressibility"],
+        W=barostat_config["W"],
+        # Q=barostat_config["Q"],  # 如果需要手动设置Q
+        stress_calculator=stress_calculator,
+    )
+
+    # 创建模拟器
     simulator = MDSimulator(
         cell=cell,
         potential=potential,
         integrator=VelocityVerletIntegrator(),
         thermostat=thermostat_config,
-        barostat=ParrinelloRahmanHooverBarostat(**barostat_config),
+        barostat=barostat,
     )
-
-    stress_calculator = StressCalculator()
+    logger.debug("MDSimulator initialized with ParrinelloRahmanHooverBarostat")
 
     return simulator, stress_calculator
 
@@ -142,22 +184,42 @@ def calculate_system_state(
     return state
 
 
+def save_system_state(cell: Cell, step: int):
+    """保存系统状态到文件"""
+    positions = np.array([atom.position for atom in cell.atoms])
+    velocities = np.array([atom.velocity for atom in cell.atoms])
+    forces = np.array([atom.force for atom in cell.atoms])
+
+    np.savez(
+        f"logs/system_state_step_{step}.npz",
+        positions=positions,
+        velocities=velocities,
+        forces=forces,
+    )
+    logger.info(
+        f"System state at step {step} saved to logs/system_state_step_{step}.npz"
+    )
+
+
 def run_npt_simulation(
     target_temp: float = 300.0,  # K
     target_pressure: float = 0.0,  # GPa
     n_steps: int = 500,
-    dt: float = 1.0,  # fs
+    dt: float = 0.005,  # fs
     record_every: int = 5,
 ) -> Dict[str, Any]:
     """运行NPT系综模拟"""
     # 初始化系统
     cell = create_aluminum_fcc()
+    logger.debug(f"Initial cell created: {cell}")
     initialize_velocities(cell, target_temp)
+    logger.debug("Velocities initialized")
 
     # 设置模拟器
     simulator, stress_calculator = setup_npt_simulation(
         cell, target_temp, target_pressure
     )
+    logger.debug("Simulator and stress calculator set up")
 
     # 初始化历史数据记录
     history = {
@@ -180,18 +242,25 @@ def run_npt_simulation(
 
     # 运行模拟
     for step in range(n_steps):
-        # 运行一步模拟
-        simulator.run(1, dt)
+        try:
+            logger.debug(f"Running step {step}")
+            # 运行一步模拟
+            simulator.run(1, dt)
+        except ValueError as e:
+            logger.error(f"Simulation stopped at step {step} due to error: {e}")
+            save_system_state(cell, step)  # 保存当前系统状态
+            break
 
         if step % record_every == 0:
             current_time = step * dt
             state = calculate_system_state(cell, simulator.potential, stress_calculator)
+            logger.debug(f"State at step {step}: {state}")
 
             # 记录数据
             history["time"].append(current_time)
             history["temperature"].append(state["temperature"])
 
-            for key in ["kinetic", "virial", "lattice", "total"]:
+            for key in ["total"]:
                 history["pressure"][key].append(state["pressure"][key])
 
             history["energy"]["kinetic"].append(state["kinetic_energy"])
@@ -214,19 +283,41 @@ def run_npt_simulation(
                 logger.info(f"Cell angles: {state['cell_angles']}")
                 logger.info(f"Stress tensor:\n{state['stress_components']['total']}")
 
+                # 检查是否有 NaN
+                if np.isnan(state["temperature"]) or np.isnan(state["volume"]):
+                    logger.error(
+                        "Detected NaN values in the system state. Stopping simulation."
+                    )
+                    save_system_state(cell, step)  # 保存当前系统状态
+                    break
+
+                # 额外调试信息
+                for atom in cell.atoms:
+                    if np.any(np.isnan(atom.position)) or np.any(
+                        np.isnan(atom.velocity)
+                    ):
+                        logger.error(f"Atom {atom.id} has NaN in position or velocity.")
+                        save_system_state(cell, step)  # 保存当前系统状态
+                        break
+
     # 绘制结果
     plot_npt_results(history, target_temp, target_pressure)
+    logger.info("Simulation completed and results plotted.")
 
     return history, cell
-
-
-# plot_npt_results 函数保持不变
 
 
 def plot_npt_results(
     history: Dict[str, Any], target_temp: float, target_pressure: float
 ):
     """绘制NPT模拟结果"""
+    if not history["time"]:
+        logger.error("No data to plot.")
+        return
+
+    cell_dims = np.array(history["cell_dimensions"])
+    cell_angles = np.array(history["cell_angles"])
+
     fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(15, 15))
 
     # 温度演化
@@ -265,35 +356,42 @@ def plot_npt_results(
     ax4.grid(True)
 
     # 晶格参数演化
-    cell_dims = np.array(history["cell_dimensions"])
-    for i in range(3):
-        ax5.plot(history["time"], cell_dims[:, i], label=f"a{i+1}")
-    ax5.set_xlabel("Time (fs)")
-    ax5.set_ylabel("Cell Dimensions (Å)")
-    ax5.set_title("Lattice Parameters")
-    ax5.legend()
-    ax5.grid(True)
+    if cell_dims.ndim == 2 and cell_dims.shape[1] >= 3:
+        for i in range(3):
+            ax5.plot(history["time"], cell_dims[:, i], label=f"a{i+1}")
+        ax5.set_xlabel("Time (fs)")
+        ax5.set_ylabel("Cell Dimensions (Å)")
+        ax5.set_title("Lattice Parameters")
+        ax5.legend()
+        ax5.grid(True)
+    else:
+        logger.warning("Insufficient cell_dimensions data for plotting.")
 
     # 晶胞角度演化
-    cell_angles = np.array(history["cell_angles"])
-    for i in range(3):
-        ax6.plot(history["time"], cell_angles[:, i], label=f"α{i+1}")
-    ax6.set_xlabel("Time (fs)")
-    ax6.set_ylabel("Cell Angles (degrees)")
-    ax6.set_title("Cell Angles")
-    ax6.legend()
-    ax6.grid(True)
+    if cell_angles.ndim == 2 and cell_angles.shape[1] >= 3:
+        for i in range(3):
+            ax6.plot(history["time"], cell_angles[:, i], label=f"α{i+1}")
+        ax6.set_xlabel("Time (fs)")
+        ax6.set_ylabel("Cell Angles (degrees)")
+        ax6.set_title("Cell Angles")
+        ax6.legend()
+        ax6.grid(True)
+    else:
+        logger.warning("Insufficient cell_angles data for plotting.")
 
     plt.tight_layout()
-    plt.savefig("npt_simulation_results.png")
+    plt.savefig("logs/npt_simulation_results.png")
     plt.close()
+    logger.info(
+        "NPT simulation results plotted and saved to logs/npt_simulation_results.png"
+    )
 
 
 if __name__ == "__main__":
     history, final_cell = run_npt_simulation(
         target_temp=300.0,  # 300K
-        target_pressure=0.0,  # 0 GPa
-        n_steps=500,  # 较短的模拟时间
-        dt=1.0,  # 1 fs 时间步长
+        target_pressure=1,  #
+        n_steps=100,  # 较短的模拟时间
+        dt=0.05,  # 1 fs 时间步长
         record_every=5,  # 每5步记录一次
     )

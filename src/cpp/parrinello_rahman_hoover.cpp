@@ -52,10 +52,10 @@ extern "C"
         double *velocities,
         const double *forces,
         double *lattice_vectors,       // 3x3 matrix, row-major
-        double *xi,                    // Thermostat variable array length 6
-        const double *Q,               // Thermostat mass parameters array length 6
-        const double *total_stress,    // Current total stress tensor from StressCalculator
-        const double *target_pressure, // Target pressure tensor
+        double *xi,                    // Thermostat variable array length 9
+        const double *Q,               // Thermostat mass parameters array length 9
+        const double *total_stress,    // Current total stress tensor from StressCalculator (9 components)
+        const double *target_pressure, // Target pressure tensor (9 components)
         double W)                      // Cell mass parameter
     {
         double volume = lattice_vectors[0] * (lattice_vectors[4] * lattice_vectors[8] -
@@ -67,7 +67,7 @@ extern "C"
 
         // Update cell velocities (represented by xi)
         // Now using the total stress directly from StressCalculator
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 9; ++i)
         {
             double delta_P = total_stress[i] - target_pressure[i];
             xi[i] += (volume * delta_P / W) * dt;

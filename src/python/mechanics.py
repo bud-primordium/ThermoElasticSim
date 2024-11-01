@@ -16,7 +16,7 @@ import matplotlib as mpl
 mpl.set_loglevel("WARNING")
 
 # 配置我们自己的日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -30,37 +30,47 @@ class StressCalculator:
     """
 
     def __init__(self):
-        """初始化应力计算器"""
         self.cpp_interface = CppInterface("stress_calculator")
         logger.debug("Initialized StressCalculator with C++ interface")
 
     def calculate_stress_components(self, cell) -> Dict[str, np.ndarray]:
-        """计算应力张量的各个组成部分"""
+        """
+        计算动能和维里应力张量（基础应力张量）
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+
+        Returns
+        -------
+        Dict[str, np.ndarray]
+            包含基础应力张量的字典，键为 "total_basic"。
+        """
         try:
+            logger.debug("Starting basic stress components calculation.")
+
             # 设置输入数据
             num_atoms = len(cell.atoms)
-            positions = np.ascontiguousarray(
-                cell.get_positions(), dtype=np.float64
-            ).flatten()
-            velocities = np.ascontiguousarray(
-                cell.get_velocities(), dtype=np.float64
-            ).flatten()
-            forces = np.ascontiguousarray(cell.get_forces(), dtype=np.float64).flatten()
-            masses = np.ascontiguousarray(
-                [atom.mass for atom in cell.atoms], dtype=np.float64
-            )
+            positions = cell.get_positions().flatten()
+            velocities = cell.get_velocities().flatten()
+            forces = cell.get_forces().flatten()
+            masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
             volume = cell.volume
-            box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+            box_lengths = cell.get_box_lengths().flatten()
 
-            logger.debug(f"Number of atoms: {num_atoms}")
-            logger.debug(f"Volume: {volume}")
-            logger.debug(f"Box lengths: {box_lengths}")
+            logger.debug(f"num_atoms: {num_atoms}")
+            logger.debug(f"positions shape: {positions.shape}")
+            logger.debug(f"velocities shape: {velocities.shape}")
+            logger.debug(f"forces shape: {forces.shape}")
+            logger.debug(f"masses shape: {masses.shape}")
+            logger.debug(f"volume: {volume}")
+            logger.debug(f"box_lengths: {box_lengths}")
 
-            # 初始化一维应力张量数组
+            # 初始化应力张量数组
             stress_tensor = np.zeros(9, dtype=np.float64)
-            logger.debug(f"Initial stress_tensor shape: {stress_tensor.shape}")
 
-            # 调用接口
+            # 调用C++接口计算基础应力张量(动能+维里)
             self.cpp_interface.compute_stress(
                 num_atoms,
                 positions,
@@ -72,82 +82,88 @@ class StressCalculator:
                 stress_tensor,
             )
 
-            logger.debug(
-                f"After compute_stress call, stress_tensor shape: {stress_tensor.shape}"
-            )
-            logger.debug(f"Stress tensor content: {stress_tensor}")
+            logger.debug(f"Computed basic stress_tensor: {stress_tensor}")
 
             # 重塑为3x3矩阵
-            stress_matrix = stress_tensor.reshape((3, 3))
-            logger.debug(f"Reshaped stress matrix shape: {stress_matrix.shape}")
-            logger.debug(f"Reshaped stress matrix content:\n{stress_matrix}")
-
-            # 计算动能张量
-            kinetic_tensor = np.zeros((3, 3))
-            velocities = velocities.reshape((num_atoms, 3))
-            for i in range(num_atoms):
-                p = velocities[i] * masses[i]
-                kinetic_tensor += np.outer(p, p) / masses[i]
-
-            # 计算维里张量
-            virial_tensor = np.zeros((3, 3))
-            positions = positions.reshape((num_atoms, 3))
-            forces = forces.reshape((num_atoms, 3))
-            for i in range(num_atoms):
-                virial_tensor += np.outer(positions[i], forces[i])
-
-            # 归一化
-            kinetic_tensor /= volume
-            virial_tensor /= volume
+            total_basic = stress_tensor.reshape((3, 3))
+            logger.debug(f"total_basic matrix:\n{total_basic}")
 
             return {
-                "kinetic": kinetic_tensor,
-                "virial": virial_tensor,
-                "total_basic": stress_matrix,
+                "total_basic": total_basic,
             }
 
         except Exception as e:
             logger.error(f"Error in stress calculation: {e}")
-            logger.error(f"Current state of arrays:")
-            logger.error(f"positions shape: {positions.shape}")
-            logger.error(f"velocities shape: {velocities.shape}")
-            logger.error(f"forces shape: {forces.shape}")
-            logger.error(f"masses shape: {masses.shape}")
             raise
 
-    def calculate_dUdh_tensor(self, cell, potential, dr: float = 1e-8) -> np.ndarray:
+    def calculate_lattice_stress(self, cell, potential, dr=1e-8) -> np.ndarray:
         """
         计算晶格应变应力张量
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象，用于计算能量
+        dr : float, optional
+            形变量的步长, 默认值为1e-8
 
         Returns
         -------
         np.ndarray
-            3x3晶格应变应力张量
+            晶格应变应力张量 (3x3)
         """
-        lattice = cell.lattice_vectors
-        dUdh = np.zeros((3, 3))
+        try:
+            logger.debug("Starting lattice stress calculation.")
 
-        for i in range(3):
-            for j in range(3):
-                # 形变矩阵
-                deformation = np.eye(3)
-                deformation[i, j] += dr
+            # 初始化能量导数矩阵
+            dUdh = np.zeros((3, 3), dtype=np.float64)
 
-                # 计算能量差
-                cell_plus = cell.copy()
-                cell_plus.apply_deformation(deformation)
-                energy_plus = potential.calculate_energy(cell_plus)
+            # 保存原始状态的深拷贝
+            original_cell = cell.copy()
+            original_lattice = original_cell.lattice_vectors.copy()
+            original_positions = original_cell.get_positions().copy()
 
-                deformation[i, j] -= 2 * dr
-                cell_minus = cell.copy()
-                cell_minus.apply_deformation(deformation)
-                energy_minus = potential.calculate_energy(cell_minus)
+            logger.debug("Created deep copy of cell for deformation.")
 
-                dUdh[i, j] = (energy_plus - energy_minus) / (2 * dr)
+            for i in range(3):
+                for j in range(3):
+                    logger.debug(f"Calculating derivative for component ({i}, {j}).")
 
-        # 转换为应力张量
-        stress_tensor = np.dot(dUdh, lattice.T) / cell.volume
-        return stress_tensor
+                    # 正向形变矩阵
+                    deformation = np.eye(3)
+                    deformation[i, j] += dr
+
+                    # 负向形变矩阵
+                    deformation_negative = np.eye(3)
+                    deformation_negative[i, j] -= dr
+
+                    # 应用正向形变到原始_cell的副本
+                    deformed_cell_plus = original_cell.copy()
+                    deformed_cell_plus.apply_deformation(deformation)
+                    energy_plus = potential.calculate_energy(deformed_cell_plus)
+                    logger.debug(f"Energy after positive deformation: {energy_plus}")
+
+                    # 应用负向形变到原始_cell的副本
+                    deformed_cell_minus = original_cell.copy()
+                    deformed_cell_minus.apply_deformation(deformation_negative)
+                    energy_minus = potential.calculate_energy(deformed_cell_minus)
+                    logger.debug(f"Energy after negative deformation: {energy_minus}")
+
+                    # 计算能量导数
+                    dUdh[i, j] = (energy_plus - energy_minus) / (2 * dr)
+                    logger.debug(f"dUdh[{i}, {j}] = {dUdh[i, j]}")
+
+            # 转换为应力张量
+            lattice_stress = np.dot(dUdh, original_lattice.T) / original_cell.volume
+            logger.debug(f"Lattice stress tensor:\n{lattice_stress}")
+
+            return lattice_stress
+
+        except Exception as e:
+            logger.error(f"Error in lattice stress calculation: {e}")
+            raise
 
     def calculate_total_stress(self, cell, potential) -> Dict[str, np.ndarray]:
         """
@@ -156,39 +172,67 @@ class StressCalculator:
         Parameters
         ----------
         cell : Cell
-            模拟晶胞对象
+            包含原子的晶胞对象
         potential : Potential
-            势能对象
+            势能对象，用于计算能量
 
         Returns
         -------
         Dict[str, np.ndarray]
-            包含各个3x3应力张量的字典
+            包含 "total_basic", "lattice", "total" 的应力张量字典
         """
         try:
-            # 获取基础张量组成
+            logger.debug("Starting total stress calculation.")
+
+            # 获取基础张量组成(动能+维里)
             components = self.calculate_stress_components(cell)
 
             # 计算晶格应变张量
-            lattice_stress = self.calculate_dUdh_tensor(cell, potential)
+            lattice_stress = self.calculate_lattice_stress(cell, potential)
 
-            # 组合总张量
+            # 组合总张量(基础 + 晶格)
             total_stress = components["total_basic"] + lattice_stress
 
             components["lattice"] = lattice_stress
             components["total"] = total_stress
 
+            logger.debug(f"Total stress tensor:\n{total_stress}")
+
             return components
 
         except Exception as e:
-            logger.error(f"Error calculating stress tensors: {e}")
+            logger.error(f"Error calculating total stress tensors: {e}")
             raise
 
     def validate_tensor_symmetry(
         self, tensor: np.ndarray, tolerance: float = 1e-10
     ) -> bool:
-        """验证应力张量是否对称"""
-        return np.allclose(tensor, tensor.T, atol=tolerance)
+        """
+        验证应力张量是否对称
+
+        Parameters
+        ----------
+        tensor : np.ndarray
+            应力张量 (3x3)
+        tolerance : float, optional
+            对称性的容差, 默认值为1e-10
+
+        Returns
+        -------
+        bool
+            如果对称则为True, 否则为False
+        """
+        if tensor.shape != (3, 3):
+            logger.error(f"Tensor shape is {tensor.shape}, expected (3, 3).")
+            return False
+
+        is_symmetric = np.allclose(tensor, tensor.T, atol=tolerance)
+        if not is_symmetric:
+            logger.warning("Stress tensor is not symmetric.")
+        else:
+            logger.debug("Stress tensor is symmetric.")
+
+        return is_symmetric
 
 
 class StressCalculatorLJ(StressCalculator):
