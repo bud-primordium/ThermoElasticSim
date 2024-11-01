@@ -10,33 +10,66 @@ import matplotlib.pyplot as plt
 import logging
 from typing import Dict, Any, Tuple
 import os
+from datetime import datetime
+
+# 获取当前时间戳
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # 获取脚本所在的绝对路径
 script_dir = os.path.dirname(os.path.abspath(__file__))
-logs_dir = os.path.join(script_dir, "logs")
 
-# 创建 logs 目录
+# 创建主输出目录，包含时间戳
+output_dir = os.path.join(script_dir, f"simulation_output_{timestamp}")
+os.makedirs(output_dir, exist_ok=True)
+
+# 创建子目录
+logs_dir = os.path.join(output_dir, "logs")
+system_states_dir = os.path.join(output_dir, "system_states")
+plots_dir = os.path.join(output_dir, "plots")
+
 os.makedirs(logs_dir, exist_ok=True)
+os.makedirs(system_states_dir, exist_ok=True)
+os.makedirs(plots_dir, exist_ok=True)
 
-log_file = os.path.join(logs_dir, "simulation_debug.log")
+# 设置日志文件路径
+log_file = os.path.join(logs_dir, f"simulation_debug_{timestamp}.log")
 print(f"日志文件将被写入到: {log_file}")  # 打印日志文件的绝对路径
 
 # 配置日志记录
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(),
-    ],
-)
-
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# 创建文件处理器
+file_handler = logging.FileHandler(log_file)
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+file_handler.setFormatter(file_formatter)
+
+# 创建流处理器
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.DEBUG)
+stream_formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+stream_handler.setFormatter(stream_formatter)
+
+# 添加处理器到 logger
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
+# 测试日志记录
+logger.debug("日志记录器已初始化。")
+logger.info("这是一个信息日志。")
+logger.error("这是一个错误日志。")
+
+# 其余代码保持不变...
 
 
 def create_aluminum_fcc(a=4.05):
     """创建FCC铝晶胞"""
-    lattice_vectors = np.array([[a, 0, 0], [0, a, 0], [0, 0, a]]) * 2
+    lattice_vectors = np.array([[a, 0, 0], [0, a, 0], [0, 0, a]]) * 4
     basis_positions = [
         [0.0, 0.0, 0.0],
         [0.0, 0.5, 0.5],
@@ -57,7 +90,7 @@ def create_aluminum_fcc(a=4.05):
         )
 
     cell = Cell(lattice_vectors, atoms)
-    return cell.build_supercell((3, 3, 3))
+    return cell.build_supercell((4, 4, 4))
 
 
 def initialize_velocities(cell: Cell, target_temp: float) -> None:
@@ -105,10 +138,10 @@ def setup_npt_simulation(
     pressure_tensor = np.eye(3) * target_pressure  # 等静压
     barostat_config = {
         "target_pressure": pressure_tensor,
-        "time_constant": 0.3,
-        "compressibility": 4.57e-5,
+        "time_constant": 0.2,
+        "compressibility": 5e-6,
         "W": None,  # 自动计算晶胞质量
-        # "Q": np.ones(9) * (0.3 ** 2),  # 如果需要手动设置Q，可以取消注释并确保长度为9
+        "Q": np.ones(9) * (0.3**2),  # 如果需要手动设置Q，可以取消注释并确保长度为9
     }
 
     # 创建应力计算器
@@ -190,15 +223,14 @@ def save_system_state(cell: Cell, step: int):
     velocities = np.array([atom.velocity for atom in cell.atoms])
     forces = np.array([atom.force for atom in cell.atoms])
 
+    file_path = os.path.join(system_states_dir, f"system_state_step_{step}.npz")
     np.savez(
-        f"logs/system_state_step_{step}.npz",
+        file_path,
         positions=positions,
         velocities=velocities,
         forces=forces,
     )
-    logger.info(
-        f"System state at step {step} saved to logs/system_state_step_{step}.npz"
-    )
+    logger.info(f"System state at step {step} saved to {file_path}")
 
 
 def run_npt_simulation(
@@ -300,6 +332,9 @@ def run_npt_simulation(
                         save_system_state(cell, step)  # 保存当前系统状态
                         break
 
+    # 确认历史数据被正确记录
+    logger.debug(f"Final history data: {history}")
+
     # 绘制结果
     plot_npt_results(history, target_temp, target_pressure)
     logger.info("Simulation completed and results plotted.")
@@ -315,13 +350,27 @@ def plot_npt_results(
         logger.error("No data to plot.")
         return
 
+    # 转换为NumPy数组以便于处理
+    time = np.array(history["time"])
+    temperature = np.array(history["temperature"])
+    pressure_total = np.array(history["pressure"]["total"])
+    kinetic_energy = np.array(history["energy"]["kinetic"])
+    potential_energy = np.array(history["energy"]["potential"])
+    total_energy = np.array(history["energy"]["total"])
+    volume = np.array(history["volume"])
+    stress_tensor = np.array(history["stress_tensor"])
     cell_dims = np.array(history["cell_dimensions"])
     cell_angles = np.array(history["cell_angles"])
+
+    # 添加调试日志以检查数据
+    logger.debug(f"Temperature data: {temperature}")
+    logger.debug(f"Pressure data: {pressure_total}")
+    logger.debug(f"Time data: {time}")
 
     fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(15, 15))
 
     # 温度演化
-    ax1.plot(history["time"], history["temperature"], label="Temperature")
+    ax1.plot(time, temperature, label="Temperature")
     ax1.axhline(y=target_temp, color="r", linestyle="--", label="Target")
     ax1.set_xlabel("Time (fs)")
     ax1.set_ylabel("Temperature (K)")
@@ -330,8 +379,8 @@ def plot_npt_results(
     ax1.grid(True)
 
     # 压力演化
-    for key in ["kinetic", "virial", "lattice", "total"]:
-        ax2.plot(history["time"], history["pressure"][key], label=key.capitalize())
+    for key in ["total"]:
+        ax2.plot(time, pressure_total, label=key.capitalize())
     ax2.axhline(y=target_pressure, color="r", linestyle="--", label="Target")
     ax2.set_xlabel("Time (fs)")
     ax2.set_ylabel("Pressure (GPa)")
@@ -340,8 +389,9 @@ def plot_npt_results(
     ax2.grid(True)
 
     # 能量演化
-    for key in ["kinetic", "potential", "total"]:
-        ax3.plot(history["time"], history["energy"][key], label=key.capitalize())
+    ax3.plot(time, kinetic_energy, label="Kinetic Energy")
+    ax3.plot(time, potential_energy, label="Potential Energy")
+    ax3.plot(time, total_energy, label="Total Energy")
     ax3.set_xlabel("Time (fs)")
     ax3.set_ylabel("Energy (eV)")
     ax3.set_title("Energy Components")
@@ -349,16 +399,17 @@ def plot_npt_results(
     ax3.grid(True)
 
     # 体积演化
-    ax4.plot(history["time"], history["volume"])
+    ax4.plot(time, volume, label="Volume")
     ax4.set_xlabel("Time (fs)")
     ax4.set_ylabel("Volume (Å³)")
     ax4.set_title("Volume Evolution")
+    ax4.legend()
     ax4.grid(True)
 
     # 晶格参数演化
     if cell_dims.ndim == 2 and cell_dims.shape[1] >= 3:
         for i in range(3):
-            ax5.plot(history["time"], cell_dims[:, i], label=f"a{i+1}")
+            ax5.plot(time, cell_dims[:, i], label=f"a{i+1}")
         ax5.set_xlabel("Time (fs)")
         ax5.set_ylabel("Cell Dimensions (Å)")
         ax5.set_title("Lattice Parameters")
@@ -370,7 +421,7 @@ def plot_npt_results(
     # 晶胞角度演化
     if cell_angles.ndim == 2 and cell_angles.shape[1] >= 3:
         for i in range(3):
-            ax6.plot(history["time"], cell_angles[:, i], label=f"α{i+1}")
+            ax6.plot(time, cell_angles[:, i], label=f"α{i+1}")
         ax6.set_xlabel("Time (fs)")
         ax6.set_ylabel("Cell Angles (degrees)")
         ax6.set_title("Cell Angles")
@@ -380,18 +431,19 @@ def plot_npt_results(
         logger.warning("Insufficient cell_angles data for plotting.")
 
     plt.tight_layout()
-    plt.savefig("logs/npt_simulation_results.png")
+
+    # 保存绘图结果到 plots 子目录，并包含时间戳
+    plot_file = os.path.join(plots_dir, f"npt_simulation_results_{timestamp}.png")
+    plt.savefig(plot_file)
     plt.close()
-    logger.info(
-        "NPT simulation results plotted and saved to logs/npt_simulation_results.png"
-    )
+    logger.info(f"NPT simulation results plotted and saved to {plot_file}")
 
 
 if __name__ == "__main__":
     history, final_cell = run_npt_simulation(
         target_temp=300.0,  # 300K
-        target_pressure=1,  #
-        n_steps=100,  # 较短的模拟时间
-        dt=0.05,  # 1 fs 时间步长
-        record_every=5,  # 每5步记录一次
+        target_pressure=0.02,  # 3GPa
+        n_steps=20,  # 增加模拟步数以获得更有意义的数据
+        dt=0.01,  # 0.01 fs 时间步长
+        record_every=1,  # 每5步记录一次
     )

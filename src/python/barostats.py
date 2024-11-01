@@ -37,7 +37,11 @@ class Barostat:
         raise NotImplementedError
 
     def calculate_internal_pressure(self, stress_tensor: np.ndarray) -> float:
-        """计算内部压力（应力张量的迹的负三分之一）"""
+        """计算内部压力（应力张量的迹的负三分之一）
+
+        Returns:
+            float: 内部压力
+        """
         return -np.trace(stress_tensor) / 3.0
 
     def record_state(self, pressure: float, volume: float, stress_tensor: np.ndarray):
@@ -56,13 +60,13 @@ class ParrinelloRahmanHooverBarostat(Barostat):
     target_pressure : np.ndarray
         目标压力张量 (3x3)
     time_constant : float
-        压力耦合时间常数
+        压力耦合时间常数，控制恒压器对压力波动的响应速度。较小的时间常数会使系统更快地达到目标压力，但可能导致数值不稳定。
     compressibility : float, optional
-        等温压缩系数, 默认值为4.57e-5
+        等温压缩系数，表示材料在恒温下的压缩程度。默认值为4.57e-5。较大的压缩系数会使系统更容易压缩。
     W : float, optional
-        晶胞质量参数, 默认为自动计算
+        晶胞质量参数，用于控制晶胞的动力学行为。默认为自动计算。调整此参数可以改变晶胞响应外界压力变化的惯性。
     Q : np.ndarray, optional
-        热浴质量参数数组 (9,), 默认为 ones(9) * (time_constant^2)
+        热浴质量参数数组 (9,)，默认为 ones(9) * (time_constant^2)。调整此参数可以改变恒压器对不同方向应力的响应。
     stress_calculator : StressCalculator
         应力张量计算器实例
     """
@@ -97,7 +101,7 @@ class ParrinelloRahmanHooverBarostat(Barostat):
 
         if W is None:
             # 重新定义 W 的计算公式，避免依赖于 target_pressure
-            # 这里使用一个常见的公式：W = 1 / (compressibility * time_constant^2)    ????这他妈是咒语吧
+            # 使用公式：W = 1 / (compressibility * time_constant^2)
             # 确保 W 不为零
             self.W = 1.0 / (self.compressibility * self.time_constant**2)
             logger.debug(f"W automatically calculated: {self.W}")
@@ -221,17 +225,20 @@ class BerendsenBarostat(Barostat):
     Parameters
     ----------
     target_pressure : float
-        目标压力 (GPa)
+        目标压力 (不是GPa)
+        调整方法：设置为所需的系统压力。例如，1.0 表示 1 ev... 的目标压力。
     tau_p : float
         压力耦合时间常数
+        调整方法：控制恒压器对压力变化的响应速度。较小的时间常数使系统更快达到目标压力，但可能导致数值不稳定。典型值在 0.1 到 1.0 ps 之间。
     compressibility : float
         等温压缩系数
+        调整方法：表示材料在恒温下的压缩程度。较大的压缩系数会使系统更容易压缩。默认值为 4.57e-5，可以根据材料特性进行调整。
     """
 
     def __init__(
         self, target_pressure: float, tau_p: float, compressibility: float = 4.57e-5
     ):
-        super().__init__(target_pressure)
+        super().__init__(np.array([target_pressure]))
         self.tau_p = tau_p
         self.compressibility = compressibility
 
@@ -269,15 +276,18 @@ class AndersenBarostat(Barostat):
     Parameters
     ----------
     target_pressure : float
-        目标压力 (GPa)
+        目标压力 (不是GPa)
+        调整方法：设置为所需的系统压力。例如，0.0 表示在无外部压力下模拟。
     mass : float
         活塞质量参数
+        调整方法：控制体积变化的惯性。较大的质量参数会使体积变化更加缓慢和稳定，但响应速度较慢。
     temperature : float
         系统温度 (K)
+        调整方法：设定系统的温度，以便与恒温恒压模拟结合使用。
     """
 
     def __init__(self, target_pressure: float, mass: float, temperature: float):
-        super().__init__(target_pressure)
+        super().__init__(np.array([target_pressure]))
         self.mass = mass
         self.temperature = temperature
         self.volume_velocity = 0.0
@@ -306,7 +316,7 @@ class AndersenBarostat(Barostat):
 
         for atom in cell.atoms:
             atom.position *= scaling_factor
-            atom.velocity *= scaling_factor
+            atom.velocity *= scaling_factor  # 如果需要，可以选择是否调整速度
 
         # 记录状态
-        self.record_state(current_pressure, cell.volume, stress_tensor)
+        self.record_state(current_pressure, cell.volume, stress_tensor.flatten())
