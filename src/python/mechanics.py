@@ -1,7 +1,7 @@
 # 文件名: mechanics.py
 # 作者: Gilbert Young
 # 修改日期: 2024-10-20
-# 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势的应力计算器。
+# 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
 """
 力学模块
@@ -89,6 +89,84 @@ class StressCalculatorLJ(StressCalculator):
         )
 
         # 重新整形为 3x3 矩阵并返回
+        stress_tensor = stress_tensor.reshape(3, 3)
+        return stress_tensor
+
+
+class StressCalculatorEAM(StressCalculator):
+    """
+    基于 EAM 势的应力计算器
+
+    计算EAM势下的应力张量，包括：
+    1. 对势项的贡献
+    2. 电子密度的贡献
+    3. 嵌入能的贡献
+
+    Parameters
+    ----------
+    None
+    """
+
+    def __init__(self):
+        """初始化EAM应力计算器"""
+        self.cpp_interface = CppInterface("stress_calculator")
+
+    def compute_stress(self, cell, potential):
+        """
+        计算 EAM 势的应力张量
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : EAMAl1Potential
+            EAM 势能对象
+
+        Returns
+        -------
+        numpy.ndarray
+            3x3 应力张量矩阵，单位为 eV/Å³
+
+        Notes
+        -----
+        EAM势的应力张量计算包括：
+        1. 对势部分的应力贡献
+        2. 由电子密度梯度产生的应力贡献
+        3. 嵌入能导致的应力贡献
+        """
+        # 计算并更新原子力
+        potential.calculate_forces(cell)
+
+        # 获取相关物理量
+        volume = cell.calculate_volume()
+        atoms = cell.atoms
+        num_atoms = len(atoms)
+        positions = np.array(
+            [atom.position for atom in atoms], dtype=np.float64
+        ).flatten()
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = cell.get_forces().flatten()  # 从cell获取更新后的力
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        box_lengths = cell.get_box_lengths()
+
+        # 初始化应力张量数组
+        stress_tensor = np.zeros((3, 3), dtype=np.float64)
+
+        # 调用C++接口计算EAM应力张量
+        self.cpp_interface.compute_stress(
+            num_atoms,
+            positions,
+            velocities,
+            forces,
+            masses,
+            volume,
+            box_lengths,
+            stress_tensor,
+        )
+
+        # 重新整形为3x3矩阵并返回
         stress_tensor = stress_tensor.reshape(3, 3)
         return stress_tensor
 
