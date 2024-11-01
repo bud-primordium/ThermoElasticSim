@@ -12,17 +12,159 @@
 
 import numpy as np
 from .utils import TensorConverter
+from typing import Dict
 from .interfaces.cpp_interface import CppInterface
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class StressCalculator:
     """
-    应力计算器基类，定义应力计算方法的接口
+    应力张量计算器
+    处理三个张量贡献：
+    1. 动能张量: p_i⊗p_i/m_i
+    2. 维里张量: r_i⊗f_i
+    3. 晶格应变张量: ∂U/∂h·h^T
     """
 
-    def compute_stress(self, cell, potential):
-        """计算应力，需子类实现"""
-        raise NotImplementedError
+    def __init__(self):
+        self.cpp_interface = CppInterface("stress_calculator")
+
+    def calculate_stress_components(self, cell) -> Dict[str, np.ndarray]:
+        """
+        计算应力张量的各个组成部分
+
+        Returns
+        -------
+        Dict[str, np.ndarray]
+            包含各个3x3张量的字典：
+            - 'kinetic': 动能张量
+            - 'virial': 维里张量
+            - 'total_basic': C++计算的总张量
+        """
+        # 设置输入数据
+        num_atoms = len(cell.atoms)
+        positions = np.array(
+            [cell.lattice_vectors @ atom.position for atom in cell.atoms],
+            dtype=np.float64,
+        ).flatten()
+        velocities = np.array(
+            [atom.velocity for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array(
+            [atom.force for atom in cell.atoms], dtype=np.float64
+        ).flatten()
+        masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
+        volume = cell.Volume
+        box_lengths = np.diagonal(cell.lattice_vectors)
+
+        # C++计算应力张量
+        stress_tensor = np.zeros(9, dtype=np.float64)
+        self.cpp_interface.compute_stress(
+            num_atoms,
+            positions,
+            velocities,
+            forces,
+            masses,
+            volume,
+            box_lengths,
+            stress_tensor,
+        )
+        stress_tensor = stress_tensor.reshape(3, 3)
+
+        # 分别计算动能和维里贡献（用于验证）
+        kinetic_tensor = np.zeros((3, 3))
+        virial_tensor = np.zeros((3, 3))
+
+        # 动能张量 Σ(p_i⊗p_i/m_i)
+        for i in range(num_atoms):
+            p = velocities[3 * i : 3 * i + 3] * masses[i]
+            kinetic_tensor += np.outer(p, p) / masses[i]
+
+        # 维里张量 Σ(r_i⊗f_i)
+        for i in range(num_atoms):
+            r = positions[3 * i : 3 * i + 3]
+            f = forces[3 * i : 3 * i + 3]
+            virial_tensor += np.outer(r, f)
+
+        # 归一化
+        kinetic_tensor /= volume
+        virial_tensor /= volume
+
+        return {
+            "kinetic": kinetic_tensor,
+            "virial": virial_tensor,
+            "total_basic": stress_tensor,
+        }
+
+    def calculate_dUdh_tensor(self, cell, potential, dr: float = 1e-8) -> np.ndarray:
+        """
+        计算晶格应变应力张量
+
+        Returns
+        -------
+        np.ndarray
+            3x3晶格应变应力张量
+        """
+        lattice = cell.lattice_vectors
+        dUdh = np.zeros((3, 3))
+
+        for i in range(3):
+            for j in range(3):
+                # 形变矩阵
+                deformation = np.eye(3)
+                deformation[i, j] += dr
+
+                # 计算能量差
+                cell_plus = cell.copy()
+                cell_plus.apply_deformation(deformation)
+                energy_plus = potential.calculate_energy(cell_plus)
+
+                deformation[i, j] -= 2 * dr
+                cell_minus = cell.copy()
+                cell_minus.apply_deformation(deformation)
+                energy_minus = potential.calculate_energy(cell_minus)
+
+                dUdh[i, j] = (energy_plus - energy_minus) / (2 * dr)
+
+        # 转换为应力张量
+        stress_tensor = np.dot(dUdh, lattice.T) / cell.Volume
+        return stress_tensor
+
+    def calculate_total_stress(self, cell, potential) -> Dict[str, np.ndarray]:
+        """
+        计算总应力张量及其组成
+
+        Returns
+        -------
+        Dict[str, np.ndarray]
+            包含各个3x3应力张量的字典
+        """
+        try:
+            # 获取基础张量组成
+            components = self.calculate_stress_components(cell)
+
+            # 计算晶格应变张量
+            lattice_stress = self.calculate_dUdh_tensor(cell, potential)
+
+            # 组合总张量
+            total_stress = components["total_basic"] + lattice_stress
+
+            components["lattice"] = lattice_stress
+            components["total"] = total_stress
+
+            return components
+
+        except Exception as e:
+            logger.error(f"Error calculating stress tensors: {e}")
+            raise
+
+    def validate_tensor_symmetry(
+        self, tensor: np.ndarray, tolerance: float = 1e-10
+    ) -> bool:
+        """验证应力张量是否对称"""
+        return np.allclose(tensor, tensor.T, atol=tolerance)
 
 
 class StressCalculatorLJ(StressCalculator):
