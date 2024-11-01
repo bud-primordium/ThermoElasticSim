@@ -13,17 +13,18 @@
 import numpy as np
 import logging
 from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures as futures
 from .mechanics import StressCalculatorLJ, StrainCalculator
 from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
-from .utils import TensorConverter, EV_TO_GPA  # 导入单位转换因子
+from .utils import TensorConverter, EV_TO_GPA
 from .visualization import Visualizer
 import os
-import matplotlib.pyplot as plt  # 确保导入了 plt
-import csv  # 导入 csv 模块
-from sklearn.linear_model import Ridge  # 导入 Ridge 模型用于正则化
+import matplotlib.pyplot as plt
+import csv
+from sklearn.linear_model import Ridge
 
-# 配置日志记录，移除 threadName
+# 配置日志记录
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(levelname)s: %(message)s",
@@ -39,7 +40,7 @@ class ZeroKElasticConstantsSolver:
 
     def solve(self, strains, stresses, regularization=False, alpha=1e-5):
         """
-        通过最小二乘法求解弹性常数矩阵
+        通过最小二乘法求解弹性常数矩阵，并计算整体拟合优度
 
         Parameters
         ----------
@@ -54,8 +55,10 @@ class ZeroKElasticConstantsSolver:
 
         Returns
         -------
-        numpy.ndarray
-            弹性常数矩阵，形状为 (6, 6)
+        tuple
+            (elastic_constants, r2_score)
+            - elastic_constants: 弹性常数矩阵，形状为 (6, 6)
+            - r2_score: 整体拟合的 R² 值
         """
         strains = np.array(strains)
         stresses = np.array(stresses)
@@ -74,14 +77,26 @@ class ZeroKElasticConstantsSolver:
             )
             model = Ridge(alpha=alpha, fit_intercept=False)
             model.fit(strains, stresses)
-            C = model.coef_.T  # Ridge 回归的 coef_ 属性形状为 (6, 6)
-            logger.debug(f"Elastic constants matrix (Ridge):\n{C}")
+            C = model.coef_.T
+
+            # 计算整体R²
+            predictions = strains @ C.T
+            ss_tot = np.sum((stresses - np.mean(stresses, axis=0)) ** 2)
+            ss_res = np.sum((stresses - predictions) ** 2)
+            r2_score = 1 - (ss_res / ss_tot)
         else:
             logger.debug("Solving elastic constants using least squares.")
             C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
-            logger.debug(f"Elastic constants matrix (before conversion):\n{C}")
+            C = C.T
 
-        return C.T  # 返回转置后的矩阵
+            # 计算整体R²
+            predictions = strains @ C
+            ss_tot = np.sum((stresses - np.mean(stresses, axis=0)) ** 2)
+            ss_res = np.sum((stresses - predictions) ** 2)
+            r2_score = 1 - (ss_res / ss_tot)
+
+        logger.debug(f"Overall R² score for elastic constants fitting: {r2_score:.6f}")
+        return C, r2_score
 
 
 class ZeroKElasticConstantsCalculator:
@@ -147,7 +162,12 @@ class ZeroKElasticConstantsCalculator:
                 self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "BFGS"
         elif optimizer_type == "LBFGS":
-            self.optimizer_params = {"tol": 1e-10, "maxiter": 1000000}
+            self.optimizer_params = {
+                "ftol": 1e-8,
+                "gtol": 1e-5,
+                "maxls": 100,
+                "maxiter": 10000,
+            }
             if optimizer_params:
                 self.optimizer_params.update(optimizer_params)
             self.optimizer_type = "LBFGS"
@@ -337,29 +357,39 @@ class ZeroKElasticConstantsCalculator:
 
         # 生成变形矩阵
         F_list = self.deformer.generate_deformation_matrices()
-        strains, stresses = [], []
-
-        # 用于存储每个变形的结果
         results = []
 
         # 并行计算应力和应变
         with ThreadPoolExecutor() as executor:
-            futures = []
-            for deformation_index, F in enumerate(F_list):
-                futures.append(
-                    executor.submit(self.calculate_stress_strain, F, deformation_index)
-                )
+            # 提交所有任务并立即获取future对象
+            future_to_idx = {
+                executor.submit(self.calculate_stress_strain, F, i): i
+                for i, F in enumerate(F_list)
+            }
 
-            for future in futures:
+            # 预分配结果列表，确保顺序
+            results = [None] * len(F_list)
+
+            # 按完成顺序处理结果
+            for future in futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
                 try:
                     result = future.result()
-                    results.append(result)
+                    results[idx] = result
+                    logger.debug(f"Completed deformation {idx}")
                 except Exception as e:
-                    logger.error(
-                        f"Error occurred during stress-strain calculation: {e}"
-                    )
+                    logger.error(f"Error in deformation {idx}: {e}")
+                    raise  # 如果有错误，立即停止计算
 
-        # 在主线程中处理可视化和文件保存
+        # 检查是否所有计算都完成
+        if any(r is None for r in results):
+            raise RuntimeError("Some deformations failed to complete")
+
+        # 初始化存储数组
+        strains = []
+        stresses = []
+
+        # 处理结果
         for (
             strain_voigt,
             stress_voigt,
@@ -373,6 +403,7 @@ class ZeroKElasticConstantsCalculator:
             )
             os.makedirs(deformation_dir, exist_ok=True)
 
+            # 保存优化轨迹动画
             animation_filename = os.path.join(
                 deformation_dir, f"deformation_{deformation_index}_optimization.gif"
             )
@@ -393,45 +424,52 @@ class ZeroKElasticConstantsCalculator:
             )
             fig, ax = self.visualizer.plot_cell_structure(deformed_cell, show=False)
             fig.savefig(plot_filename)
-            plt.close(fig)  # 关闭图形，释放内存
+            plt.close(fig)
             logger.info(f"Saved deformed cell structure plot to {plot_filename}")
 
-            # 保存应力和应变数据
+            # 收集应力应变数据
             strains.append(strain_voigt)
             stresses.append(stress_voigt)
 
-        # 将应力和应变数据合并保存到一个 CSV 文件中
+        # 转换为numpy数组
         strain_data = np.array(strains)
         stress_data = np.array(stresses)
+
+        # 保存应力应变数据
         self.save_stress_strain_data(strain_data, stress_data)
 
         logger.info(f"Total strain-stress pairs: {len(strains)}")
         logger.info(f"Strain range: [{strain_data.min():.6e}, {strain_data.max():.6e}]")
         logger.info(f"Stress range: [{stress_data.min():.6e}, {stress_data.max():.6e}]")
 
-        # 计算弹性常数矩阵
+        # 计算弹性常数矩阵和R²
         logger.debug("Solving for elastic constants.")
         solver = ZeroKElasticConstantsSolver()
-        # 可选：使用正则化来提高求解的稳定性
-        C = solver.solve(strain_data, stress_data, regularization=False, alpha=1e-5)
-        C_in_GPa = C * EV_TO_GPA
-        logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
-
-        # 保存弹性常数矩阵到文件
-        np.savetxt(
-            os.path.join(self.save_path, "elastic_constants_GPa.txt"),
-            C_in_GPa,
-            fmt="%.6e",
+        C, r2_score = solver.solve(
+            strain_data, stress_data, regularization=False, alpha=1e-5
         )
+        C_in_GPa = C * EV_TO_GPA
+
+        # 记录R²值
+        logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
+        logger.info(f"Overall R² score: {r2_score:.6f}")
+
+        # 保存弹性常数矩阵和R²到文件
+        results_file = os.path.join(self.save_path, "elastic_constants_GPa.txt")
+        with open(results_file, "w") as f:
+            f.write("Elastic Constants Matrix (GPa):\n")
+            np.savetxt(f, C_in_GPa, fmt="%.6e")
+            f.write(f"\nOverall R² score: {r2_score:.6f}")
+            f.write("\nNote: R² closer to 1 indicates better fit quality")
 
         # 保存应力-应变关系图
         fig, ax = self.visualizer.plot_stress_strain_multiple(
             strain_data, stress_data, show=False
         )
         fig.savefig(os.path.join(self.save_path, "stress_strain_relationship.png"))
-        plt.close(fig)  # 关闭图形，释放内存
+        plt.close(fig)
 
-        # 可选：创建应力-应变关系的动画
+        # 保留应力-应变关系动画的创建
         self.visualizer.create_stress_strain_animation(
             strain_data,
             stress_data,
