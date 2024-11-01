@@ -142,6 +142,22 @@ class CppInterface:
             ]
             self.lib.nose_hoover_chain.restype = None
 
+        elif lib_name == "parrinello_rahman_hoover":
+            self.lib.parrinello_rahman_hoover.argtypes = [
+                ctypes.c_double,  # dt
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # target_pressure
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # virial_stress
+                ctypes.c_double,  # W
+            ]
+            self.lib.parrinello_rahman_hoover.restype = None
+
         else:
             raise ValueError(f"未知的库名称: {lib_name}")
 
@@ -456,4 +472,69 @@ class CppInterface:
             Q,
             chain_length,
             target_temperature,
+        )
+
+    def parrinello_rahman_hoover(
+        self,
+        dt: float,
+        num_atoms: int,
+        masses: np.ndarray,
+        velocities: np.ndarray,
+        forces: np.ndarray,
+        lattice_vectors: np.ndarray,
+        xi: np.ndarray,
+        Q: np.ndarray,
+        target_pressure: np.ndarray,
+        virial_stress: np.ndarray,
+        W: float,
+    ):
+        """
+        应用 Parrinello-Rahman-Hoover 恒压器。
+
+        Parameters
+        ----------
+        dt : float
+            时间步长
+        num_atoms : int
+            原子数量
+        masses : numpy.ndarray
+            原子质量数组
+        velocities : numpy.ndarray
+            原子速度数组
+        forces : numpy.ndarray
+            原子受力数组
+        lattice_vectors : numpy.ndarray
+            晶格矢量(3x3矩阵)
+        xi : numpy.ndarray
+            热浴变量数组(长度为6)
+        Q : numpy.ndarray
+            热浴质量参数数组(长度为6)
+        target_pressure : numpy.ndarray
+            目标压力张量(3x3矩阵)
+        virial_stress : numpy.ndarray
+            维里应力张量(3x3矩阵)
+        W : float
+            晶胞质量参数
+        """
+        masses = np.ascontiguousarray(masses, dtype=np.float64)
+        velocities = np.ascontiguousarray(velocities, dtype=np.float64)
+        forces = np.ascontiguousarray(forces, dtype=np.float64)
+        lattice_vectors = np.ascontiguousarray(lattice_vectors, dtype=np.float64)
+        xi = np.ascontiguousarray(xi, dtype=np.float64)
+        Q = np.ascontiguousarray(Q, dtype=np.float64)
+        target_pressure = np.ascontiguousarray(target_pressure, dtype=np.float64)
+        virial_stress = np.ascontiguousarray(virial_stress, dtype=np.float64)
+
+        self.lib.parrinello_rahman_hoover(
+            dt,
+            num_atoms,
+            masses,
+            velocities,
+            forces,
+            lattice_vectors,
+            xi,
+            Q,
+            target_pressure,
+            virial_stress,
+            W,
         )
