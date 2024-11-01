@@ -45,10 +45,10 @@ class GradientDescentOptimizer(Optimizer):
     """
 
     def __init__(
-        self, max_steps=10000, tol=1e-3, step_size=1e-3, energy_tol=1e-4, beta=0.9
+        self, maxiter=10000, tol=1e-3, step_size=1e-3, energy_tol=1e-4, beta=0.9
     ):
         """初始化带动量项的梯度下降优化器"""
-        self.max_steps = max_steps
+        self.maxiter = maxiter
         self.tol = tol
         self.step_size = step_size
         self.energy_tol = energy_tol
@@ -73,7 +73,7 @@ class GradientDescentOptimizer(Optimizer):
         previous_energy = potential.calculate_energy(cell)
         velocities = [np.zeros(3, dtype=np.float64) for _ in atoms]  # 初始化动量
 
-        for step in range(1, self.max_steps + 1):
+        for step in range(1, self.maxiter + 1):
             positions = cell.get_positions()
             forces = cell.get_forces()
             volume = cell.volume
@@ -146,7 +146,7 @@ class GradientDescentOptimizer(Optimizer):
                 f"Step {step}: Min distance = {min_distance:.3f} Å between atoms {min_pair[0]} and {min_pair[1]}"
             )
 
-            if min_distance < 0.8 * potential.parameters["sigma"]:
+            if min_distance < 1.0:
                 logger.error(
                     f"Step {step}: Minimum inter-atomic distance {min_distance:.3f} Å is too small between atoms {min_pair[0]} and {min_pair[1]}. Terminating optimization."
                 )
@@ -164,7 +164,7 @@ class GradientDescentOptimizer(Optimizer):
         lattice_vectors = cell.lattice_vectors.copy()
         self.trajectory.append(
             {
-                "step": self.max_steps + 1,
+                "step": self.maxiter + 1,
                 "positions": final_positions.copy(),
                 "volume": volume,
                 "lattice_vectors": lattice_vectors.copy(),
@@ -293,22 +293,37 @@ class BFGSOptimizer(Optimizer):
 
 class LBFGSOptimizer(Optimizer):
     """
-    L-BFGS 优化器，基于 scipy.optimize.minimize
+    改进的 L-BFGS 优化器
 
     Parameters
     ----------
-    tol : float
-        收敛阈值
-    maxiter : int
-        最大迭代步数
+    ftol : float, optional
+        函数值相对变化的收敛阈值，默认为 1e-6
+    gtol : float, optional
+        梯度（力）的收敛阈值，默认为 1e-5
+    maxcor : int, optional
+        存储的向量数量，默认为 10
+    maxls : int, optional
+        每次迭代中线搜索的最大步数，默认为 20
+    maxiter : int, optional
+        最大迭代步数，默认为 10000
     """
 
-    def __init__(self, tol=1e-6, maxiter=10000):
-        """初始化 L-BFGS 优化器"""
-        self.tol = tol
+    def __init__(
+        self,
+        ftol=1e-6,  # 保持与原来的 tol 一致
+        gtol=1e-5,  # scipy 默认值
+        maxcor=10,  # scipy 默认值
+        maxls=20,  # scipy 默认值
+        maxiter=10000,  # 保持与原来一致
+    ):
+        self.ftol = ftol
+        self.gtol = gtol
+        self.maxcor = maxcor
+        self.maxls = maxls
         self.maxiter = maxiter
         self.converged = False
-        self.trajectory = []  # 记录轨迹数据
+        self.trajectory = []
 
     def optimize(self, cell, potential):
         """
@@ -378,9 +393,15 @@ class LBFGSOptimizer(Optimizer):
             initial_positions,
             method="L-BFGS-B",
             jac=grad_fn,
-            tol=self.tol,
-            options={"maxiter": self.maxiter, "disp": False},
-            callback=callback,  # 设置回调函数
+            options={
+                "ftol": self.ftol,  # 替代之前未使用的 tol 参数
+                "gtol": self.gtol,  # 控制力的收敛
+                "maxcor": self.maxcor,  # 控制内存使用
+                "maxls": self.maxls,  # 控制线搜索
+                "maxiter": self.maxiter,
+                "disp": False,
+            },
+            callback=callback,
         )
 
         if result.success:

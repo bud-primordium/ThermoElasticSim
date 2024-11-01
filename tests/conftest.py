@@ -40,7 +40,7 @@ def configure_root_logging():
 def configure_module_logging(request):
     """配置每个测试模块的日志记录，将日志保存到各自的子目录"""
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     module_path = request.node.nodeid.split("::")[0]
     module_name = os.path.splitext(os.path.basename(module_path))[0]

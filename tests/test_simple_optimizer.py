@@ -11,7 +11,7 @@ def test_gradient_descent_optimizer_simple(lj_potential, simple_cell):
     """
     logger = logging.getLogger(__name__)
     optimizer = GradientDescentOptimizer(
-        max_steps=10000, tol=1e-4, step_size=1e-2, energy_tol=1e-4
+        maxiter=10000, tol=1e-4, step_size=1e-2, energy_tol=1e-4
     )
     cell = simple_cell.copy()  # 使用深拷贝以避免修改原始晶胞
 
