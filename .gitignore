@@ -54,3 +54,6 @@ output/
 # 特殊文件夹（如讲义和笔记）
 .lectures/
 .notes/
+
+npt_simulation_results_*.png
+temperature_evolution.png
