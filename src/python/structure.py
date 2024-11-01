@@ -355,7 +355,7 @@ class Cell:
 
         # 转换到分数坐标
         try:
-            fractional = np.dot(self.lattice_inv, displacement)
+            fractional = np.dot(displacement, self.lattice_inv)
         except np.linalg.LinAlgError:
             logger.error("Failed to compute fractional coordinates")
             raise
@@ -368,4 +368,69 @@ class Cell:
             logger.warning("Possible numerical instability in minimum image convention")
 
         # 转回笛卡尔坐标
-        return np.dot(self.lattice_vectors.T, fractional)
+        return np.dot(
+            self.lattice_vectors,
+            fractional,
+        )
+
+    def build_supercell(self, repetition):
+        """
+        构建超胞，返回一个新的 Cell 对象
+
+        Parameters
+        ----------
+        repetition : tuple of int
+            在 x, y, z 方向上的重复次数，例如 (2, 2, 2)
+
+        Returns
+        -------
+        Cell
+            新的超胞对象
+        """
+        nx, ny, nz = repetition
+        # 获取基本晶胞的晶格矢量
+        lattice_vectors = self.lattice_vectors.copy()
+        # 计算超胞的晶格矢量
+        super_lattice_vectors = np.dot(np.diag([nx, ny, nz]), lattice_vectors)
+
+        # 获取原始原子的分数坐标
+        positions = np.array([atom.position for atom in self.atoms])
+        fractional = np.linalg.solve(lattice_vectors.T, positions.T).T  # Shape (N, 3)
+
+        super_atoms = []
+        atom_id = 0
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+                    # 平移矢量（分数坐标）
+                    shift = np.array([i, j, k])
+                    for idx, atom in enumerate(self.atoms):
+                        # 新的分数坐标
+                        frac_coord = fractional[idx] + shift
+                        # 检查是否在范围内，避免重复原子
+                        if i == nx - 1 and frac_coord[0] >= nx:
+                            continue
+                        if j == ny - 1 and frac_coord[1] >= ny:
+                            continue
+                        if k == nz - 1 and frac_coord[2] >= nz:
+                            continue
+                        # 转换回笛卡尔坐标
+                        new_position = np.dot(frac_coord, lattice_vectors)
+                        # 创建新的原子
+                        new_atom = Atom(
+                            id=atom_id,
+                            symbol=atom.symbol,
+                            mass_amu=atom.mass_amu,
+                            position=new_position,
+                            velocity=atom.velocity.copy(),
+                        )
+                        super_atoms.append(new_atom)
+                        atom_id += 1
+
+        # 创建新的 Cell 对象
+        super_cell = Cell(
+            lattice_vectors=super_lattice_vectors,
+            atoms=super_atoms,
+            pbc_enabled=self.pbc_enabled,
+        )
+        return super_cell

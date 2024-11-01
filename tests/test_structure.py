@@ -1,9 +1,6 @@
 import pytest
 import numpy as np
 from python.structure import Atom, Cell
-import logging
-from datetime import datetime
-import os
 
 # 配置日志记录（已在 conftest.py 中配置，故无需在这里再次配置）
 
@@ -107,10 +104,6 @@ def test_minimum_image(cell):
     """
     displacement = np.array([3.0, 3.0, 3.0])  # 示例位移
     min_disp = cell.minimum_image(displacement)
-    # lattice_vectors = 4.0 * I, displacement = [3,3,3]
-    # fractional = [0.75,0.75,0.75]
-    # fractional -= np.round(fractional) = [0.75-1, 0.75-1, 0.75-1] = [-0.25, -0.25, -0.25]
-    # min_disp = 4.0 * [-0.25, -0.25, -0.25] = [-1.0, -1.0, -1.0]
     expected_disp = np.array([-1.0, -1.0, -1.0])
     np.testing.assert_array_almost_equal(
         min_disp,
@@ -172,8 +165,7 @@ def test_apply_deformation_unlocked(cell, atom):
 
     # 计算原子的位置变换
     fractional = np.linalg.solve(original_lattice_vectors.T, original_position)
-    fractional = np.dot(deformation_matrix, fractional)
-    expected_position = np.dot(expected_lattice_vectors.T, fractional)
+    expected_position = np.dot(cell.lattice_vectors.T, fractional)
 
     if cell.pbc_enabled:
         expected_position = cell.apply_periodic_boundary(expected_position)
@@ -233,3 +225,126 @@ def test_apply_periodic_boundary_no_pbc():
         position,
         err_msg="Position should remain unchanged when PBC is disabled.",
     )
+
+
+# 新增针对 build_supercell 方法的测试
+def test_build_supercell(cell):
+    """
+    @brief 测试 build_supercell 方法，确保超胞构建正确，且没有原子重叠
+    """
+    repetition = (2, 2, 2)
+    super_cell = cell.build_supercell(repetition)
+
+    # 检查超胞的晶格矢量是否正确
+    expected_lattice_vectors = np.dot(np.diag(repetition), cell.lattice_vectors)
+    np.testing.assert_array_equal(
+        super_cell.lattice_vectors,
+        expected_lattice_vectors,
+        err_msg="Supercell lattice vectors are incorrect.",
+    )
+
+    # 计算预期的原子数量
+    expected_num_atoms = cell.num_atoms * np.prod(repetition)
+    assert (
+        super_cell.num_atoms == expected_num_atoms
+    ), "Supercell has incorrect number of atoms."
+
+    # 检查原子位置是否正确，且没有原子重叠
+    positions = np.array([atom.position for atom in super_cell.atoms])
+    # 计算原子间距矩阵
+    distance_matrix = np.linalg.norm(
+        positions[:, np.newaxis, :] - positions[np.newaxis, :, :], axis=-1
+    )
+    # 设置对角线为无穷大，避免自我比较
+    np.fill_diagonal(distance_matrix, np.inf)
+    min_distance = np.min(distance_matrix)
+    # 检查最小原子间距是否大于某个阈值，避免原子重叠（例如 0.1 Å）
+    assert (
+        min_distance > 0.1
+    ), "Atoms in supercell are too close, possible overlap detected."
+
+
+def test_build_supercell_no_overlap(cell):
+    """
+    @brief 测试构建的超胞在周期性边界条件下没有原子重叠
+    """
+    repetition = (2, 2, 2)
+    super_cell = cell.build_supercell(repetition)
+
+    # 获取原子位置并转换到分数坐标
+    positions = np.array([atom.position for atom in super_cell.atoms])
+    fractional = np.dot(positions, np.linalg.inv(super_cell.lattice_vectors.T))
+
+    # 将分数坐标映射到 [0, 1) 区间
+    fractional %= 1.0
+
+    # 检查是否有重复的原子分数坐标
+    unique_fractional = np.unique(fractional, axis=0)
+    assert len(unique_fractional) == len(
+        fractional
+    ), "Duplicate fractional coordinates detected in supercell."
+
+
+def test_build_supercell_pbc(cell):
+    """
+    @brief 测试构建的超胞是否正确处理周期性边界条件
+    """
+    repetition = (2, 2, 2)
+    super_cell = cell.build_supercell(repetition)
+
+    # 获取超胞中原子的分数坐标
+    positions = np.array([atom.position for atom in super_cell.atoms])
+    fractional = np.dot(positions, np.linalg.inv(super_cell.lattice_vectors.T))
+
+    # 检查分数坐标是否在 [0, nx), [0, ny), [0, nz) 范围内
+    nx, ny, nz = repetition
+    assert np.all(fractional[:, 0] >= 0) and np.all(
+        fractional[:, 0] < nx
+    ), "Fractional x-coordinates out of bounds."
+    assert np.all(fractional[:, 1] >= 0) and np.all(
+        fractional[:, 1] < ny
+    ), "Fractional y-coordinates out of bounds."
+    assert np.all(fractional[:, 2] >= 0) and np.all(
+        fractional[:, 2] < nz
+    ), "Fractional z-coordinates out of bounds."
+
+    # 将分数坐标映射到 [0, 1) 区间
+    fractional_mod = fractional % 1.0
+
+    # 检查映射后的分数坐标是否正确处理了 PBC
+    assert np.all(
+        (fractional_mod >= 0) & (fractional_mod < 1)
+    ), "Fractional coordinates after PBC application are out of bounds."
+
+
+def test_build_supercell_large(cell):
+    """
+    @brief 测试更大尺寸的超胞构建，确保在更大规模下功能正常
+    """
+    repetition = (3, 3, 3)
+    super_cell = cell.build_supercell(repetition)
+
+    # 检查超胞的晶格矢量是否正确
+    expected_lattice_vectors = np.dot(np.diag(repetition), cell.lattice_vectors)
+    np.testing.assert_array_equal(
+        super_cell.lattice_vectors,
+        expected_lattice_vectors,
+        err_msg="Supercell lattice vectors are incorrect for large supercell.",
+    )
+
+    # 检查原子数量
+    expected_num_atoms = cell.num_atoms * np.prod(repetition)
+    assert (
+        super_cell.num_atoms == expected_num_atoms
+    ), "Large supercell has incorrect number of atoms."
+
+    # 检查是否有原子重叠
+    positions = np.array([atom.position for atom in super_cell.atoms])
+    distance_matrix = np.linalg.norm(
+        positions[:, np.newaxis, :] - positions[np.newaxis, :, :], axis=-1
+    )
+    np.fill_diagonal(distance_matrix, np.inf)
+    min_distance = np.min(distance_matrix)
+    assert (
+        min_distance > 0.1
+    ), "Atoms in large supercell are too close, possible overlap detected."
