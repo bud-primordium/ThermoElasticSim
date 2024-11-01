@@ -13,11 +13,16 @@ ThermoElasticSim 项目初始化模块
 
 # 导入子模块
 from .structure import Atom, Cell
-from .potentials import Potential, LennardJonesPotential
+from .potentials import Potential, LennardJonesPotential, EAMAl1Potential
 from .integrators import Integrator, VelocityVerletIntegrator, RK4Integrator
 from .thermostats import Thermostat, NoseHooverThermostat, NoseHooverChainThermostat
 from .barostats import Barostat, ParrinelloRahmanHooverBarostat
-from .mechanics import StressCalculator, StressCalculatorLJ, StrainCalculator
+from .mechanics import (
+    StressCalculator,
+    StressCalculatorLJ,
+    StressCalculatorEAM,
+    StrainCalculator,
+)
 from .zeroelasticity import ZeroKElasticConstantsSolver, ZeroKElasticConstantsCalculator
 from .optimizers import Optimizer, GradientDescentOptimizer, BFGSOptimizer
 from .deformation import Deformer
