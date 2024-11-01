@@ -36,6 +36,10 @@ $(LIB_DIR)/$(LIB_PREFIX)lennard_jones$(LIB_EXT): $(SRC_DIR)/lennard_jones.cpp | 
 	@echo "编译 lennard_jones$(LIB_EXT) ..."
 	$(COMPILER) $(SRC_DIR)/lennard_jones.cpp -o $(LIB_DIR)/$(LIB_PREFIX)lennard_jones$(LIB_EXT) $(CFLAGS)
 
+$(LIB_DIR)/$(LIB_PREFIX)eam_al1$(LIB_EXT): $(SRC_DIR)/eam_al1.cpp | $(LIB_DIR)
+	@echo "编译 eam_al1$(LIB_EXT) ..."
+	$(COMPILER) $(SRC_DIR)/eam_al1.cpp -o $(LIB_DIR)/$(LIB_PREFIX)eam_al1$(LIB_EXT) $(CFLAGS)
+
 $(LIB_DIR)/$(LIB_PREFIX)nose_hoover$(LIB_EXT): $(SRC_DIR)/nose_hoover.cpp | $(LIB_DIR)
 	@echo "编译 nose_hoover$(LIB_EXT) ..."
 	$(COMPILER) $(SRC_DIR)/nose_hoover.cpp -o $(LIB_DIR)/$(LIB_PREFIX)nose_hoover$(LIB_EXT) $(CFLAGS)
@@ -54,6 +58,7 @@ $(LIB_DIR)/$(LIB_PREFIX)parrinello_rahman_hoover$(LIB_EXT): $(SRC_DIR)/parrinell
 
 # 定义一个总的构建目标
 build_libs: $(LIB_DIR)/$(LIB_PREFIX)lennard_jones$(LIB_EXT) \
+           $(LIB_DIR)/$(LIB_PREFIX)eam_al1$(LIB_EXT) \
            $(LIB_DIR)/$(LIB_PREFIX)nose_hoover$(LIB_EXT) \
            $(LIB_DIR)/$(LIB_PREFIX)nose_hoover_chain$(LIB_EXT) \
            $(LIB_DIR)/$(LIB_PREFIX)stress_calculator$(LIB_EXT) \

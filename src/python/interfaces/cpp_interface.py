@@ -96,6 +96,23 @@ class CppInterface:
             ]
             self.lib.calculate_lj_energy.restype = ctypes.c_double
 
+        elif lib_name == "eam_al1":
+            self.lib.calculate_eam_al1_forces.argtypes = [
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
+            ]
+            self.lib.calculate_eam_al1_forces.restype = None
+
+            self.lib.calculate_eam_al1_energy.argtypes = [
+                ctypes.c_int,  # num_atoms
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
+                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # energy (output)
+            ]
+            self.lib.calculate_eam_al1_energy.restype = None
+
         elif lib_name == "nose_hoover":
             self.lib.nose_hoover.argtypes = [
                 ctypes.c_double,  # dt
@@ -285,6 +302,67 @@ class CppInterface:
             num_pairs,
         )
         return energy
+
+    def calculate_eam_al1_forces(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        box_lengths: np.ndarray,
+        forces: np.ndarray,
+    ) -> None:
+        """
+        计算EAM Al1势的原子力。
+
+        Parameters
+        ----------
+        num_atoms : int
+            原子数量
+        positions : numpy.ndarray
+            原子位置数组，形状为(num_atoms, 3)
+        box_lengths : numpy.ndarray
+            模拟盒子的长度，形状为(3,)
+        forces : numpy.ndarray
+            输出的力数组，形状为(num_atoms, 3)，将被更新
+
+        Returns
+        -------
+        None
+        """
+        self.lib.calculate_eam_al1_forces(
+            num_atoms,
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(box_lengths, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+        )
+
+    def calculate_eam_al1_energy(
+        self, num_atoms: int, positions: np.ndarray, box_lengths: np.ndarray
+    ) -> float:
+        """
+        计算EAM Al1势的总能量。
+
+        Parameters
+        ----------
+        num_atoms : int
+            原子数量
+        positions : numpy.ndarray
+            原子位置数组，形状为(num_atoms, 3)
+        box_lengths : numpy.ndarray
+            模拟盒子的长度，形状为(3,)
+
+        Returns
+        -------
+        float
+            系统的总能量，单位为eV
+        """
+        energy = np.zeros(1, dtype=np.float64)
+        self.lib.calculate_eam_al1_energy(
+            num_atoms,
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(box_lengths, dtype=np.float64),
+            energy,
+        )
+        return energy[0]
 
     def nose_hoover(
         self, dt, num_atoms, masses, velocities, forces, xi_array, Q, target_temperature

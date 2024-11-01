@@ -212,3 +212,104 @@ class LennardJonesPotential(Potential):
         )
         logger.debug(f"Calculated potential energy: {energy} eV.")
         return energy
+
+
+class EAMAl1Potential(Potential):
+    """
+    Al1 EAM (Embedded Atom Method) 势的实现
+
+    基于 Mendelev et al. (2008) 的参数化。该势包含三个主要部分：
+    1. 对势项 φ(r)
+    2. 电子密度贡献 ψ(r)
+    3. 嵌入能 F(ρ)
+
+    总能量表达式：E = Σ_i Σ_{j>i} φ(r_ij) + Σ_i F(ρ_i)
+    其中 ρ_i = Σ_{j≠i} ψ(r_ij)
+
+    Parameters
+    ----------
+    cutoff : float, optional
+        势能的截断距离，单位为 Å。默认为 6.5 Å。
+    """
+
+    def __init__(self, cutoff=6.5):
+        parameters = {"cutoff": cutoff, "type": "Al1"}
+        super().__init__(parameters=parameters, cutoff=cutoff)
+        self.cpp_interface = CppInterface("eam_al1")
+        logger.debug(f"EAM Al1 Potential initialized with cutoff={cutoff}.")
+
+    def calculate_forces(self, cell):
+        """
+        计算并更新所有原子的作用力
+
+        使用完整的EAM表达式计算力：
+        F_i = -∇_i E = -Σ_j [φ'(r_ij) + (F'(ρ_i) + F'(ρ_j))ψ'(r_ij)] * r_ij/r_ij
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        """
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
+        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+
+        # 初始化力数组
+        forces = np.zeros_like(positions, dtype=np.float64)
+
+        # 调用C++接口计算力
+        self.cpp_interface.calculate_eam_al1_forces(
+            num_atoms, positions, box_lengths, forces
+        )
+
+        # 更新原子力，按原子顺序存储计算结果
+        forces = forces.reshape((num_atoms, 3))
+        for i, atom in enumerate(cell.atoms):
+            atom.force = forces[i]
+
+    def calculate_energy(self, cell):
+        """
+        计算系统的总能量
+
+        包括对势能和嵌入能两部分：
+        E = Σ_i Σ_{j>i} φ(r_ij) + Σ_i F(ρ_i)
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+
+        Returns
+        -------
+        float
+            计算的总势能，单位为 eV
+        """
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
+        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+
+        # 调用C++接口计算能量
+        energy = self.cpp_interface.calculate_eam_al1_energy(
+            num_atoms, positions, box_lengths
+        )
+        logger.debug(f"Calculated EAM potential energy: {energy} eV.")
+
+        return energy
+
+    def set_neighbor_list(self, neighbor_list):
+        """
+        重写该方法以避免使用邻居列表
+
+        Parameters
+        ----------
+        neighbor_list : NeighborList
+            邻居列表对象，将被忽略。
+        """
+        logger.warning(
+            "EAM Al1 potential does not use neighbor lists. This call will be ignored."
+        )
+        pass
