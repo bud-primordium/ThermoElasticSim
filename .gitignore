@@ -14,14 +14,14 @@ env/
 env.bak/
 venv.bak/
 
-# Fortran 编译文件
-*.o
-*.mod
-*.so
+# # Fortran 编译文件
+# *.o
+# *.mod
+# *.so
 
-# Doxygen 生成的文档
-docs/html/
-docs/xml/
+# # Doxygen 生成的文档
+# docs/html/
+# docs/xml/
 
 # C++ 编译生成的库文件
 src/lib/*.dll
