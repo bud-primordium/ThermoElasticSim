@@ -45,8 +45,8 @@ tests.txt
 .DS_Store
 Thumbs.db
 
-# 自动生成的 Sphinx 文档
-build/
+# # 自动生成的 Sphinx 文档
+# build/
 
 # 轨迹文件
 output/
