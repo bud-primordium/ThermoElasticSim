@@ -16,7 +16,7 @@
       ~Potential.__init__
       ~Potential.calculate_energy
       ~Potential.calculate_forces
-      ~Potential.calculate_potential
+      ~Potential.set_neighbor_list
    
    
 

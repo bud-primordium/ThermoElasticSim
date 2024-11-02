@@ -15,6 +15,10 @@
    
       ~Thermostat.__init__
       ~Thermostat.apply
+      ~Thermostat.get_kinetic_energy
+      ~Thermostat.get_temperature
+      ~Thermostat.record_state
+      ~Thermostat.remove_com_motion
    
    
 

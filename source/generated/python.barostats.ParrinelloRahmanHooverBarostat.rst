@@ -15,6 +15,8 @@
    
       ~ParrinelloRahmanHooverBarostat.__init__
       ~ParrinelloRahmanHooverBarostat.apply
+      ~ParrinelloRahmanHooverBarostat.calculate_internal_pressure
+      ~ParrinelloRahmanHooverBarostat.record_state
    
    
 

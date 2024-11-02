@@ -15,6 +15,8 @@
    
       ~Barostat.__init__
       ~Barostat.apply
+      ~Barostat.calculate_internal_pressure
+      ~Barostat.record_state
    
    
 

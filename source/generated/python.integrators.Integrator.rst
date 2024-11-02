@@ -14,6 +14,7 @@
    .. autosummary::
    
       ~Integrator.__init__
+      ~Integrator.calculate_kinetic_energy
       ~Integrator.integrate
    
    

@@ -16,7 +16,7 @@
       ~LennardJonesPotential.__init__
       ~LennardJonesPotential.calculate_energy
       ~LennardJonesPotential.calculate_forces
-      ~LennardJonesPotential.calculate_potential
+      ~LennardJonesPotential.set_neighbor_list
    
    
 

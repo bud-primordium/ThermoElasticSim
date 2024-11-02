@@ -1,9 +1,9 @@
-﻿python.integrators.RK4Integrator
+﻿python.integrators.MTKIntegrator
 ================================
 
 .. currentmodule:: python.integrators
 
-.. autoclass:: RK4Integrator
+.. autoclass:: MTKIntegrator
 
    
    .. automethod:: __init__
@@ -13,9 +13,9 @@
 
    .. autosummary::
    
-      ~RK4Integrator.__init__
-      ~RK4Integrator.calculate_kinetic_energy
-      ~RK4Integrator.integrate
+      ~MTKIntegrator.__init__
+      ~MTKIntegrator.calculate_kinetic_energy
+      ~MTKIntegrator.integrate
    
    
 

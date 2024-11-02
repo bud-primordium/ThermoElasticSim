@@ -14,6 +14,7 @@
    .. autosummary::
    
       ~VelocityVerletIntegrator.__init__
+      ~VelocityVerletIntegrator.calculate_kinetic_energy
       ~VelocityVerletIntegrator.integrate
    
    

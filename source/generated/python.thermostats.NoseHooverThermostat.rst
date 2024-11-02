@@ -15,6 +15,10 @@
    
       ~NoseHooverThermostat.__init__
       ~NoseHooverThermostat.apply
+      ~NoseHooverThermostat.get_kinetic_energy
+      ~NoseHooverThermostat.get_temperature
+      ~NoseHooverThermostat.record_state
+      ~NoseHooverThermostat.remove_com_motion
    
    
 
