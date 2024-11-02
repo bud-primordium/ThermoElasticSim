@@ -1,0 +1,684 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>python.interfaces.cpp_interface &mdash; ThermoElasticSim 1.0 文档</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=92fd9be5" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js?v=8930e309"></script>
+      <script src="../../../_static/doctools.js?v=888ff710"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=4825356b"></script>
+      <script src="../../../_static/translations.js?v=beaddf03"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="索引" href="../../../genindex.html" />
+    <link rel="search" title="搜索" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            ThermoElasticSim
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="搜索文档" aria-label="搜索文档" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="导航菜单">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../python.html">Python 包文档</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="移动版导航菜单" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">ThermoElasticSim</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="页面导航">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">模块代码</a></li>
+      <li class="breadcrumb-item active">python.interfaces.cpp_interface</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>python.interfaces.cpp_interface 源代码</h1><div class="highlight"><pre>
+<span></span><span class="c1"># 文件名: cpp_interface.py</span>
+<span class="c1"># 作者: Gilbert Young</span>
+<span class="c1"># 修改日期: 2024-10-20</span>
+<span class="c1"># 文件描述: 用于在 Python 中调用 C++ 实现的接口类。</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">接口模块。</span>
+
+<span class="sd">该模块定义了 `CppInterface` 类，用于通过 ctypes 调用外部 C++ 函数库。</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">ctypes</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">numpy.ctypeslib</span> <span class="kn">import</span> <span class="n">ndpointer</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># from ..utils import AMU_TO_EVFSA2  # 如果需要，确保导入单位转换常量</span>
+
+
+<div class="viewcode-block" id="CppInterface"><a class="viewcode-back" href="../../../generated/python.interfaces.cpp_interface.CppInterface.html#python.interfaces.cpp_interface.CppInterface">[文档]</a><span class="k">class</span> <span class="nc">CppInterface</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    @class CppInterface</span>
+<span class="sd">    @brief 用于调用 C++ 实现的函数的接口类。</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lib_name : str</span>
+<span class="sd">        库的名称，不包括前缀和扩展名。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="CppInterface.__init__"><a class="viewcode-back" href="../../../generated/python.interfaces.cpp_interface.CppInterface.html#python.interfaces.cpp_interface.CppInterface.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lib_name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;nt&quot;</span><span class="p">:</span>  <span class="c1"># Windows</span>
+            <span class="n">lib_extension</span> <span class="o">=</span> <span class="s2">&quot;.dll&quot;</span>
+            <span class="n">lib_prefix</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+            <span class="c1"># 判断是否使用 MinGW 环境</span>
+            <span class="k">if</span> <span class="s2">&quot;GCC&quot;</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">:</span>
+                <span class="n">lib_prefix</span> <span class="o">=</span> <span class="s2">&quot;lib&quot;</span>  <span class="c1"># MinGW 使用 &#39;lib&#39; 前缀</span>
+        <span class="k">elif</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;darwin&quot;</span><span class="p">:</span>  <span class="c1"># macOS</span>
+            <span class="n">lib_extension</span> <span class="o">=</span> <span class="s2">&quot;.dylib&quot;</span>
+            <span class="n">lib_prefix</span> <span class="o">=</span> <span class="s2">&quot;lib&quot;</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c1"># Unix/Linux</span>
+            <span class="n">lib_extension</span> <span class="o">=</span> <span class="s2">&quot;.so&quot;</span>
+            <span class="n">lib_prefix</span> <span class="o">=</span> <span class="s2">&quot;lib&quot;</span>
+
+        <span class="c1"># 获取当前脚本文件的目录</span>
+        <span class="n">script_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
+        <span class="c1"># 使用脚本文件目录来构造 lib_path</span>
+        <span class="n">lib_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">script_dir</span><span class="p">,</span> <span class="s2">&quot;../../lib&quot;</span><span class="p">,</span> <span class="n">lib_prefix</span> <span class="o">+</span> <span class="n">lib_name</span> <span class="o">+</span> <span class="n">lib_extension</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">lib_path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;无法找到库文件: </span><span class="si">{</span><span class="n">lib_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">CDLL</span><span class="p">(</span><span class="n">lib_path</span><span class="p">)</span>
+
+        <span class="c1"># 配置不同库的函数签名</span>
+        <span class="k">if</span> <span class="n">lib_name</span> <span class="o">==</span> <span class="s2">&quot;stress_calculator&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">compute_stress</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span>
+                    <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span>
+                <span class="p">),</span>  <span class="c1"># positions (3*num_atoms)</span>
+                <span class="n">ndpointer</span><span class="p">(</span>
+                    <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span>
+                <span class="p">),</span>  <span class="c1"># velocities (3*num_atoms)</span>
+                <span class="n">ndpointer</span><span class="p">(</span>
+                    <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span>
+                <span class="p">),</span>  <span class="c1"># forces (3*num_atoms)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># masses (num_atoms)</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># volume</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># box_lengths (3,)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;WRITEABLE&quot;</span><span class="p">),</span>  <span class="c1"># stress_tensor (9,)</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">compute_stress</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">elif</span> <span class="n">lib_name</span> <span class="o">==</span> <span class="s2">&quot;lennard_jones&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_lj_forces</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># positions</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># forces</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># epsilon</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># sigma</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># cutoff</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># box_lengths</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># neighbor_pairs</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_pairs</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_lj_forces</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_lj_energy</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># positions</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># epsilon</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># sigma</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># cutoff</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># box_lengths</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># neighbor_pairs</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_pairs</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_lj_energy</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span>
+
+        <span class="k">elif</span> <span class="n">lib_name</span> <span class="o">==</span> <span class="s2">&quot;eam_al1&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_eam_al1_forces</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># positions</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># box_lengths</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># forces</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_eam_al1_forces</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_eam_al1_energy</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># positions</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># box_lengths</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># energy (output)</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_eam_al1_energy</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">elif</span> <span class="n">lib_name</span> <span class="o">==</span> <span class="s2">&quot;nose_hoover&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">nose_hoover</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># dt</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># masses</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># velocities</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># forces</span>
+                <span class="n">ndpointer</span><span class="p">(</span>
+                    <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span>
+                <span class="p">),</span>  <span class="c1"># xi_array (修改为 ndpointer)</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># Q</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># target_temperature</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">nose_hoover</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">elif</span> <span class="n">lib_name</span> <span class="o">==</span> <span class="s2">&quot;nose_hoover_chain&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">nose_hoover_chain</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># dt</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># masses</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># velocities</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># forces</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># xi_chain</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># Q</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># chain_length</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># target_temperature</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">nose_hoover_chain</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">elif</span> <span class="n">lib_name</span> <span class="o">==</span> <span class="s2">&quot;parrinello_rahman_hoover&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">parrinello_rahman_hoover</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># dt</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">,</span>  <span class="c1"># num_atoms</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># masses (num_atoms)</span>
+                <span class="n">ndpointer</span><span class="p">(</span>
+                    <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span>
+                <span class="p">),</span>  <span class="c1"># velocities (3*num_atoms)</span>
+                <span class="n">ndpointer</span><span class="p">(</span>
+                    <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span>
+                <span class="p">),</span>  <span class="c1"># forces (3*num_atoms)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># lattice_vectors (9)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># xi (9)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># Q (9)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># total_stress (9)</span>
+                <span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>  <span class="c1"># target_pressure (9)</span>
+                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_double</span><span class="p">,</span>  <span class="c1"># W</span>
+            <span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">parrinello_rahman_hoover</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;未知的库名称: </span><span class="si">{</span><span class="n">lib_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">compute_stress</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_atoms</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">positions</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">velocities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">forces</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">masses</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">volume</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">box_lengths</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">stress_tensor</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算应力张量。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数量</span>
+<span class="sd">        positions : numpy.ndarray</span>
+<span class="sd">            原子位置数组 (3*num_atoms,)</span>
+<span class="sd">        velocities : numpy.ndarray</span>
+<span class="sd">            原子速度数组 (3*num_atoms,)</span>
+<span class="sd">        forces : numpy.ndarray</span>
+<span class="sd">            原子受力数组 (3*num_atoms,)</span>
+<span class="sd">        masses : numpy.ndarray</span>
+<span class="sd">            原子质量数组 (num_atoms,)</span>
+<span class="sd">        volume : float</span>
+<span class="sd">            晶胞体积</span>
+<span class="sd">        box_lengths : numpy.ndarray</span>
+<span class="sd">            晶胞长度数组 (3,)</span>
+<span class="sd">        stress_tensor : numpy.ndarray</span>
+<span class="sd">            输出应力张量数组 (9,)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># 检查输入数组的形状</span>
+        <span class="k">if</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected positions shape </span><span class="si">{</span><span class="p">(</span><span class="mi">3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">num_atoms</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">velocities</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected velocities shape </span><span class="si">{</span><span class="p">(</span><span class="mi">3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">num_atoms</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">velocities</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">forces</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected forces shape </span><span class="si">{</span><span class="p">(</span><span class="mi">3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">num_atoms</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">forces</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">masses</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">num_atoms</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected masses shape </span><span class="si">{</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">masses</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">box_lengths</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected box_lengths shape </span><span class="si">{</span><span class="p">(</span><span class="mi">3</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">box_lengths</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">stress_tensor</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected stress_tensor shape </span><span class="si">{</span><span class="p">(</span><span class="mi">9</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">stress_tensor</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># 确保所有数组是连续的并且是浮点类型</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">velocities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">velocities</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">forces</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">masses</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">masses</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">box_lengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">box_lengths</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">stress_tensor</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">stress_tensor</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 调用 C++ 函数</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">compute_stress</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">positions</span><span class="p">,</span>
+            <span class="n">velocities</span><span class="p">,</span>
+            <span class="n">forces</span><span class="p">,</span>
+            <span class="n">masses</span><span class="p">,</span>
+            <span class="n">volume</span><span class="p">,</span>
+            <span class="n">box_lengths</span><span class="p">,</span>
+            <span class="n">stress_tensor</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># 将结果赋值回原数组</span>
+        <span class="n">stress_tensor</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">stress_tensor</span>
+
+    <span class="k">def</span> <span class="nf">calculate_lj_forces</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_atoms</span><span class="p">,</span>
+        <span class="n">positions</span><span class="p">,</span>
+        <span class="n">forces</span><span class="p">,</span>
+        <span class="n">epsilon</span><span class="p">,</span>
+        <span class="n">sigma</span><span class="p">,</span>
+        <span class="n">cutoff</span><span class="p">,</span>
+        <span class="n">box_lengths</span><span class="p">,</span>
+        <span class="n">neighbor_pairs</span><span class="p">,</span>
+        <span class="n">num_pairs</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        调用 C++ 接口计算作用力。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数。</span>
+<span class="sd">        positions : numpy.ndarray</span>
+<span class="sd">            原子位置数组，形状为 (num_atoms, 3)。</span>
+<span class="sd">        forces : numpy.ndarray</span>
+<span class="sd">            力数组，形状为 (num_atoms, 3)，将被更新。</span>
+<span class="sd">        epsilon : float</span>
+<span class="sd">            Lennard-Jones 势参数 ε，单位 eV。</span>
+<span class="sd">        sigma : float</span>
+<span class="sd">            Lennard-Jones 势参数 σ，单位 Å。</span>
+<span class="sd">        cutoff : float</span>
+<span class="sd">            截断距离，单位 Å。</span>
+<span class="sd">        box_lengths : numpy.ndarray</span>
+<span class="sd">            盒子长度数组，形状为 (3,)。</span>
+<span class="sd">        neighbor_pairs : numpy.ndarray</span>
+<span class="sd">            邻居对数组，形状为 (2*num_pairs,)。</span>
+<span class="sd">        num_pairs : int</span>
+<span class="sd">            邻居对的数量。</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_lj_forces</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">positions</span><span class="p">,</span>
+            <span class="n">forces</span><span class="p">,</span>
+            <span class="n">epsilon</span><span class="p">,</span>
+            <span class="n">sigma</span><span class="p">,</span>
+            <span class="n">cutoff</span><span class="p">,</span>
+            <span class="n">box_lengths</span><span class="p">,</span>
+            <span class="n">neighbor_pairs</span><span class="p">,</span>
+            <span class="n">num_pairs</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">calculate_lj_energy</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_atoms</span><span class="p">,</span>
+        <span class="n">positions</span><span class="p">,</span>
+        <span class="n">epsilon</span><span class="p">,</span>
+        <span class="n">sigma</span><span class="p">,</span>
+        <span class="n">cutoff</span><span class="p">,</span>
+        <span class="n">box_lengths</span><span class="p">,</span>
+        <span class="n">neighbor_pairs</span><span class="p">,</span>
+        <span class="n">num_pairs</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        调用 C++ 接口计算能量。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数。</span>
+<span class="sd">        positions : numpy.ndarray</span>
+<span class="sd">            原子位置数组，形状为 (num_atoms, 3)。</span>
+<span class="sd">        epsilon : float</span>
+<span class="sd">            Lennard-Jones 势参数 ε，单位 eV。</span>
+<span class="sd">        sigma : float</span>
+<span class="sd">            Lennard-Jones 势参数 σ，单位 Å。</span>
+<span class="sd">        cutoff : float</span>
+<span class="sd">            截断距离，单位 Å。</span>
+<span class="sd">        box_lengths : numpy.ndarray</span>
+<span class="sd">            盒子长度数组，形状为 (3,)。</span>
+<span class="sd">        neighbor_pairs : numpy.ndarray</span>
+<span class="sd">            邻居对数组，形状为 (2*num_pairs,)。</span>
+<span class="sd">        num_pairs : int</span>
+<span class="sd">            邻居对的数量。</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            总势能，单位 eV。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">energy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_lj_energy</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">positions</span><span class="p">,</span>
+            <span class="n">epsilon</span><span class="p">,</span>
+            <span class="n">sigma</span><span class="p">,</span>
+            <span class="n">cutoff</span><span class="p">,</span>
+            <span class="n">box_lengths</span><span class="p">,</span>
+            <span class="n">neighbor_pairs</span><span class="p">,</span>
+            <span class="n">num_pairs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">energy</span>
+
+    <span class="k">def</span> <span class="nf">calculate_eam_al1_forces</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_atoms</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">positions</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">box_lengths</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">forces</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算EAM Al1势的原子力。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数量</span>
+<span class="sd">        positions : numpy.ndarray</span>
+<span class="sd">            原子位置数组，形状为(num_atoms, 3)</span>
+<span class="sd">        box_lengths : numpy.ndarray</span>
+<span class="sd">            模拟盒子的长度，形状为(3,)</span>
+<span class="sd">        forces : numpy.ndarray</span>
+<span class="sd">            输出的力数组，形状为(num_atoms, 3)，将被更新</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_eam_al1_forces</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">box_lengths</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">forces</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">calculate_eam_al1_energy</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">positions</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">box_lengths</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算EAM Al1势的总能量。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数量</span>
+<span class="sd">        positions : numpy.ndarray</span>
+<span class="sd">            原子位置数组，形状为(num_atoms, 3)</span>
+<span class="sd">        box_lengths : numpy.ndarray</span>
+<span class="sd">            模拟盒子的长度，形状为(3,)</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            系统的总能量，单位为eV</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">energy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">calculate_eam_al1_energy</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">box_lengths</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">energy</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">energy</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">nose_hoover</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">,</span> <span class="n">masses</span><span class="p">,</span> <span class="n">velocities</span><span class="p">,</span> <span class="n">forces</span><span class="p">,</span> <span class="n">xi_array</span><span class="p">,</span> <span class="n">Q</span><span class="p">,</span> <span class="n">target_temperature</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        实现 Nose-Hoover 恒温器算法。!!!没有去除质心运动</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            时间步长。</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数。</span>
+<span class="sd">        masses : numpy.ndarray</span>
+<span class="sd">            原子质量数组。</span>
+<span class="sd">        velocities : numpy.ndarray</span>
+<span class="sd">            原子速度数组。</span>
+<span class="sd">        forces : numpy.ndarray</span>
+<span class="sd">            原子受力数组。</span>
+<span class="sd">        xi_array : numpy.ndarray</span>
+<span class="sd">            Nose-Hoover 热浴变量数组。</span>
+<span class="sd">        Q : float</span>
+<span class="sd">            热浴质量参数。</span>
+<span class="sd">        target_temperature : float</span>
+<span class="sd">            目标温度。</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            更新后的 Nose-Hoover 热浴变量。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">xi_array</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="ow">or</span> <span class="n">xi_array</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;xi must be a numpy array with one element.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">nose_hoover</span><span class="p">(</span>
+            <span class="n">dt</span><span class="p">,</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">masses</span><span class="p">,</span>
+            <span class="n">velocities</span><span class="p">,</span>
+            <span class="n">forces</span><span class="p">,</span>
+            <span class="n">xi_array</span><span class="p">,</span>
+            <span class="n">Q</span><span class="p">,</span>
+            <span class="n">target_temperature</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">xi_array</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">nose_hoover_chain</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">,</span>
+        <span class="n">num_atoms</span><span class="p">,</span>
+        <span class="n">masses</span><span class="p">,</span>
+        <span class="n">velocities</span><span class="p">,</span>
+        <span class="n">forces</span><span class="p">,</span>
+        <span class="n">xi_chain</span><span class="p">,</span>
+        <span class="n">Q</span><span class="p">,</span>
+        <span class="n">chain_length</span><span class="p">,</span>
+        <span class="n">target_temperature</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        实现 Nose-Hoover 链恒温器算法。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            时间步长。</span>
+<span class="sd">        num_atoms : int</span>
+<span class="sd">            原子数。</span>
+<span class="sd">        masses : numpy.ndarray</span>
+<span class="sd">            原子质量数组。</span>
+<span class="sd">        velocities : numpy.ndarray</span>
+<span class="sd">            原子速度数组。</span>
+<span class="sd">        forces : numpy.ndarray</span>
+<span class="sd">            原子受力数组。</span>
+<span class="sd">        xi_chain : numpy.ndarray</span>
+<span class="sd">            Nose-Hoover 链的热浴变量数组。</span>
+<span class="sd">        Q : numpy.ndarray</span>
+<span class="sd">            热浴质量参数数组。</span>
+<span class="sd">        chain_length : int</span>
+<span class="sd">            Nose-Hoover 链的长度。</span>
+<span class="sd">        target_temperature : float</span>
+<span class="sd">            目标温度。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">nose_hoover_chain</span><span class="p">(</span>
+            <span class="n">dt</span><span class="p">,</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">masses</span><span class="p">,</span>
+            <span class="n">velocities</span><span class="p">,</span>
+            <span class="n">forces</span><span class="p">,</span>
+            <span class="n">xi_chain</span><span class="p">,</span>
+            <span class="n">Q</span><span class="p">,</span>
+            <span class="n">chain_length</span><span class="p">,</span>
+            <span class="n">target_temperature</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">parrinello_rahman_hoover</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">num_atoms</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">masses</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">velocities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">forces</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">lattice_vectors</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">xi</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">Q</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">total_stress</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>  <span class="c1"># 9 components</span>
+        <span class="n">target_pressure</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>  <span class="c1"># 9 components</span>
+        <span class="n">W</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="c1"># 检查输入数组的形状</span>
+        <span class="k">if</span> <span class="n">masses</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">num_atoms</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected masses shape </span><span class="si">{</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">masses</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">velocities</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">num_atoms</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected velocities shape </span><span class="si">{</span><span class="p">(</span><span class="n">num_atoms</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">3</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">velocities</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">forces</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">num_atoms</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected forces shape </span><span class="si">{</span><span class="p">(</span><span class="n">num_atoms</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">3</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">forces</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">lattice_vectors</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected lattice_vectors shape </span><span class="si">{</span><span class="p">(</span><span class="mi">9</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">lattice_vectors</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">xi</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected xi shape </span><span class="si">{</span><span class="p">(</span><span class="mi">9</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">xi</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">Q</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected Q shape </span><span class="si">{</span><span class="p">(</span><span class="mi">9</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">Q</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">total_stress</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected total_stress shape </span><span class="si">{</span><span class="p">(</span><span class="mi">9</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">total_stress</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">target_pressure</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected target_pressure shape </span><span class="si">{</span><span class="p">(</span><span class="mi">9</span><span class="p">,)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">target_pressure</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># 确保所有数组是连续的并且是浮点类型</span>
+        <span class="n">masses</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">masses</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">velocities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">velocities</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">forces</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">lattice_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">lattice_vectors</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">xi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">xi</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">Q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">total_stress</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">total_stress</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">target_pressure</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">target_pressure</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">parrinello_rahman_hoover</span><span class="p">(</span>
+                <span class="n">dt</span><span class="p">,</span>
+                <span class="n">num_atoms</span><span class="p">,</span>
+                <span class="n">masses</span><span class="p">,</span>
+                <span class="n">velocities</span><span class="p">,</span>
+                <span class="n">forces</span><span class="p">,</span>
+                <span class="n">lattice_vectors</span><span class="p">,</span>
+                <span class="n">xi</span><span class="p">,</span>
+                <span class="n">Q</span><span class="p">,</span>
+                <span class="n">total_stress</span><span class="p">,</span>
+                <span class="n">target_pressure</span><span class="p">,</span>
+                <span class="n">W</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in C++ parrinello_rahman_hoover: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; 版权所有 2024, Gilbert Young。</p>
+  </div>
+
+  利用 <a href="https://www.sphinx-doc.org/">Sphinx</a> 构建，使用的 
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">主题</a>
+    由 <a href="https://readthedocs.org">Read the Docs</a> 开发.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

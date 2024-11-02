@@ -1,0 +1,437 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>python.utils &mdash; ThermoElasticSim 1.0 文档</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=92fd9be5" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js?v=8930e309"></script>
+      <script src="../../_static/doctools.js?v=888ff710"></script>
+      <script src="../../_static/sphinx_highlight.js?v=4825356b"></script>
+      <script src="../../_static/translations.js?v=beaddf03"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="搜索" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            ThermoElasticSim
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="搜索文档" aria-label="搜索文档" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="导航菜单">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../python.html">Python 包文档</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="移动版导航菜单" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">ThermoElasticSim</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="页面导航">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">模块代码</a></li>
+      <li class="breadcrumb-item active">python.utils</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>python.utils 源代码</h1><div class="highlight"><pre>
+<span></span><span class="c1"># 文件名: utils.py</span>
+<span class="c1"># 作者: Gilbert Young</span>
+<span class="c1"># 修改日期: 2024-10-20</span>
+<span class="c1"># 文件描述: 实现张量转换工具类和数据收集类，并定义了一些常用的单位转换常量。</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">工具模块</span>
+
+<span class="sd">包含 TensorConverter 类用于张量与 Voigt 表示之间的转换，DataCollector 类用于收集模拟过程中的数据，及一些常用的单位转换常量</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+
+<div class="viewcode-block" id="TensorConverter"><a class="viewcode-back" href="../../generated/python.utils.TensorConverter.html#python.utils.TensorConverter">[文档]</a><span class="k">class</span> <span class="nc">TensorConverter</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    张量转换工具类，正确处理应力和应变的 Voigt 表示</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">to_voigt</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">tensor_type</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        将 3x3 张量转换为 Voigt 表示的 6 元素向量</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        tensor : numpy.ndarray</span>
+<span class="sd">            形状为 (3, 3) 的张量</span>
+<span class="sd">        tensor_type : str, optional</span>
+<span class="sd">            张量类型，可以是 &#39;stress&#39; 或 &#39;strain&#39;</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        numpy.ndarray</span>
+<span class="sd">            形状为 (6,) 的 Voigt 表示向量</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">factor</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="k">if</span> <span class="n">tensor_type</span> <span class="o">==</span> <span class="s2">&quot;strain&quot;</span> <span class="k">else</span> <span class="mf">1.0</span>
+        <span class="n">voigt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">tensor</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>  <span class="c1"># xx</span>
+                <span class="n">tensor</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>  <span class="c1"># yy</span>
+                <span class="n">tensor</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>  <span class="c1"># zz</span>
+                <span class="n">tensor</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span>  <span class="c1"># yz</span>
+                <span class="n">tensor</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span>  <span class="c1"># xz</span>
+                <span class="n">tensor</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span>  <span class="c1"># xy</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">voigt</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_voigt</span><span class="p">(</span><span class="n">voigt</span><span class="p">,</span> <span class="n">tensor_type</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        将 Voigt 表示的 6 元素向量转换为 3x3 张量</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        voigt : numpy.ndarray</span>
+<span class="sd">            形状为 (6,) 的 Voigt 表示向量</span>
+<span class="sd">        tensor_type : str, optional</span>
+<span class="sd">            张量类型，可以是 &#39;stress&#39; 或 &#39;strain&#39;</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        numpy.ndarray</span>
+<span class="sd">            形状为 (3, 3) 的张量</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">factor</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="k">if</span> <span class="n">tensor_type</span> <span class="o">==</span> <span class="s2">&quot;strain&quot;</span> <span class="k">else</span> <span class="mf">1.0</span>
+        <span class="n">tensor</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">voigt</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">voigt</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span> <span class="n">voigt</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">],</span>
+                <span class="p">[</span><span class="n">voigt</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span> <span class="n">voigt</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">voigt</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">],</span>
+                <span class="p">[</span><span class="n">voigt</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span> <span class="n">voigt</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span> <span class="n">voigt</span><span class="p">[</span><span class="mi">2</span><span class="p">]],</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">tensor</span></div>
+
+
+<div class="viewcode-block" id="DataCollector"><a class="viewcode-back" href="../../generated/python.utils.DataCollector.html#python.utils.DataCollector">[文档]</a><span class="k">class</span> <span class="nc">DataCollector</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    数据收集工具类，用于收集模拟过程中的原子位置和速度数据</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="DataCollector.__init__"><a class="viewcode-back" href="../../generated/python.utils.DataCollector.html#python.utils.DataCollector.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        初始化数据收集器</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+    <span class="k">def</span> <span class="nf">collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        收集晶胞中的原子位置信息和速度信息</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">position</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">]</span>  <span class="c1"># 复制原子位置</span>
+        <span class="n">velocities</span> <span class="o">=</span> <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">velocity</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">]</span>  <span class="c1"># 复制原子速度</span>
+        <span class="c1"># 保存到数据字典</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;positions&quot;</span><span class="p">:</span> <span class="n">positions</span><span class="p">,</span> <span class="s2">&quot;velocities&quot;</span><span class="p">:</span> <span class="n">velocities</span><span class="p">})</span></div>
+
+
+<div class="viewcode-block" id="NeighborList"><a class="viewcode-back" href="../../generated/python.utils.NeighborList.html#python.utils.NeighborList">[文档]</a><span class="k">class</span> <span class="nc">NeighborList</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    邻居列表类，用于生成和维护原子的邻居列表。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NeighborList.__init__"><a class="viewcode-back" href="../../generated/python.utils.NeighborList.html#python.utils.NeighborList.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">,</span> <span class="n">skin</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        初始化邻居列表。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cutoff : float</span>
+<span class="sd">            截断半径，单位为 Å。</span>
+<span class="sd">        skin : float, optional</span>
+<span class="sd">            皮肤厚度（skin width），默认值为 0.3 Å。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">cutoff</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cutoff radius must be positive&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">skin</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Skin distance must be non-negative&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span> <span class="o">=</span> <span class="n">cutoff</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skin</span> <span class="o">=</span> <span class="n">skin</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutoff_with_skin</span> <span class="o">=</span> <span class="n">cutoff</span> <span class="o">+</span> <span class="n">skin</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_positions</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cell</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_update_step</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+    <span class="k">def</span> <span class="nf">_validate_cutoff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">box_size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;验证截断半径的合理性&quot;&quot;&quot;</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+        <span class="n">min_box_length</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">box_size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutoff_with_skin</span> <span class="o">&gt;</span> <span class="n">min_box_length</span> <span class="o">/</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Cutoff radius (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">cutoff_with_skin</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">) is too large compared to box size (</span><span class="si">{</span><span class="n">min_box_length</span><span class="o">/</span><span class="mi">2</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="p">)</span>
+            <span class="c1"># 自动调整截断半径</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span> <span class="o">=</span> <span class="n">min_box_length</span> <span class="o">/</span> <span class="mi">3</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cutoff_with_skin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">skin</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Adjusted cutoff radius to </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_compute_optimal_grid_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">box_size</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;优化网格大小的计算&quot;&quot;&quot;</span>
+        <span class="n">volume</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">box_size</span><span class="p">)</span>
+        <span class="n">density</span> <span class="o">=</span> <span class="n">num_atoms</span> <span class="o">/</span> <span class="n">volume</span>
+        <span class="n">mean_atomic_spacing</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">density</span><span class="p">)</span> <span class="o">**</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+
+        <span class="c1"># 确保网格大小略大于截断半径</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">mean_atomic_spacing</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        构建邻居列表。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">()</span>
+        <span class="n">num_atoms</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">num_atoms</span>
+        <span class="n">box_size</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">get_box_lengths</span><span class="p">()</span>
+        <span class="n">cutoff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutoff_with_skin</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cell</span> <span class="o">=</span> <span class="n">cell</span>  <span class="c1"># 正确设置关联的晶胞对象</span>
+
+        <span class="c1"># 对小系统使用简单的双重循环</span>
+        <span class="k">if</span> <span class="n">num_atoms</span> <span class="o">&lt;</span> <span class="mi">64</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_build_brute_force</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># 对大系统使用网格划分</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_build_with_grid</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">,</span> <span class="n">box_size</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_positions</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_build_brute_force</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        使用双重循环构建小系统的邻居列表。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">)]</span>
+        <span class="n">cutoff_squared</span> <span class="o">=</span> <span class="n">cutoff</span><span class="o">**</span><span class="mi">2</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">):</span>
+                <span class="n">rij</span> <span class="o">=</span> <span class="n">positions</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">positions</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="c1"># 应用最小镜像原则</span>
+                <span class="k">if</span> <span class="n">cell</span><span class="o">.</span><span class="n">pbc_enabled</span><span class="p">:</span>
+                    <span class="n">rij</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">minimum_image</span><span class="p">(</span><span class="n">rij</span><span class="p">)</span>
+                <span class="n">distance_squared</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">rij</span><span class="p">,</span> <span class="n">rij</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">distance_squared</span> <span class="o">&lt;</span> <span class="n">cutoff_squared</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_build_with_grid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">,</span> <span class="n">box_size</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        改进的基于网格的邻居列表构建。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># 验证截断半径</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_cutoff</span><span class="p">(</span><span class="n">box_size</span><span class="p">)</span>
+
+        <span class="c1"># 计算最优网格大小</span>
+        <span class="n">grid_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_optimal_grid_size</span><span class="p">(</span><span class="n">box_size</span><span class="p">,</span> <span class="n">num_atoms</span><span class="p">)</span>
+        <span class="n">grid_dims</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">box_size</span> <span class="o">/</span> <span class="n">grid_size</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># 初始化网格和邻居列表</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">)]</span>
+        <span class="n">cutoff_squared</span> <span class="o">=</span> <span class="n">cutoff</span> <span class="o">*</span> <span class="n">cutoff</span>
+
+        <span class="c1"># 将原子分配到网格</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">pos</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">positions</span><span class="p">):</span>
+            <span class="n">grid_idx</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(((</span><span class="n">pos</span> <span class="o">/</span> <span class="n">grid_size</span><span class="p">)</span> <span class="o">%</span> <span class="n">grid_dims</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">))</span>
+            <span class="n">grid</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">grid_idx</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+
+        <span class="c1"># 构建邻居列表</span>
+        <span class="k">for</span> <span class="n">grid_idx</span><span class="p">,</span> <span class="n">atom_indices</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="c1"># 获取相邻网格（考虑周期性边界条件）</span>
+            <span class="n">neighbor_cells</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_neighbor_cells</span><span class="p">(</span><span class="n">grid_idx</span><span class="p">,</span> <span class="n">grid_dims</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">atom_indices</span><span class="p">:</span>
+                <span class="n">pos_i</span> <span class="o">=</span> <span class="n">positions</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="c1"># 检查相邻网格中的原子</span>
+                <span class="k">for</span> <span class="n">neighbor_idx</span> <span class="ow">in</span> <span class="n">neighbor_cells</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">neighbor_idx</span><span class="p">,</span> <span class="p">[]):</span>
+                        <span class="k">if</span> <span class="n">j</span> <span class="o">&lt;=</span> <span class="n">i</span><span class="p">:</span>
+                            <span class="k">continue</span>
+
+                        <span class="n">rij</span> <span class="o">=</span> <span class="n">positions</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">pos_i</span>
+                        <span class="k">if</span> <span class="n">cell</span><span class="o">.</span><span class="n">pbc_enabled</span><span class="p">:</span>
+                            <span class="n">rij</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">minimum_image</span><span class="p">(</span><span class="n">rij</span><span class="p">)</span>
+
+                        <span class="n">dist_squared</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">rij</span><span class="p">,</span> <span class="n">rij</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">dist_squared</span> <span class="o">&lt;</span> <span class="n">cutoff_squared</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_neighbor_cells</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grid_idx</span><span class="p">,</span> <span class="n">grid_dims</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;获取相邻网格索引（考虑周期性边界条件）&quot;&quot;&quot;</span>
+        <span class="n">neighbor_cells</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">dx</span> <span class="ow">in</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]:</span>
+            <span class="k">for</span> <span class="n">dy</span> <span class="ow">in</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]:</span>
+                <span class="k">for</span> <span class="n">dz</span> <span class="ow">in</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">dx</span> <span class="o">==</span> <span class="n">dy</span> <span class="o">==</span> <span class="n">dz</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">neighbor_idx</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                        <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">grid_idx</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="n">dx</span><span class="p">,</span> <span class="n">dy</span><span class="p">,</span> <span class="n">dz</span><span class="p">])</span> <span class="o">%</span> <span class="n">grid_dims</span>
+                    <span class="p">)</span>
+                    <span class="n">neighbor_cells</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">neighbor_idx</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">neighbor_cells</span>
+
+    <span class="k">def</span> <span class="nf">need_refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        判断是否需要更新邻居列表。</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        bool</span>
+<span class="sd">            如果需要更新，返回 True；否则返回 False。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">()</span>
+        <span class="n">displacements</span> <span class="o">=</span> <span class="n">positions</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_positions</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">pbc_enabled</span><span class="p">:</span>
+            <span class="c1"># 考虑 PBC 下的位移</span>
+            <span class="n">displacements</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">minimum_image</span><span class="p">(</span><span class="n">disp</span><span class="p">)</span> <span class="k">for</span> <span class="n">disp</span> <span class="ow">in</span> <span class="n">displacements</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="n">max_displacement</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">displacements</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">max_displacement</span> <span class="o">&gt;</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">skin</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        更新邻居列表，如果需要的话。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">need_refresh</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_neighbors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">atom_index</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        获取指定原子的邻居列表。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        atom_index : int</span>
+<span class="sd">            原子的索引。</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list of int</span>
+<span class="sd">            邻居原子的索引列表。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">atom_index</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">debug_neighbor_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        分析和打印邻居分布情况</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Neighbor list not built yet&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="n">neighbor_counts</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">neighbors</span><span class="p">)</span> <span class="k">for</span> <span class="n">neighbors</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">]</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Neighbor distribution:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Min neighbors: </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">neighbor_counts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Max neighbors: </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">neighbor_counts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average neighbors: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">neighbor_counts</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 检查边界原子</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">()</span>
+        <span class="n">box_lengths</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">get_box_lengths</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">pos</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">positions</span><span class="p">):</span>
+            <span class="n">is_boundary</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">p</span> <span class="o">/</span> <span class="n">l</span> <span class="o">-</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.35</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span> <span class="n">box_lengths</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">is_boundary</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Boundary atom </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Position: </span><span class="si">{</span><span class="n">pos</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Number of neighbors: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Neighbors: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<span class="c1"># 单位转换常量</span>
+<span class="c1"># 定义常见单位转换的常量，用于模拟中单位的转换</span>
+
+<span class="c1"># 1 amu = 104.3968445 eV·fs²/Å²</span>
+<span class="n">AMU_TO_EVFSA2</span> <span class="o">=</span> <span class="mf">104.3968445</span>
+
+<span class="c1"># 1 eV/Å^3 = 160.21766208 GPa</span>
+<span class="n">EV_TO_GPA</span> <span class="o">=</span> <span class="mf">160.2176565</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; 版权所有 2024, Gilbert Young。</p>
+  </div>
+
+  利用 <a href="https://www.sphinx-doc.org/">Sphinx</a> 构建，使用的 
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">主题</a>
+    由 <a href="https://readthedocs.org">Read the Docs</a> 开发.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

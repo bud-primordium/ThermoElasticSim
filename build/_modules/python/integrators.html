@@ -1,0 +1,411 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>python.integrators &mdash; ThermoElasticSim 1.0 文档</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=92fd9be5" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js?v=8930e309"></script>
+      <script src="../../_static/doctools.js?v=888ff710"></script>
+      <script src="../../_static/sphinx_highlight.js?v=4825356b"></script>
+      <script src="../../_static/translations.js?v=beaddf03"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="搜索" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            ThermoElasticSim
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="搜索文档" aria-label="搜索文档" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="导航菜单">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../python.html">Python 包文档</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="移动版导航菜单" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">ThermoElasticSim</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="页面导航">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">模块代码</a></li>
+      <li class="breadcrumb-item active">python.integrators</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>python.integrators 源代码</h1><div class="highlight"><pre>
+<span></span><span class="c1"># 文件名: integrators.py</span>
+<span class="c1"># 作者: Gilbert Young</span>
+<span class="c1"># 修改日期: 2024-11-02</span>
+<span class="c1"># 文件描述: 实现分子动力学模拟中的积分器，包括速度 Verlet、RK4 和 MTK 积分器。</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">List</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Integrator"><a class="viewcode-back" href="../../generated/python.integrators.Integrator.html#python.integrators.Integrator">[文档]</a><span class="k">class</span> <span class="nc">Integrator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;积分器基类，定义积分方法的接口&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">integrate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;应用积分器，更新晶胞和原子状态&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+    <span class="k">def</span> <span class="nf">calculate_kinetic_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">atoms</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;计算系统总动能&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span>
+            <span class="mf">0.5</span> <span class="o">*</span> <span class="n">atom</span><span class="o">.</span><span class="n">mass</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">velocity</span><span class="p">,</span> <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span><span class="p">)</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VelocityVerletIntegrator"><a class="viewcode-back" href="../../generated/python.integrators.VelocityVerletIntegrator.html#python.integrators.VelocityVerletIntegrator">[文档]</a><span class="k">class</span> <span class="nc">VelocityVerletIntegrator</span><span class="p">(</span><span class="n">Integrator</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    速度 Verlet 积分器的实现</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cell : Cell</span>
+<span class="sd">        包含原子的晶胞对象</span>
+<span class="sd">    potential : Potential</span>
+<span class="sd">        势能对象，用于计算作用力</span>
+<span class="sd">    dt : float</span>
+<span class="sd">        时间步长</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">integrate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        使用速度 Verlet 算法进行分子动力学积分</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        potential : Potential</span>
+<span class="sd">            势能对象，用于计算作用力</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            时间步长</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">atoms</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span>
+        <span class="c1"># 第一半步：更新位置</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">:</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">+=</span> <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">atom</span><span class="o">.</span><span class="n">force</span> <span class="o">/</span> <span class="n">atom</span><span class="o">.</span><span class="n">mass</span> <span class="o">*</span> <span class="n">dt</span><span class="o">**</span><span class="mi">2</span>
+            <span class="c1"># 应用周期性边界条件</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">apply_periodic_boundary</span><span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+
+        <span class="c1"># 保存旧的力</span>
+        <span class="n">forces_old</span> <span class="o">=</span> <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">force</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">]</span>
+        <span class="c1"># 计算新的力</span>
+        <span class="n">potential</span><span class="o">.</span><span class="n">calculate_forces</span><span class="p">(</span><span class="n">cell</span><span class="p">)</span>
+        <span class="c1"># 第二半步：更新速度</span>
+        <span class="k">for</span> <span class="n">atom</span><span class="p">,</span> <span class="n">force_old</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">atoms</span><span class="p">,</span> <span class="n">forces_old</span><span class="p">):</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">+=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">force</span> <span class="o">+</span> <span class="n">force_old</span><span class="p">)</span> <span class="o">/</span> <span class="n">atom</span><span class="o">.</span><span class="n">mass</span> <span class="o">*</span> <span class="n">dt</span></div>
+
+
+<div class="viewcode-block" id="MTKIntegrator"><a class="viewcode-back" href="../../generated/python.integrators.MTKIntegrator.html#python.integrators.MTKIntegrator">[文档]</a><span class="k">class</span> <span class="nc">MTKIntegrator</span><span class="p">(</span><span class="n">Integrator</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Martyna-Tobias-Klein (MTK) 积分器实现</span>
+
+<span class="sd">    该积分器专门设计用于NPT系综，可以正确处理热浴和压浴的耦合。</span>
+<span class="sd">    使用多时间尺度积分方案，确保系统的哈密顿量守恒。</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    thermostat : Optional[Thermostat]</span>
+<span class="sd">        恒温器对象</span>
+<span class="sd">    barostat : Optional[Barostat]</span>
+<span class="sd">        恒压器对象</span>
+<span class="sd">    n_chains : int</span>
+<span class="sd">        Nose-Hoover链的长度，默认为3</span>
+<span class="sd">    n_yoshida : int</span>
+<span class="sd">        Yoshida积分器的阶数，默认为4</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MTKIntegrator.__init__"><a class="viewcode-back" href="../../generated/python.integrators.MTKIntegrator.html#python.integrators.MTKIntegrator.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">thermostat</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">barostat</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">n_chains</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">n_yoshida</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span> <span class="o">=</span> <span class="n">thermostat</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span> <span class="o">=</span> <span class="n">barostat</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_chains</span> <span class="o">=</span> <span class="n">n_chains</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_yoshida</span> <span class="o">=</span> <span class="n">n_yoshida</span>
+
+        <span class="c1"># Yoshida积分器权重</span>
+        <span class="k">if</span> <span class="n">n_yoshida</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="mf">4.0</span> <span class="o">-</span> <span class="mf">4.0</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mf">3.0</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Currently only 4th order Yoshida integrator is supported&quot;</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">integrate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        执行MTK积分</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            晶胞对象</span>
+<span class="sd">        potential : Potential</span>
+<span class="sd">            势能对象</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            时间步长</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># 多时间尺度积分</span>
+            <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">:</span>
+                <span class="n">dt_sub</span> <span class="o">=</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">w</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_single_step_integration</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt_sub</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTK integration error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+
+    <span class="k">def</span> <span class="nf">_single_step_integration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;执行单步MTK积分&quot;&quot;&quot;</span>
+        <span class="c1"># 1. 更新热浴变量（1/2步）</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_thermostat_half_step</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 2. 更新压浴变量（1/4步）</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_barostat_quarter_step</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 3. 更新粒子动量（1/2步）</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_particle_momenta_half_step</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 4. 更新粒子位置和晶胞参数（1步）</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_positions_and_cell</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 5. 计算新的力</span>
+        <span class="n">potential</span><span class="o">.</span><span class="n">calculate_forces</span><span class="p">(</span><span class="n">cell</span><span class="p">)</span>
+
+        <span class="c1"># 6. 更新粒子动量（1/2步）</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_particle_momenta_half_step</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 7. 更新压浴变量（1/4步）</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_barostat_quarter_step</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 8. 更新热浴变量（1/2步）</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_thermostat_half_step</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_update_thermostat_half_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;更新热浴变量半步&quot;&quot;&quot;</span>
+        <span class="n">dof</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">)</span> <span class="o">-</span> <span class="mi">3</span>  <span class="c1"># 考虑质心运动约束</span>
+        <span class="n">kinetic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculate_kinetic_energy</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">)</span>
+
+        <span class="c1"># 更新Nose-Hoover链变量</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="p">,</span> <span class="s2">&quot;xi_chain&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_nose_hoover_chain</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">dt</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dof</span><span class="p">,</span> <span class="n">kinetic</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># 单个Nose-Hoover热浴</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">,</span> <span class="n">dt</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_update_barostat_quarter_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;更新压浴变量四分之一步&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">barostat</span><span class="p">,</span> <span class="s2">&quot;xi&quot;</span><span class="p">):</span>
+            <span class="n">stress_tensor</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">calculate_stress_tensor</span><span class="p">()</span>
+            <span class="n">current_pressure</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span><span class="o">.</span><span class="n">calculate_internal_pressure</span><span class="p">(</span><span class="n">stress_tensor</span><span class="p">)</span>
+
+            <span class="c1"># 更新压浴动量</span>
+            <span class="n">dp</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_pressure</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span><span class="o">.</span><span class="n">target_pressure</span><span class="p">)</span> <span class="o">*</span> <span class="n">cell</span><span class="o">.</span><span class="n">volume</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span><span class="o">.</span><span class="n">xi</span> <span class="o">+=</span> <span class="n">dp</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mi">4</span>
+
+    <span class="k">def</span> <span class="nf">_update_particle_momenta_half_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;更新粒子动量半步&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">:</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">momentum</span> <span class="o">+=</span> <span class="n">atom</span><span class="o">.</span><span class="n">force</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">=</span> <span class="n">atom</span><span class="o">.</span><span class="n">momentum</span> <span class="o">/</span> <span class="n">atom</span><span class="o">.</span><span class="n">mass</span>
+
+    <span class="k">def</span> <span class="nf">_update_positions_and_cell</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;更新位置和晶胞参数&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># 计算体积缩放因子</span>
+            <span class="n">mu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">barostat</span><span class="o">.</span><span class="n">xi</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+            <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">mu</span> <span class="o">*</span> <span class="n">dt</span><span class="p">)</span>
+
+            <span class="c1"># 更新晶格向量</span>
+            <span class="n">cell</span><span class="o">.</span><span class="n">lattice_vectors</span> <span class="o">*=</span> <span class="n">scale</span>
+            <span class="n">cell</span><span class="o">.</span><span class="n">update_volume</span><span class="p">()</span>
+
+            <span class="c1"># 更新原子位置</span>
+            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">:</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">*=</span> <span class="n">scale</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">apply_periodic_boundary</span><span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># 常规位置更新</span>
+            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">:</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">+=</span> <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">*</span> <span class="n">dt</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">apply_periodic_boundary</span><span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_update_nose_hoover_chain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">dof</span><span class="p">,</span> <span class="n">kinetic</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;更新Nose-Hoover链&quot;&quot;&quot;</span>
+        <span class="c1"># 计算热浴动能</span>
+        <span class="n">Q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">Q</span>
+        <span class="n">xi_chain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">xi_chain</span>
+
+        <span class="c1"># Suzuki-Yoshida方案更新链变量</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_chains</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c1"># 第一个热浴与粒子耦合</span>
+                <span class="n">dxi</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="mi">2</span> <span class="o">*</span> <span class="n">kinetic</span>
+                    <span class="o">-</span> <span class="n">dof</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">kb</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">target_temperature</span>
+                <span class="p">)</span> <span class="o">/</span> <span class="n">Q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># 链中的其他热浴</span>
+                <span class="n">dxi</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">Q</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">xi_chain</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span>
+                    <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">kb</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermostat</span><span class="o">.</span><span class="n">target_temperature</span>
+                <span class="p">)</span> <span class="o">/</span> <span class="n">Q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+            <span class="n">xi_chain</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="n">dxi</span> <span class="o">*</span> <span class="n">dt</span>
+
+            <span class="c1"># 更新运动能量</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">kinetic</span> <span class="o">*=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">xi_chain</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">dt</span><span class="p">)</span>
+
+        <span class="c1"># 更新粒子速度</span>
+        <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">xi_chain</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">dt</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">:</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">*=</span> <span class="n">scale</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">momentum</span> <span class="o">=</span> <span class="n">atom</span><span class="o">.</span><span class="n">mass</span> <span class="o">*</span> <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span></div>
+
+
+<div class="viewcode-block" id="RK4Integrator"><a class="viewcode-back" href="../../generated/python.integrators.RK4Integrator.html#python.integrators.RK4Integrator">[文档]</a><span class="k">class</span> <span class="nc">RK4Integrator</span><span class="p">(</span><span class="n">Integrator</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    四阶 Runge-Kutta (RK4) 积分器的实现</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cell : Cell</span>
+<span class="sd">        包含原子的晶胞对象</span>
+<span class="sd">    potential : Potential</span>
+<span class="sd">        势能对象，用于计算作用力</span>
+<span class="sd">    dt : float</span>
+<span class="sd">        时间步长</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">integrate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">potential</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        使用四阶 Runge-Kutta (RK4) 算法进行分子动力学积分</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        potential : Potential</span>
+<span class="sd">            势能对象，用于计算作用力</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            时间步长</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">get_state</span><span class="p">():</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;获取当前原子位置和速度的状态&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">]</span>
+                <span class="o">+</span> <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">set_state</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;根据给定状态更新原子的位置和速度&quot;&quot;&quot;</span>
+            <span class="n">num_atoms</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">)</span>
+            <span class="n">positions</span> <span class="o">=</span> <span class="n">state</span><span class="p">[:</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_atoms</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+            <span class="n">velocities</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_atoms</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">):</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">positions</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">=</span> <span class="n">velocities</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">def</span> <span class="nf">compute_derivatives</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;计算位置和速度的导数&quot;&quot;&quot;</span>
+            <span class="n">num_atoms</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">)</span>
+            <span class="n">positions</span> <span class="o">=</span> <span class="n">state</span><span class="p">[:</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_atoms</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+            <span class="n">velocities</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_atoms</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">):</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">positions</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span> <span class="o">=</span> <span class="n">velocities</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="c1"># 计算力</span>
+            <span class="n">potential</span><span class="o">.</span><span class="n">calculate_forces</span><span class="p">(</span><span class="n">cell</span><span class="p">)</span>
+            <span class="c1"># 计算导数</span>
+            <span class="n">derivatives</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">):</span>
+                <span class="n">derivatives</span><span class="p">[</span><span class="mi">3</span> <span class="o">*</span> <span class="n">i</span> <span class="p">:</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">atom</span><span class="o">.</span><span class="n">velocity</span>
+                <span class="n">derivatives</span><span class="p">[</span><span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">i</span> <span class="p">:</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">num_atoms</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">atom</span><span class="o">.</span><span class="n">force</span> <span class="o">/</span> <span class="n">atom</span><span class="o">.</span><span class="n">mass</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="n">derivatives</span>
+
+        <span class="n">state</span> <span class="o">=</span> <span class="n">get_state</span><span class="p">()</span>
+        <span class="n">k1</span> <span class="o">=</span> <span class="n">compute_derivatives</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="n">k2</span> <span class="o">=</span> <span class="n">compute_derivatives</span><span class="p">(</span><span class="n">state</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">k1</span><span class="p">)</span>
+        <span class="n">k3</span> <span class="o">=</span> <span class="n">compute_derivatives</span><span class="p">(</span><span class="n">state</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">k2</span><span class="p">)</span>
+        <span class="n">k4</span> <span class="o">=</span> <span class="n">compute_derivatives</span><span class="p">(</span><span class="n">state</span> <span class="o">+</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">k3</span><span class="p">)</span>
+        <span class="n">new_state</span> <span class="o">=</span> <span class="n">state</span> <span class="o">+</span> <span class="p">(</span><span class="n">dt</span> <span class="o">/</span> <span class="mf">6.0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">k1</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">k2</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">k3</span> <span class="o">+</span> <span class="n">k4</span><span class="p">)</span>
+        <span class="n">set_state</span><span class="p">(</span><span class="n">new_state</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; 版权所有 2024, Gilbert Young。</p>
+  </div>
+
+  利用 <a href="https://www.sphinx-doc.org/">Sphinx</a> 构建，使用的 
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">主题</a>
+    由 <a href="https://readthedocs.org">Read the Docs</a> 开发.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

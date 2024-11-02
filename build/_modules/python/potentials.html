@@ -1,0 +1,416 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>python.potentials &mdash; ThermoElasticSim 1.0 文档</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=92fd9be5" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js?v=8930e309"></script>
+      <script src="../../_static/doctools.js?v=888ff710"></script>
+      <script src="../../_static/sphinx_highlight.js?v=4825356b"></script>
+      <script src="../../_static/translations.js?v=beaddf03"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="搜索" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            ThermoElasticSim
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="搜索文档" aria-label="搜索文档" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="导航菜单">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../python.html">Python 包文档</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="移动版导航菜单" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">ThermoElasticSim</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="页面导航">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">模块代码</a></li>
+      <li class="breadcrumb-item active">python.potentials</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>python.potentials 源代码</h1><div class="highlight"><pre>
+<span></span><span class="c1"># 文件名: potentials.py</span>
+<span class="c1"># 作者: Gilbert Young</span>
+<span class="c1"># 修改日期: 2024-10-30</span>
+<span class="c1"># 文件描述: 实现 Lennard-Jones 势能及其相关方法。</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">势能模块</span>
+
+<span class="sd">包含 Potential 基类和 LennardJonesPotential 类，用于计算原子间的 Lennard-Jones 势能</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">NeighborList</span>
+<span class="kn">from</span> <span class="nn">.interfaces.cpp_interface</span> <span class="kn">import</span> <span class="n">CppInterface</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Potential"><a class="viewcode-back" href="../../generated/python.potentials.Potential.html#python.potentials.Potential">[文档]</a><span class="k">class</span> <span class="nc">Potential</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    势能基类，定义势能计算的接口</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    parameters : dict</span>
+<span class="sd">        势能相关的参数</span>
+<span class="sd">    cutoff : float</span>
+<span class="sd">        势能的截断距离，单位为 Å</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Potential.__init__"><a class="viewcode-back" href="../../generated/python.potentials.Potential.html#python.potentials.Potential.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="n">parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span> <span class="o">=</span> <span class="n">cutoff</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># 邻居列表</span></div>
+
+    <span class="k">def</span> <span class="nf">calculate_forces</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算作用力，需子类实现</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+    <span class="k">def</span> <span class="nf">calculate_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算能量，需子类实现</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+    <span class="k">def</span> <span class="nf">set_neighbor_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">neighbor_list</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        设置邻居列表。</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        neighbor_list : NeighborList</span>
+<span class="sd">            邻居列表对象。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">neighbor_list</span></div>
+
+
+<div class="viewcode-block" id="LennardJonesPotential"><a class="viewcode-back" href="../../generated/python.potentials.LennardJonesPotential.html#python.potentials.LennardJonesPotential">[文档]</a><span class="k">class</span> <span class="nc">LennardJonesPotential</span><span class="p">(</span><span class="n">Potential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Lennard-Jones 势的实现</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    epsilon : float</span>
+<span class="sd">        Lennard-Jones 势深度参数，单位为 eV</span>
+<span class="sd">    sigma : float</span>
+<span class="sd">        Lennard-Jones 势的零势距，单位为 Å</span>
+<span class="sd">    cutoff : float</span>
+<span class="sd">        Lennard-Jones 势的截断距离，单位为 Å</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="LennardJonesPotential.__init__"><a class="viewcode-back" href="../../generated/python.potentials.LennardJonesPotential.html#python.potentials.LennardJonesPotential.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">):</span>
+        <span class="c1"># 初始化父类参数</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;epsilon&quot;</span><span class="p">:</span> <span class="n">epsilon</span><span class="p">,</span> <span class="s2">&quot;sigma&quot;</span><span class="p">:</span> <span class="n">sigma</span><span class="p">}</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpp_interface</span> <span class="o">=</span> <span class="n">CppInterface</span><span class="p">(</span><span class="s2">&quot;lennard_jones&quot;</span><span class="p">)</span>
+        <span class="c1"># 自动创建邻居列表</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Lennard-Jones Potential initialized with epsilon=</span><span class="si">{</span><span class="n">epsilon</span><span class="si">}</span><span class="s2">, sigma=</span><span class="si">{</span><span class="n">sigma</span><span class="si">}</span><span class="s2">, cutoff=</span><span class="si">{</span><span class="n">cutoff</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">calculate_forces</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算并更新所有原子的作用力</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># 如果邻居列表未构建，则构建它</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">cell</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Neighbor list not built yet. Building now.&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="n">cell</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># 检查是否需要更新邻居列表</span>
+            <span class="c1"># logger.debug(&quot;Updating neighbor list.&quot;)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+
+        <span class="n">num_atoms</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">num_atoms</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span>
+            <span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">box_lengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">get_box_lengths</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 构建邻居对列表</span>
+        <span class="n">neighbor_pairs</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">get_neighbors</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">j</span> <span class="o">&gt;</span> <span class="n">i</span>
+        <span class="p">]</span>
+
+        <span class="n">neighbor_list_flat</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">neighbor_pairs</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">pair</span><span class="p">]</span>
+        <span class="n">neighbor_list_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">neighbor_list_flat</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+        <span class="c1"># logger.debug(f&quot;Number of neighbor pairs: {len(neighbor_pairs)}.&quot;)</span>
+
+        <span class="c1"># 初始化力数组</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 调用 C++ 接口计算作用力</span>
+        <span class="c1"># logger.debug(&quot;Calling C++ interface to calculate forces.&quot;)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpp_interface</span><span class="o">.</span><span class="n">calculate_lj_forces</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">positions</span><span class="p">,</span>
+            <span class="n">forces</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s2">&quot;epsilon&quot;</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s2">&quot;sigma&quot;</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span><span class="p">,</span>
+            <span class="n">box_lengths</span><span class="p">,</span>
+            <span class="n">neighbor_list_array</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">neighbor_pairs</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="c1"># 更新原子力，按原子顺序存储计算结果</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="n">forces</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_atoms</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="c1"># logger.debug(&quot;Updating atomic forces.&quot;)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">):</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">force</span> <span class="o">=</span> <span class="n">forces</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="c1"># logger.debug(&quot;Forces calculation and update completed.&quot;)</span>
+
+    <span class="k">def</span> <span class="nf">calculate_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算系统的总能量</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            计算的总势能，单位为 eV</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">cell</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Neighbor list not built yet. Building now.&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="n">cell</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># 检查是否需要更新邻居列表</span>
+            <span class="c1"># logger.debug(&quot;Updating neighbor list.&quot;)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+
+        <span class="n">num_atoms</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">num_atoms</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span>
+            <span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">box_lengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">get_box_lengths</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 构建邻居对列表</span>
+        <span class="n">neighbor_pairs</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_atoms</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">neighbor_list</span><span class="o">.</span><span class="n">get_neighbors</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">j</span> <span class="o">&gt;</span> <span class="n">i</span>
+        <span class="p">]</span>
+
+        <span class="n">neighbor_list_flat</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">neighbor_pairs</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">pair</span><span class="p">]</span>
+        <span class="n">neighbor_list_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">neighbor_list_flat</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Number of neighbor pairs for energy calculation: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">neighbor_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># 调用 C++ 接口计算能量</span>
+        <span class="c1"># logger.debug(&quot;Calling C++ interface to calculate energy.&quot;)</span>
+        <span class="n">energy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpp_interface</span><span class="o">.</span><span class="n">calculate_lj_energy</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span>
+            <span class="n">positions</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s2">&quot;epsilon&quot;</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s2">&quot;sigma&quot;</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cutoff</span><span class="p">,</span>
+            <span class="n">box_lengths</span><span class="p">,</span>
+            <span class="n">neighbor_list_array</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">neighbor_pairs</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calculated potential energy: </span><span class="si">{</span><span class="n">energy</span><span class="si">}</span><span class="s2"> eV.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">energy</span></div>
+
+
+<div class="viewcode-block" id="EAMAl1Potential"><a class="viewcode-back" href="../../generated/python.potentials.EAMAl1Potential.html#python.potentials.EAMAl1Potential">[文档]</a><span class="k">class</span> <span class="nc">EAMAl1Potential</span><span class="p">(</span><span class="n">Potential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Al1 EAM (Embedded Atom Method) 势的实现</span>
+
+<span class="sd">    基于 Mendelev et al. (2008) 的参数化。该势包含三个主要部分：</span>
+<span class="sd">    1. 对势项 φ(r)</span>
+<span class="sd">    2. 电子密度贡献 ψ(r)</span>
+<span class="sd">    3. 嵌入能 F(ρ)</span>
+
+<span class="sd">    总能量表达式：E = Σ_i Σ_{j&gt;i} φ(r_ij) + Σ_i F(ρ_i)</span>
+<span class="sd">    其中 ρ_i = Σ_{j≠i} ψ(r_ij)</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cutoff : float, optional</span>
+<span class="sd">        势能的截断距离，单位为 Å。默认为 6.5 Å。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="EAMAl1Potential.__init__"><a class="viewcode-back" href="../../generated/python.potentials.EAMAl1Potential.html#python.potentials.EAMAl1Potential.__init__">[文档]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mf">6.5</span><span class="p">):</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;cutoff&quot;</span><span class="p">:</span> <span class="n">cutoff</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Al1&quot;</span><span class="p">}</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">parameters</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">cutoff</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpp_interface</span> <span class="o">=</span> <span class="n">CppInterface</span><span class="p">(</span><span class="s2">&quot;eam_al1&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;EAM Al1 Potential initialized with cutoff=</span><span class="si">{</span><span class="n">cutoff</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">calculate_forces</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算并更新所有原子的作用力</span>
+
+<span class="sd">        使用完整的EAM表达式计算力：</span>
+<span class="sd">        F_i = -∇_i E = -Σ_j [φ&#39;(r_ij) + (F&#39;(ρ_i) + F&#39;(ρ_j))ψ&#39;(r_ij)] * r_ij/r_ij</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">num_atoms</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">num_atoms</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span>
+            <span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">box_lengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">get_box_lengths</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 初始化力数组</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 调用C++接口计算力</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpp_interface</span><span class="o">.</span><span class="n">calculate_eam_al1_forces</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">box_lengths</span><span class="p">,</span> <span class="n">forces</span>
+        <span class="p">)</span>
+
+        <span class="c1"># 更新原子力，按原子顺序存储计算结果</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="n">forces</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_atoms</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">atoms</span><span class="p">):</span>
+            <span class="n">atom</span><span class="o">.</span><span class="n">force</span> <span class="o">=</span> <span class="n">forces</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">calculate_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        计算系统的总能量</span>
+
+<span class="sd">        包括对势能和嵌入能两部分：</span>
+<span class="sd">        E = Σ_i Σ_{j&gt;i} φ(r_ij) + Σ_i F(ρ_i)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cell : Cell</span>
+<span class="sd">            包含原子的晶胞对象</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            计算的总势能，单位为 eV</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">num_atoms</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">num_atoms</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span>
+            <span class="n">cell</span><span class="o">.</span><span class="n">get_positions</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">box_lengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">get_box_lengths</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># 调用C++接口计算能量</span>
+        <span class="n">energy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpp_interface</span><span class="o">.</span><span class="n">calculate_eam_al1_energy</span><span class="p">(</span>
+            <span class="n">num_atoms</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">box_lengths</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calculated EAM potential energy: </span><span class="si">{</span><span class="n">energy</span><span class="si">}</span><span class="s2"> eV.&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">energy</span>
+
+    <span class="k">def</span> <span class="nf">set_neighbor_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">neighbor_list</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        重写该方法以避免使用邻居列表</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        neighbor_list : NeighborList</span>
+<span class="sd">            邻居列表对象，将被忽略。</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;EAM Al1 potential does not use neighbor lists. This call will be ignored.&quot;</span>
+        <span class="p">)</span>
+        <span class="k">pass</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; 版权所有 2024, Gilbert Young。</p>
+  </div>
+
+  利用 <a href="https://www.sphinx-doc.org/">Sphinx</a> 构建，使用的 
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">主题</a>
+    由 <a href="https://readthedocs.org">Read the Docs</a> 开发.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
