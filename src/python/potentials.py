@@ -1,7 +1,7 @@
 # 文件名: potentials.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-30
-# 文件描述: 实现 Lennard-Jones 势能及其相关方法。
+# 修改日期: 2024-12-06
+# 文件描述: 实现 Lennard-Jones 势能，EAM势能及其相关方法。
 
 """
 势能模块
@@ -267,7 +267,8 @@ class EAMAl1Potential(Potential):
         # 更新原子力，按原子顺序存储计算结果
         forces = forces.reshape((num_atoms, 3))
         for i, atom in enumerate(cell.atoms):
-            atom.force = forces[i]
+            atom.force = -forces[i]
+        # 注，在新版本中发现漏洞，EAM应该是负的力
 
     def calculate_energy(self, cell):
         """
