@@ -123,7 +123,7 @@ class StressCalculator:
             # 保存原始状态的深拷贝
             original_cell = cell.copy()
             original_lattice = original_cell.lattice_vectors.copy()
-            original_positions = original_cell.get_positions().copy()
+
 
             logger.debug("Created deep copy of cell for deformation.")
 
