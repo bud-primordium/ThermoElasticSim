@@ -42,7 +42,7 @@ DOT_IMAGE_FORMAT       = svg
 INTERACTIVE_SVG        = YES
 CALL_GRAPH             = YES
 CALLER_GRAPH           = YES
-# CLASS_DIAGRAMS         = YES 旧版本
+# CLASS_DIAGRAMS         = YES
 DOT_MULTI_TARGETS      = YES
 
 # UML 类图和模板关系
