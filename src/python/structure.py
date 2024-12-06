@@ -440,25 +440,22 @@ class Cell:
         super_atoms = []
         atom_id = 0
         
-        # 在三个方向上重复晶胞
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
-                    shift = np.array([i/nx, j/ny, k/nz])
+                    # 使用整数偏移
+                    # 对分数坐标进行拓展：加上(i,j,k)，然后除以(nx,ny,nz)
+                    # 这样就保证了扩展后的分数坐标仍然落在[0,1)内，并且分布正确
                     for idx, atom in enumerate(self.atoms):
-                        # 计算新的分数坐标（针对超胞）
-                        frac_coord = (fractional[idx] + shift) / np.array([nx, ny, nz])
-                        
-                        # 转换回笛卡尔坐标（使用超胞晶格向量）
+                        frac_coord = (fractional[idx] + np.array([i, j, k])) / np.array([nx, ny, nz])
                         new_position = np.dot(frac_coord, super_lattice_vectors)
-                        
-                        # 创建新的原子，速度需要保持不变
+
                         new_atom = Atom(
                             id=atom_id,
                             symbol=atom.symbol,
                             mass_amu=atom.mass_amu,
                             position=new_position,
-                            velocity=atom.velocity.copy()  # 保持原始速度
+                            velocity=atom.velocity.copy()
                         )
                         super_atoms.append(new_atom)
                         atom_id += 1
