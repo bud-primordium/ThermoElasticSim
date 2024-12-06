@@ -51,7 +51,7 @@ def create_supercell(cell, repetition):
 potential = EAMAl1Potential()
 
 # 定义超胞的重复次数
-repetition = (8, 8, 8)  # 在 x, y, z 方向上各重复 3 次
+repetition = (4, 4, 4)  # 在 x, y, z 方向上各重复 3 次
 
 # 扫描晶格常数
 lattice_constants = np.linspace(3.9, 4.1, 200)  # A，缩小范围以提高精度

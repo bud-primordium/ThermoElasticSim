@@ -18,8 +18,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# from ..utils import AMU_TO_EVFSA2  # 如果需要，确保导入单位转换常量
-
 
 class CppInterface:
     """

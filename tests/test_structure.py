@@ -321,7 +321,7 @@ def test_build_supercell_large(cell):
     """
     @brief 测试更大尺寸的超胞构建，确保在更大规模下功能正常
     """
-    repetition = (3, 3, 3)
+    repetition = (8, 8, 8)
     super_cell = cell.build_supercell(repetition)
 
     # 检查超胞的晶格矢量是否正确
