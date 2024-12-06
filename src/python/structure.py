@@ -1,6 +1,6 @@
 # 文件名: structure.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-20
+# 修改日期: 2024-12-06
 # 文件描述: 提供原子和晶胞类，用于分子动力学模拟中的结构表示和操作。
 
 """
@@ -247,7 +247,7 @@ class Cell:
 
     def apply_periodic_boundary(self, positions):
         """
-        改进的周期性边界条件实现
+        改进的周期性边界条件实现，增加数值稳定性检查
 
         Parameters
         ----------
@@ -262,34 +262,35 @@ class Cell:
         if not self.pbc_enabled:
             return positions
 
-        # 处理单个原子和多个原子的情况
-        single_pos = positions.ndim == 1
+        single_pos = (positions.ndim == 1)
         if single_pos:
             positions = positions.reshape(1, -1)
 
-        # 确保输入的维度正确
         if positions.shape[1] != 3:
             raise ValueError("Positions must have shape (N, 3) or (3,)")
 
-        try:
-            # 转换到分数坐标
-            fractional = np.dot(positions, self.lattice_inv)
+        # 转换到分数坐标
+        fractional = np.dot(positions, self.lattice_inv)
 
-            # 应用周期性边界条件
-            fractional = fractional % 1.0
+        # 数值稳定检查
+        if not np.all(np.isfinite(fractional)):
+            raise ValueError("Non-finite values in fractional coordinates during PBC application")
 
-            # 转回笛卡尔坐标
-            new_positions = np.dot(fractional, self.lattice_vectors.T)
+        # 对接近整数的值进行偏移，避免浮点误差
+        tol = 1e-12
+        fractional = fractional % 1.0
+        # 将非常接近1的值强制稍微拉回
+        fractional[(fractional > 1.0 - tol) & (fractional <= 1.0)] = 1.0 - tol
+        fractional[(fractional < tol) & (fractional >= 0.0)] = tol
 
-            # 数值稳定性检查
-            if np.any(np.isnan(new_positions)):
-                raise ValueError("NaN values detected in position calculation")
+        # 转回笛卡尔坐标
+        new_positions = np.dot(fractional, self.lattice_vectors.T)
 
-        except Exception as e:
-            logger.error(f"Error in periodic boundary application: {str(e)}")
-            raise
+        if not np.all(np.isfinite(new_positions)):
+            raise ValueError("Non-finite values in cartesian coordinates after PBC application")
 
         return new_positions[0] if single_pos else new_positions
+
 
     def copy(self):
         """创建 Cell 的深拷贝"""
@@ -301,26 +302,37 @@ class Cell:
     def calculate_temperature(self):
         """
         计算当前系统的温度，扣除质心运动。
-
-        Returns
-        -------
-        float
-            当前温度，单位K。
+        对于多个原子：dof = 3*N - 3
+        对于单个原子：dof = 3*N （不扣除质心自由度）
         """
+
         kb = 8.617333262e-5  # eV/K
+        num_atoms = len(self.atoms)
+        if num_atoms == 0:
+            return 0.0  # 或 raise Exception("No atoms in system.")
+        
         total_mass = sum(atom.mass for atom in self.atoms)
         total_momentum = sum(atom.mass * atom.velocity for atom in self.atoms)
         com_velocity = total_momentum / total_mass
 
         kinetic = sum(
-            0.5
-            * atom.mass
-            * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
+            0.5 * atom.mass * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
             for atom in self.atoms
         )
-        dof = 3 * len(self.atoms) - 3  # 考虑质心运动约束
+
+        # 根据原子数决定自由度计算方式
+        if num_atoms > 1:
+            dof = 3 * num_atoms - 3
+        else:
+            dof = 3 * num_atoms  # 对于单个原子不扣除3个自由度
+
+        if dof <= 0:
+            # 若无自由度可分配，温度定义无意义，按需处理
+            return 0.0
+
         temperature = 2.0 * kinetic / (dof * kb)
         return temperature
+
 
     def get_positions(self):
         """
@@ -357,12 +369,12 @@ class Cell:
 
     def minimum_image(self, displacement):
         """
-        改进的最小镜像约定实现
+        改进的最小镜像约定实现，增加数值检查与修正
 
         Parameters
         ----------
         displacement : numpy.ndarray
-            原始位移向量
+            原始位移向量 (3,)
 
         Returns
         -------
@@ -373,24 +385,28 @@ class Cell:
             raise ValueError("Displacement must be a 3-dimensional vector")
 
         # 转换到分数坐标
-        try:
-            fractional = np.dot(displacement, self.lattice_inv)
-        except np.linalg.LinAlgError:
-            logger.error("Failed to compute fractional coordinates")
-            raise
+        fractional = np.dot(displacement, self.lattice_inv)
+
+        if not np.all(np.isfinite(fractional)):
+            raise ValueError("Non-finite values in fractional coordinates for minimum image calculation")
 
         # 应用最小镜像约定
         fractional -= np.round(fractional)
 
-        # 数值稳定性检查
+        # 二次检查数值范围与稳定性
+        # 若仍有分量大于0.5或小于-0.5，视为数值不稳定，进行修正
         if np.any(np.abs(fractional) > 0.5 + 1e-10):
-            logger.warning("Possible numerical instability in minimum image convention")
+            logger.warning("Possible numerical instability in minimum image convention, applying correction.")
+            fractional = np.clip(fractional, -0.5, 0.5)
 
         # 转回笛卡尔坐标
-        return np.dot(
-            self.lattice_vectors,
-            fractional,
-        )
+        min_image_vector = np.dot(self.lattice_vectors, fractional)
+
+        if not np.all(np.isfinite(min_image_vector)):
+            raise ValueError("Non-finite values in cartesian coordinates after minimum image calculation")
+
+        return min_image_vector
+
 
     def build_supercell(self, repetition):
         """
@@ -407,52 +423,57 @@ class Cell:
             新的超胞对象
         """
         nx, ny, nz = repetition
-        # 获取基本晶胞的晶格矢量
+        
+        # 获取并复制基本晶胞的晶格矢量
         lattice_vectors = self.lattice_vectors.copy()
+        
         # 计算超胞的晶格矢量
-        super_lattice_vectors = np.dot(np.diag([nx, ny, nz]), lattice_vectors)
+        super_lattice_vectors = lattice_vectors * np.array([nx, ny, nz])[:, np.newaxis]
 
         # 获取原始原子的分数坐标
         positions = np.array([atom.position for atom in self.atoms])
-        fractional = np.linalg.solve(lattice_vectors.T, positions.T).T  # Shape (N, 3)
+        # 确保正确的矩阵运算顺序
+        fractional = np.dot(positions, np.linalg.inv(lattice_vectors))
+        # 确保分数坐标在 [0,1) 范围内
+        fractional = fractional % 1.0
 
         super_atoms = []
         atom_id = 0
+        
+        # 在三个方向上重复晶胞
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
-                    # 平移矢量（分数坐标）
-                    shift = np.array([i, j, k])
+                    shift = np.array([i/nx, j/ny, k/nz])
                     for idx, atom in enumerate(self.atoms):
-                        # 新的分数坐标
-                        frac_coord = fractional[idx] + shift
-                        # 检查是否在范围内，避免重复原子
-                        if i == nx - 1 and frac_coord[0] >= nx:
-                            continue
-                        if j == ny - 1 and frac_coord[1] >= ny:
-                            continue
-                        if k == nz - 1 and frac_coord[2] >= nz:
-                            continue
-                        # 转换回笛卡尔坐标
-                        new_position = np.dot(frac_coord, lattice_vectors)
-                        # 创建新的原子
+                        # 计算新的分数坐标（针对超胞）
+                        frac_coord = (fractional[idx] + shift) / np.array([nx, ny, nz])
+                        
+                        # 转换回笛卡尔坐标（使用超胞晶格向量）
+                        new_position = np.dot(frac_coord, super_lattice_vectors)
+                        
+                        # 创建新的原子，速度需要保持不变
                         new_atom = Atom(
                             id=atom_id,
                             symbol=atom.symbol,
                             mass_amu=atom.mass_amu,
                             position=new_position,
-                            velocity=atom.velocity.copy(),
+                            velocity=atom.velocity.copy()  # 保持原始速度
                         )
                         super_atoms.append(new_atom)
                         atom_id += 1
 
-        # 创建新的 Cell 对象
+        # 创建新的超胞对象
         super_cell = Cell(
             lattice_vectors=super_lattice_vectors,
             atoms=super_atoms,
-            pbc_enabled=self.pbc_enabled,
+            pbc_enabled=self.pbc_enabled
         )
+        
         return super_cell
+
+
+
 
     def get_com_velocity(self):
         """
