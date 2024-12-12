@@ -65,7 +65,7 @@ def test_generate_deformation_matrices():
             strain_tensor = 0.5 * (F + F.T) - np.eye(3)
             strain_voigt = TensorConverter.to_voigt(strain_tensor, tensor_type="strain")
 
-            expected_strain = np.zeros(9)
+            expected_strain = np.zeros(6)
             voigt_idx = voigt_mapping[(i, j)]
             if i == j:
                 expected_strain[voigt_idx] = strain
@@ -107,7 +107,7 @@ def test_apply_deformation(simple_cell):
         deformer.apply_deformation(test_cell, F)
 
         # 验证晶格矢量
-        expected_lattice = np.dot(original_cell.lattice_vectors, F.T)
+        expected_lattice = F @ original_cell.lattice_vectors
         np.testing.assert_array_almost_equal(
             test_cell.lattice_vectors,
             expected_lattice,
@@ -123,11 +123,8 @@ def test_apply_deformation(simple_cell):
                 original_cell.lattice_vectors.T, orig_atom.position
             )
 
-            # 计算期望的晶格矢量
-            expected_lattice = np.dot(original_cell.lattice_vectors, F.T)
-
             # 计算期望的原子位置
-            expected_pos = np.dot(expected_lattice.T, fractional)
+            expected_pos = expected_lattice.T @ fractional
 
             # 应用周期性边界条件（如果需要）
             if test_cell.pbc_enabled:

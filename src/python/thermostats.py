@@ -9,6 +9,7 @@ from typing import List, Dict, Optional
 from .interfaces.cpp_interface import CppInterface
 import ctypes
 from numpy.ctypeslib import ndpointer
+from .utils import KB_IN_EV
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class Thermostat:
 
     def __init__(self, target_temperature: float):
         self.target_temperature = target_temperature
-        self.kb = 8.617333262e-5  # Boltzmann常数，单位eV/K
+        self.kb = KB_IN_EV  # Boltzmann常数，单位eV/K
         # 用于记录历史数据
         self.temperature_history = []
         self.time_history = []
@@ -174,8 +175,8 @@ class BerendsenThermostat(Thermostat):
             for i, atom in enumerate(atoms):
                 atom.velocity = velocities[i]
 
-            # 移除质心运动
-            self.remove_com_motion(atoms)
+            # # 移除质心运动
+            # self.remove_com_motion(atoms)
 
         # 记录状态
         current_time = len(self.time_history) * dt if self.time_history else 0.0
@@ -252,8 +253,8 @@ class AndersenThermostat(Thermostat):
             for i in collision_indices:
                 atoms[i].velocity = velocities[i]
 
-        # 移除整体平动
-        self.remove_com_motion(atoms)
+        # # 移除整体平动
+        # self.remove_com_motion(atoms)
 
         # 记录状态
         current_time = len(self.time_history) * dt if self.time_history else 0.0
@@ -340,8 +341,8 @@ class NoseHooverThermostat(Thermostat):
             for i, atom in enumerate(atoms):
                 atom.velocity = velocities[i]
 
-            # 移除质心运动
-            self.remove_com_motion(atoms)
+            # # 移除质心运动
+            # self.remove_com_motion(atoms)
 
         except Exception as e:
             logger.error(f"Nose-Hoover thermostat error: {e}")
@@ -458,8 +459,8 @@ class NoseHooverChainThermostat(Thermostat):
             for i, atom in enumerate(atoms):
                 atom.velocity = velocities[i]
 
-            # 移除质心运动
-            self.remove_com_motion(atoms)
+            # # 移除质心运动
+            # self.remove_com_motion(atoms)
 
         except Exception as e:
             logger.error(f"Nose-Hoover chain thermostat error: {e}")

@@ -107,7 +107,7 @@ class Visualizer:
         origin = np.array([0, 0, 0])
         lattice_vectors = cell_structure.lattice_vectors
         for i in range(3):
-            vec = lattice_vectors[:, i]
+            vec = lattice_vectors[i]
             ax.quiver(
                 *origin, *vec, color="r", arrow_length_ratio=0.1, linewidth=1.5
             )  # 使用箭头表示晶格矢量

@@ -188,56 +188,55 @@ class Cell:
 
     def apply_deformation(self, deformation_matrix):
         """
-        对晶胞和原子坐标施加变形矩阵
+        对晶胞和原子坐标施加变形矩阵F。
 
-        Parameters
-        ----------
-        deformation_matrix : array_like
-            3x3 变形矩阵
+        当晶格未锁定时：
+        1. 更新晶格矢量： L_new = F * L_old
+        2. 更新原子坐标： r_new = r_old * F^T （因为r是行向量形式表示坐标）
+
+        当晶格已锁定时：
+        仅对原子坐标施加F变形： r_new = r_old * F^T
+        不修改晶格矢量。
         """
+        logger = logging.getLogger(__name__)
+
+        positions = self.get_positions()  # shape (N, 3)
+
         if self.lattice_locked:
+            # 晶格矢量不变，仅对原子坐标进行变换
             logger.debug(
-                "Lattice vectors are locked. Only applying deformation to atomic positions."
+                "Lattice vectors are locked. Applying deformation only to atomic positions."
             )
-            # 批量更新原子坐标
-            positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
-            # 直接计算分数坐标
-            fractional = np.linalg.solve(self.lattice_vectors.T, positions.T)  # (3, N)
-            # 应用变形
-            fractional = np.dot(deformation_matrix, fractional)  # (3, N)
-            # 转回笛卡尔坐标
-            new_positions = np.dot(self.lattice_vectors.T, fractional).T  # (N, 3)
+
+            # 将F作用在笛卡尔坐标上
+            # x_new = F * x_old => 若x_old以行向量表示，则 x_new = x_old * F^T
+            new_positions = positions @ deformation_matrix.T
 
             if self.pbc_enabled:
-                # 应用周期性边界条件
                 new_positions = self.apply_periodic_boundary(new_positions)
 
-            # 更新原子位置
             for i, atom in enumerate(self.atoms):
                 atom.position = new_positions[i]
+
         else:
             logger.debug(
                 "Applying deformation to lattice vectors and atomic positions."
             )
 
-            # 先获取当前分数坐标
-            positions = np.array([atom.position for atom in self.atoms])  # (N, 3)
-            fractional = np.linalg.solve(self.lattice_vectors.T, positions.T)  # (3, N)
-
-            # 更新晶格矢量
-            self.lattice_vectors = np.dot(self.lattice_vectors, deformation_matrix.T)
+            # 晶格可变形：先更新晶格矢量
+            # L_new = F * L_old
+            self.lattice_vectors = deformation_matrix @ self.lattice_vectors
             logger.debug(f"Updated lattice vectors:\n{self.lattice_vectors}")
 
-            # 重新计算逆晶格矢量矩阵
+            # 更新逆矩阵
             self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
 
-            # 直接使用原始分数坐标计算新的笛卡尔坐标
-            new_positions = np.dot(self.lattice_vectors.T, fractional).T  # (N, 3)
+            # 原子坐标同样在笛卡尔坐标下被变形
+            new_positions = positions @ deformation_matrix.T
 
             if self.pbc_enabled:
                 new_positions = self.apply_periodic_boundary(new_positions)
 
-            # 更新原子位置
             for i, atom in enumerate(self.atoms):
                 atom.position = new_positions[i]
 
@@ -262,7 +261,7 @@ class Cell:
         if not self.pbc_enabled:
             return positions
 
-        single_pos = (positions.ndim == 1)
+        single_pos = positions.ndim == 1
         if single_pos:
             positions = positions.reshape(1, -1)
 
@@ -274,7 +273,9 @@ class Cell:
 
         # 数值稳定检查
         if not np.all(np.isfinite(fractional)):
-            raise ValueError("Non-finite values in fractional coordinates during PBC application")
+            raise ValueError(
+                "Non-finite values in fractional coordinates during PBC application"
+            )
 
         # 对接近整数的值进行偏移，避免浮点误差
         tol = 1e-12
@@ -287,10 +288,11 @@ class Cell:
         new_positions = np.dot(fractional, self.lattice_vectors.T)
 
         if not np.all(np.isfinite(new_positions)):
-            raise ValueError("Non-finite values in cartesian coordinates after PBC application")
+            raise ValueError(
+                "Non-finite values in cartesian coordinates after PBC application"
+            )
 
         return new_positions[0] if single_pos else new_positions
-
 
     def copy(self):
         """创建 Cell 的深拷贝"""
@@ -310,13 +312,15 @@ class Cell:
         num_atoms = len(self.atoms)
         if num_atoms == 0:
             return 0.0  # 或 raise Exception("No atoms in system.")
-        
+
         total_mass = sum(atom.mass for atom in self.atoms)
         total_momentum = sum(atom.mass * atom.velocity for atom in self.atoms)
         com_velocity = total_momentum / total_mass
 
         kinetic = sum(
-            0.5 * atom.mass * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
+            0.5
+            * atom.mass
+            * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
             for atom in self.atoms
         )
 
@@ -332,7 +336,6 @@ class Cell:
 
         temperature = 2.0 * kinetic / (dof * kb)
         return temperature
-
 
     def get_positions(self):
         """
@@ -388,7 +391,9 @@ class Cell:
         fractional = np.dot(displacement, self.lattice_inv)
 
         if not np.all(np.isfinite(fractional)):
-            raise ValueError("Non-finite values in fractional coordinates for minimum image calculation")
+            raise ValueError(
+                "Non-finite values in fractional coordinates for minimum image calculation"
+            )
 
         # 应用最小镜像约定
         fractional -= np.round(fractional)
@@ -396,17 +401,20 @@ class Cell:
         # 二次检查数值范围与稳定性
         # 若仍有分量大于0.5或小于-0.5，视为数值不稳定，进行修正
         if np.any(np.abs(fractional) > 0.5 + 1e-10):
-            logger.warning("Possible numerical instability in minimum image convention, applying correction.")
+            logger.warning(
+                "Possible numerical instability in minimum image convention, applying correction."
+            )
             fractional = np.clip(fractional, -0.5, 0.5)
 
         # 转回笛卡尔坐标
         min_image_vector = np.dot(self.lattice_vectors, fractional)
 
         if not np.all(np.isfinite(min_image_vector)):
-            raise ValueError("Non-finite values in cartesian coordinates after minimum image calculation")
+            raise ValueError(
+                "Non-finite values in cartesian coordinates after minimum image calculation"
+            )
 
         return min_image_vector
-
 
     def build_supercell(self, repetition):
         """
@@ -423,10 +431,10 @@ class Cell:
             新的超胞对象
         """
         nx, ny, nz = repetition
-        
+
         # 获取并复制基本晶胞的晶格矢量
         lattice_vectors = self.lattice_vectors.copy()
-        
+
         # 计算超胞的晶格矢量
         super_lattice_vectors = lattice_vectors * np.array([nx, ny, nz])[:, np.newaxis]
 
@@ -439,7 +447,7 @@ class Cell:
 
         super_atoms = []
         atom_id = 0
-        
+
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
@@ -447,7 +455,9 @@ class Cell:
                     # 对分数坐标进行拓展：加上(i,j,k)，然后除以(nx,ny,nz)
                     # 这样就保证了扩展后的分数坐标仍然落在[0,1)内，并且分布正确
                     for idx, atom in enumerate(self.atoms):
-                        frac_coord = (fractional[idx] + np.array([i, j, k])) / np.array([nx, ny, nz])
+                        frac_coord = (fractional[idx] + np.array([i, j, k])) / np.array(
+                            [nx, ny, nz]
+                        )
                         new_position = np.dot(frac_coord, super_lattice_vectors)
 
                         new_atom = Atom(
@@ -455,7 +465,7 @@ class Cell:
                             symbol=atom.symbol,
                             mass_amu=atom.mass_amu,
                             position=new_position,
-                            velocity=atom.velocity.copy()
+                            velocity=atom.velocity.copy(),
                         )
                         super_atoms.append(new_atom)
                         atom_id += 1
@@ -464,13 +474,10 @@ class Cell:
         super_cell = Cell(
             lattice_vectors=super_lattice_vectors,
             atoms=super_atoms,
-            pbc_enabled=self.pbc_enabled
+            pbc_enabled=self.pbc_enabled,
         )
-        
+
         return super_cell
-
-
-
 
     def get_com_velocity(self):
         """

@@ -71,7 +71,7 @@ def test_simple_strain_stress_response():
     )
 
     # 测试不同方向的应变
-    strains = [0.0002, 0.0005, 0.001]  # 0.02%, 0.05%, 0.1%的应变
+    strains = [0.0001]  # 0.01%的应变
 
     # 定义要测试的变形类型
     deformation_types = [

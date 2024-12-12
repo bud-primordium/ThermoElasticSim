@@ -186,60 +186,77 @@ class CppInterface:
         """
         计算应力张量。
 
+        本函数允许输入的 positions, velocities, forces 既可以是 (num_atoms, 3) 也可以是 (3*num_atoms,) 的形状。
+        同理，对于 stress_tensor，既可以是 (3,3) 也可以是 (9,)。
+
         Parameters
         ----------
         num_atoms : int
-            原子数量
-        positions : numpy.ndarray
-            原子位置数组 (3*num_atoms,)
-        velocities : numpy.ndarray
-            原子速度数组 (3*num_atoms,)
-        forces : numpy.ndarray
-            原子受力数组 (3*num_atoms,)
-        masses : numpy.ndarray
+        positions : np.ndarray
+            原子位置数组，可为 (num_atoms, 3) 或 (3*num_atoms, )
+        velocities : np.ndarray
+            原子速度数组，可为 (num_atoms, 3) 或 (3*num_atoms, )
+        forces : np.ndarray
+            原子力数组，可为 (num_atoms, 3) 或 (3*num_atoms, )
+        masses : np.ndarray
             原子质量数组 (num_atoms,)
         volume : float
             晶胞体积
-        box_lengths : numpy.ndarray
+        box_lengths : np.ndarray
             晶胞长度数组 (3,)
-        stress_tensor : numpy.ndarray
-            输出应力张量数组 (9,)
+        stress_tensor : np.ndarray
+            输出应力张量，可为 (3,3) 或 (9,)
+
+        Returns
+        -------
+        None
         """
-        # 检查输入数组的形状
-        if positions.shape != (3 * num_atoms,):
-            raise ValueError(
-                f"Expected positions shape {(3 * num_atoms,)}, got {positions.shape}"
-            )
-        if velocities.shape != (3 * num_atoms,):
-            raise ValueError(
-                f"Expected velocities shape {(3 * num_atoms,)}, got {velocities.shape}"
-            )
-        if forces.shape != (3 * num_atoms,):
-            raise ValueError(
-                f"Expected forces shape {(3 * num_atoms,)}, got {forces.shape}"
-            )
+
+        def ensure_flat(array, length):
+            # 此内部函数将 (num_atoms,3) 转为 (3*num_atoms,) 的视图，或检查本就是(3*num_atoms,)
+            if array.shape == (length,):
+                return array
+            elif array.ndim == 2 and array.shape == (length // 3, 3):
+                return array.reshape(length)
+            else:
+                raise ValueError(
+                    f"Array shape {array.shape} not compatible with length {length}."
+                )
+
+        # 对 positions/velocities/forces 进行统一处理
+        positions = ensure_flat(positions, 3 * num_atoms)
+        velocities = ensure_flat(velocities, 3 * num_atoms)
+        forces = ensure_flat(forces, 3 * num_atoms)
+
+        # masses 和 box_lengths 保持严格要求
         if masses.shape != (num_atoms,):
             raise ValueError(
                 f"Expected masses shape {(num_atoms,)}, got {masses.shape}"
             )
         if box_lengths.shape != (3,):
             raise ValueError(
-                f"Expected box_lengths shape {(3,)}, got {box_lengths.shape}"
-            )
-        if stress_tensor.shape != (9,):
-            raise ValueError(
-                f"Expected stress_tensor shape {(9,)}, got {stress_tensor.shape}"
+                f"Expected box_lengths shape (3,), got {box_lengths.shape}"
             )
 
-        # 确保所有数组是连续的并且是浮点类型
+        # 对应力张量同样灵活处理
+        if stress_tensor.shape == (3, 3):
+            stress_tensor_view = stress_tensor.reshape(9)
+        elif stress_tensor.shape == (9,):
+            stress_tensor_view = stress_tensor
+        else:
+            raise ValueError(
+                f"stress_tensor must be shape (3,3) or (9,), got {stress_tensor.shape}"
+            )
+
+        # 确保所有数组是连续和浮点数类型
         positions = np.ascontiguousarray(positions, dtype=np.float64)
         velocities = np.ascontiguousarray(velocities, dtype=np.float64)
         forces = np.ascontiguousarray(forces, dtype=np.float64)
         masses = np.ascontiguousarray(masses, dtype=np.float64)
         box_lengths = np.ascontiguousarray(box_lengths, dtype=np.float64)
-        stress_tensor = np.ascontiguousarray(stress_tensor, dtype=np.float64)
+        stress_tensor_view = np.ascontiguousarray(stress_tensor_view, dtype=np.float64)
 
-        # 调用 C++ 函数
+        # 调用C++函数
         self.lib.compute_stress(
             num_atoms,
             positions,
@@ -248,11 +265,11 @@ class CppInterface:
             masses,
             volume,
             box_lengths,
-            stress_tensor,
+            stress_tensor_view,
         )
 
-        # 将结果赋值回原数组
-        stress_tensor[:] = stress_tensor
+        # 若stress_tensor为(3,3)，数据已经更新，因为view共享内存
+        stress_tensor[:] = stress_tensor_view.reshape(stress_tensor.shape)
 
     def calculate_lj_forces(
         self,

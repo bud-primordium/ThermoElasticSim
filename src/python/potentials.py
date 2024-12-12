@@ -6,7 +6,7 @@
 """
 势能模块
 
-包含 Potential 基类和 LennardJonesPotential 类，用于计算原子间的 Lennard-Jones 势能
+包含 Potential 基类和 LennardJonesPotential 子类、EAMAl1Potential子类，用于计算原子势能
 """
 
 import numpy as np
@@ -112,6 +112,7 @@ class LennardJonesPotential(Potential):
             self.neighbor_list.update()
 
         num_atoms = cell.num_atoms
+        # 展平 避免报错
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
         ).flatten()

@@ -7,6 +7,7 @@ import numpy as np
 from typing import Optional, List, Tuple
 from .interfaces.cpp_interface import CppInterface
 from .mechanics import StressCalculator
+from .utils import KB_IN_EV
 import logging
 
 logger = logging.getLogger(__name__)
@@ -291,7 +292,7 @@ class AndersenBarostat(Barostat):
         self.mass = mass
         self.temperature = temperature
         self.volume_velocity = 0.0
-        self.kb = 8.617333262e-5  # Boltzmann 常数 (eV/K)
+        self.kb = KB_IN_EV  # Boltzmann 常数 (eV/K)
 
     def apply(self, cell, dt: float):
         """应用 Andersen 恒压器"""

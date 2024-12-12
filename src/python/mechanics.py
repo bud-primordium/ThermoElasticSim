@@ -1,6 +1,6 @@
 # 文件名: mechanics.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-20
+# 修改日期: 2024-12-06
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
 import numpy as np
@@ -33,7 +33,7 @@ class StressCalculator:
         self.cpp_interface = CppInterface("stress_calculator")
         logger.debug("Initialized StressCalculator with C++ interface")
 
-    def calculate_stress_components(self, cell) -> Dict[str, np.ndarray]:
+    def calculate_stress_basic(self, cell, potential) -> np.ndarray:
         """
         计算动能和维里应力张量（基础应力张量）
 
@@ -41,62 +41,74 @@ class StressCalculator:
         ----------
         cell : Cell
             包含原子的晶胞对象
+        potential : Potential
+            势能对象，用于计算力
 
         Returns
         -------
-        Dict[str, np.ndarray]
-            包含基础应力张量的字典，键为 "total_basic"。
+        np.ndarray
+            基础应力张量 (3x3)，顺序为[α, β]，其中α为行（x, y, z），β为列（x, y, z）
+            应力定义为 (动能项 + 维里项) / 体积
         """
         try:
-            logger.debug("Starting basic stress components calculation.")
+            logger.debug("Starting basic stress calculation.")
 
-            # 设置输入数据
+            # 首先根据给定的势函数计算原子力
+            potential.calculate_forces(cell)
+
+            # 获取原子数、位置、速度、力和质量
             num_atoms = len(cell.atoms)
-            positions = cell.get_positions().flatten()
-            velocities = cell.get_velocities().flatten()
-            forces = cell.get_forces().flatten()
+            positions = (
+                cell.get_positions()
+            )  # shape: (num_atoms, 3), positions[i] = [x_i, y_i, z_i]
+            velocities = (
+                cell.get_velocities()
+            )  # shape: (num_atoms, 3), velocities[i] = [v_xi, v_yi, v_zi]
+            forces = (
+                cell.get_forces()
+            )  # shape: (num_atoms, 3), forces[i] = [F_xi, F_yi, F_zi]
             masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
             volume = cell.volume
-            box_lengths = cell.get_box_lengths().flatten()
 
             logger.debug(f"num_atoms: {num_atoms}")
-            logger.debug(f"positions shape: {positions.shape}")
-            logger.debug(f"velocities shape: {velocities.shape}")
-            logger.debug(f"forces shape: {forces.shape}")
-            logger.debug(f"masses shape: {masses.shape}")
             logger.debug(f"volume: {volume}")
-            logger.debug(f"box_lengths: {box_lengths}")
 
-            # 初始化应力张量数组
-            stress_tensor = np.zeros(9, dtype=np.float64)
+            # 初始化应力张量数组 (3,3)
+            # stress_tensor[α, β]: α、β分别表示 x=0, y=1, z=2 方向
+            stress_tensor = np.zeros((3, 3), dtype=np.float64)
 
-            # 调用C++接口计算基础应力张量(动能+维里)
-            self.cpp_interface.compute_stress(
-                num_atoms,
-                positions,
-                velocities,
-                forces,
-                masses,
-                volume,
-                box_lengths,
-                stress_tensor,
-            )
+            # 动能应力项 (Kinetic part of the stress)
+            # 对应公式中: Σ m_i v_iα v_iβ
+            # α, β均从0到2，对应x, y, z分量
+            for i in range(num_atoms):
+                for α in range(3):
+                    for β in range(3):
+                        # m_i v_{iα} v_{iβ}
+                        stress_tensor[α, β] += (
+                            masses[i] * velocities[i, α] * velocities[i, β]
+                        )
+
+            # 维里应力项 (Virial part of the stress)
+            # 对应公式中: Σ r_{iα} F_{iβ}
+            # α, β均从0到2，对应x, y, z分量
+            for i in range(num_atoms):
+                for α in range(3):
+                    for β in range(3):
+                        stress_tensor[α, β] += positions[i, α] * forces[i, β]
+
+            # 将总和除以体积得到应力
+            # 应力张量公式: σ_{αβ} = ( Σ_i m_i v_{iα} v_{iβ} + Σ_i r_{iα} F_{iβ} ) / V
+            stress_tensor /= volume
 
             logger.debug(f"Computed basic stress_tensor: {stress_tensor}")
 
-            # 重塑为3x3矩阵
-            total_basic = stress_tensor.reshape((3, 3))
-            logger.debug(f"total_basic matrix:\n{total_basic}")
-
-            return {
-                "total_basic": total_basic,
-            }
+            return stress_tensor
 
         except Exception as e:
             logger.error(f"Error in stress calculation: {e}")
             raise
 
-    def calculate_lattice_stress(self, cell, potential, dr=1e-8) -> np.ndarray:
+    def calculate_lattice_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
         """
         计算晶格应变应力张量
 
@@ -107,7 +119,7 @@ class StressCalculator:
         potential : Potential
             势能对象，用于计算能量
         dr : float, optional
-            形变量的步长, 默认值为1e-8
+            形变量的步长, 默认值为1e-6
 
         Returns
         -------
@@ -122,8 +134,6 @@ class StressCalculator:
 
             # 保存原始状态的深拷贝
             original_cell = cell.copy()
-            original_lattice = original_cell.lattice_vectors.copy()
-
 
             logger.debug("Created deep copy of cell for deformation.")
 
@@ -156,7 +166,7 @@ class StressCalculator:
                     logger.debug(f"dUdh[{i}, {j}] = {dUdh[i, j]}")
 
             # 转换为应力张量
-            lattice_stress = np.dot(dUdh, original_lattice.T) / original_cell.volume
+            lattice_stress = dUdh / original_cell.volume
             logger.debug(f"Lattice stress tensor:\n{lattice_stress}")
 
             return lattice_stress
@@ -165,9 +175,9 @@ class StressCalculator:
             logger.error(f"Error in lattice stress calculation: {e}")
             raise
 
-    def calculate_total_stress(self, cell, potential) -> Dict[str, np.ndarray]:
+    def get_all_stress_components(self, cell, potential) -> Dict[str, np.ndarray]:
         """
-        计算总应力张量及其组成
+        计算总应力张量及其组成，请先计算力
 
         Parameters
         ----------
@@ -179,19 +189,21 @@ class StressCalculator:
         Returns
         -------
         Dict[str, np.ndarray]
-            包含 "total_basic", "lattice", "total" 的应力张量字典
+            包含 "basic", "lattice", "total" 的应力张量字典
         """
         try:
             logger.debug("Starting total stress calculation.")
+            components = {}
 
             # 获取基础张量组成(动能+维里)
-            components = self.calculate_stress_components(cell)
+            basic = self.calculate_stress_basic(cell, potential)
+            components["basic"] = basic
 
             # 计算晶格应变张量
             lattice_stress = self.calculate_lattice_stress(cell, potential)
 
             # 组合总张量(基础 + 晶格)
-            total_stress = components["total_basic"] + lattice_stress
+            total_stress = basic + lattice_stress
 
             components["lattice"] = lattice_stress
             components["total"] = total_stress
@@ -203,6 +215,27 @@ class StressCalculator:
         except Exception as e:
             logger.error(f"Error calculating total stress tensors: {e}")
             raise
+
+    def compute_stress(self, cell, potential):
+        """
+        计算应力张量
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象
+
+        Returns
+        -------
+        np.ndarray
+            3x3 应力张量矩阵
+        """
+        basic = self.calculate_stress_basic(cell, potential)
+        lattice_stress = self.calculate_lattice_stress(cell, potential)
+        total_stress = basic + lattice_stress
+        return total_stress
 
     def validate_tensor_symmetry(
         self, tensor: np.ndarray, tolerance: float = 1e-10
@@ -235,150 +268,144 @@ class StressCalculator:
         return is_symmetric
 
 
-class StressCalculatorLJ(StressCalculator):
-    """
-    基于 Lennard-Jones 势的应力计算器
+# 废弃的子类
+# class StressCalculatorLJ(StressCalculator):
+#     """
+#     基于 Lennard-Jones 势的应力计算器
 
-    Parameters
-    ----------
-    cell : Cell
-        包含原子的晶胞对象
-    potential : Potential
-        Lennard-Jones 势能对象
-    """
+#     Parameters
+#     ----------
+#     cell : Cell
+#         包含原子的晶胞对象
+#     potential : Potential
+#         Lennard-Jones 势能对象
+#     """
 
-    def __init__(self):
-        self.cpp_interface = CppInterface("stress_calculator")
+#     def __init__(self):
+#         self.cpp_interface = CppInterface("stress_calculator")
 
-    def compute_stress(self, cell, potential):
-        """
-        计算 Lennard-Jones 势的应力张量
+#     def compute_stress(self, cell, potential):
+#         """
+#         计算 Lennard-Jones 势的应力张量
 
-        Parameters
-        ----------
-        cell : Cell
-            包含原子的晶胞对象
-        potential : Potential
-            Lennard-Jones 势能对象
+#         Parameters
+#         ----------
+#         cell : Cell
+#             包含原子的晶胞对象
+#         potential : Potential
+#             Lennard-Jones 势能对象
 
-        Returns
-        -------
-        numpy.ndarray
-            3x3 应力张量矩阵
-        """
-        # 计算并更新原子力
-        potential.calculate_forces(cell)
+#         Returns
+#         -------
+#         numpy.ndarray
+#             3x3 应力张量矩阵
+#         """
+#         # 计算并更新原子力
+#         potential.calculate_forces(cell)
 
-        # 获取相关物理量
-        volume = cell.calculate_volume()
-        atoms = cell.atoms
-        num_atoms = len(atoms)
-        positions = np.array(
-            [atom.position for atom in atoms], dtype=np.float64
-        ).flatten()
-        velocities = np.array(
-            [atom.velocity for atom in atoms], dtype=np.float64
-        ).flatten()
-        forces = cell.get_forces().flatten()  # 从 cell 获取更新后的力
-        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
-        box_lengths = cell.get_box_lengths()
+#         # 获取相关物理量
+#         volume = cell.calculate_volume()
+#         atoms = cell.atoms
+#         num_atoms = len(atoms)
+#         positions = np.array(
+#             [atom.position for atom in atoms], dtype=np.float64
+#         )  # (num_atoms, 3)
+#         velocities = np.array(
+#             [atom.velocity for atom in atoms], dtype=np.float64
+#         )  # (num_atoms, 3)
+#         forces = cell.get_forces()  # cell.get_forces() 返回 (num_atoms, 3)
+#         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+#         box_lengths = cell.get_box_lengths()  # (3,)
 
-        # 初始化应力张量数组
-        stress_tensor = np.zeros((3, 3), dtype=np.float64)
+#         # 初始化应力张量数组
+#         stress_tensor = np.zeros((3, 3), dtype=np.float64)
 
-        # 调用 C++ 接口计算应力张量
-        self.cpp_interface.compute_stress(
-            num_atoms,
-            positions,
-            velocities,
-            forces,
-            masses,
-            volume,
-            box_lengths,
-            stress_tensor,
-        )
+#         # 调用 C++ 接口计算应力张量
+#         self.cpp_interface.compute_stress(
+#             num_atoms,
+#             positions,
+#             velocities,
+#             forces,
+#             masses,
+#             volume,
+#             box_lengths,
+#             stress_tensor,
+#         )
 
-        # 重新整形为 3x3 矩阵并返回
-        stress_tensor = stress_tensor.reshape(3, 3)
-        return stress_tensor
+#         # 这里因为stress_tensor已经是(3,3)，无需再次reshape
+#         return stress_tensor
 
 
-class StressCalculatorEAM(StressCalculator):
-    """
-    基于 EAM 势的应力计算器
+# class StressCalculatorEAM(StressCalculator):
+#     """
+#     基于 EAM 势的应力计算器
 
-    计算EAM势下的应力张量，包括：
-    1. 对势项的贡献
-    2. 电子密度的贡献
-    3. 嵌入能的贡献
+#     计算EAM势下的应力张量，包括：
+#     1. 对势项的贡献
+#     2. 电子密度的贡献
+#     3. 嵌入能的贡献
 
-    Parameters
-    ----------
-    None
-    """
+#     Parameters
+#     ----------
+#     None
+#     """
 
-    def __init__(self):
-        """初始化EAM应力计算器"""
-        self.cpp_interface = CppInterface("stress_calculator")
+#     def __init__(self):
+#         """初始化EAM应力计算器"""
+#         self.cpp_interface = CppInterface("stress_calculator")
 
-    def compute_stress(self, cell, potential):
-        """
-        计算 EAM 势的应力张量
+#     def compute_stress(self, cell, potential):
+#         """
+#         计算 EAM 势的应力张量
 
-        Parameters
-        ----------
-        cell : Cell
-            包含原子的晶胞对象
-        potential : EAMAl1Potential
-            EAM 势能对象
+#         Parameters
+#         ----------
+#         cell : Cell
+#             包含原子的晶胞对象
+#         potential : EAMAl1Potential
+#             EAM 势能对象
 
-        Returns
-        -------
-        numpy.ndarray
-            3x3 应力张量矩阵，单位为 eV/Å³
+#         Returns
+#         -------
+#         numpy.ndarray
+#             3x3 应力张量矩阵，单位为 eV/Å³
 
-        Notes
-        -----
-        EAM势的应力张量计算包括：
-        1. 对势部分的应力贡献
-        2. 由电子密度梯度产生的应力贡献
-        3. 嵌入能导致的应力贡献
-        """
-        # 计算并更新原子力
-        potential.calculate_forces(cell)
+#         Notes
+#         -----
+#         EAM势的应力张量计算包括：
+#         1. 对势部分的应力贡献
+#         2. 由电子密度梯度产生的应力贡献
+#         3. 嵌入能导致的应力贡献
+#         """
+#         # 计算并更新原子力
+#         potential.calculate_forces(cell)
 
-        # 获取相关物理量
-        volume = cell.calculate_volume()
-        atoms = cell.atoms
-        num_atoms = len(atoms)
-        positions = np.array(
-            [atom.position for atom in atoms], dtype=np.float64
-        ).flatten()
-        velocities = np.array(
-            [atom.velocity for atom in atoms], dtype=np.float64
-        ).flatten()
-        forces = cell.get_forces().flatten()  # 从cell获取更新后的力
-        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
-        box_lengths = cell.get_box_lengths()
+#         # 获取相关物理量
+#         volume = cell.calculate_volume()
+#         atoms = cell.atoms
+#         num_atoms = len(atoms)
+#         positions = np.array([atom.position for atom in atoms], dtype=np.float64)
+#         velocities = np.array([atom.velocity for atom in atoms], dtype=np.float64)
+#         forces = cell.get_forces()  # 从cell获取更新后的力
+#         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+#         box_lengths = cell.get_box_lengths()
 
-        # 初始化应力张量数组
-        stress_tensor = np.zeros((3, 3), dtype=np.float64)
+#         # 初始化应力张量数组
+#         stress_tensor = np.zeros((3, 3), dtype=np.float64)
 
-        # 调用C++接口计算EAM应力张量
-        self.cpp_interface.compute_stress(
-            num_atoms,
-            positions,
-            velocities,
-            forces,
-            masses,
-            volume,
-            box_lengths,
-            stress_tensor,
-        )
+#         # 调用C++接口计算EAM应力张量
+#         self.cpp_interface.compute_stress(
+#             num_atoms,
+#             positions,
+#             velocities,
+#             forces,
+#             masses,
+#             volume,
+#             box_lengths,
+#             stress_tensor,
+#         )
 
-        # 重新整形为3x3矩阵并返回
-        stress_tensor = stress_tensor.reshape(3, 3)
-        return stress_tensor
+#         return stress_tensor
 
 
 class StrainCalculator:

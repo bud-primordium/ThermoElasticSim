@@ -148,7 +148,7 @@ def generate_fcc_positions(lattice_constant, repetitions):
 @pytest.fixture
 def fcc_cell():
     """创建一个标准的FCC晶胞实例"""
-    lattice_constant = 4.05  # Å
+    lattice_constant = 4.046  # Å
     repetitions = 2
     positions = generate_fcc_positions(lattice_constant, repetitions)
 

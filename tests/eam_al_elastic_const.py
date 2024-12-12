@@ -19,7 +19,7 @@ def test_elastic_constants_fcc_aluminum_eam():
     os.makedirs(output_dir, exist_ok=True)
 
     # 创建基本FCC铝晶胞
-    a0 = 4.05  # 铝的晶格常数，单位：Å
+    a0 = 4.046  # 铝的晶格常数，单位：Å
     lattice_vectors = np.array([[a0, 0.0, 0.0], [0.0, a0, 0.0], [0.0, 0.0, a0]])
 
     # FCC基胞原子位置（分数坐标）

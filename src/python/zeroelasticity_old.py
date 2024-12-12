@@ -1,13 +1,13 @@
 # 文件名: zeroelasticity.py
 # 作者: Gilbert Young
-# 修改日期: 2024-12-06
-# 文件描述: 实现用于计算弹性常数的求解器和管理工作流（零温条件下）。
+# 修改日期: 2024-10-20
+# 文件描述: 实现用于计算弹性常数的求解器和计算类（零温条件下）。
 
 """
 弹性常数模块（零温）
 
-包含 ElasticConstantsSolver 和 ElasticConstantsWorkflow 类，
-用于通过应力应变数据计算材料的弹性常数并管理整个计算流程
+包含 ZeroKElasticConstantsSolver 和 ZeroKElasticConstantsCalculator 类，
+用于通过应力应变数据计算材料的弹性常数
 """
 
 import os
@@ -25,10 +25,7 @@ from .deformation import Deformer
 from .optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
 from .utils import TensorConverter, EV_TO_GPA
 from .visualization import Visualizer
-from datetime import datetime
 
-# 获取当前时间字符串
-current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 # 配置日志记录
 logging.basicConfig(
     level=logging.DEBUG,
@@ -38,14 +35,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class ElasticConstantsSolver:
+class ZeroKElasticConstantsSolver:
     """
-    根据应力应变数据拟合弹性常数矩阵的求解器（零温）
+    计算弹性常数的求解器类（零温）
     """
 
     def solve(self, strains, stresses, regularization=False, alpha=1e-5):
         """
-        通过最小二乘或Ridge回归求解弹性常数矩阵，并计算整体拟合优度
+        通过最小二乘法求解弹性常数矩阵，并计算整体拟合优度
 
         Parameters
         ----------
@@ -61,13 +58,14 @@ class ElasticConstantsSolver:
         Returns
         -------
         tuple
-            (C, r2_score)
-            C为6x6弹性常数矩阵，r2_score为全局拟合的R²值
+            (elastic_constants, r2_score)
+            - elastic_constants: 弹性常数矩阵，形状为 (6, 6)
+            - r2_score: 整体拟合的 R^2 值
         """
         strains = np.array(strains)
         stresses = np.array(stresses)
 
-        # 基本检查
+        # 检查输入数据维度
         if strains.ndim != 2 or stresses.ndim != 2:
             raise ValueError("Strains and stresses must be 2D arrays.")
         if strains.shape[0] != stresses.shape[0]:
@@ -76,7 +74,9 @@ class ElasticConstantsSolver:
             raise ValueError("Strains and stresses must have 6 components each.")
 
         if regularization:
-            logger.debug("Solving elastic constants using Ridge regression.")
+            logger.debug(
+                "Solving elastic constants using Ridge regression with regularization."
+            )
             model = Ridge(alpha=alpha, fit_intercept=False)
             model.fit(strains, stresses)
             C = model.coef_.T
@@ -87,8 +87,10 @@ class ElasticConstantsSolver:
             C = C.T
             predictions = strains @ C
 
+        # 使用sklearn的r2_score计算拟合优度
         r2_value = r2_score(stresses.flatten(), predictions.flatten())
         logger.debug(f"Overall R^2 score for elastic constants fitting: {r2_value:.6f}")
+
         return C, r2_value
 
     def perform_individual_fits(self, strains, stresses, save_path):
@@ -111,7 +113,9 @@ class ElasticConstantsSolver:
         logger.info(
             "Performing individual linear fits for each stress-strain component."
         )
+
         components = ["11", "22", "33", "23", "13", "12"]
+        results = []
 
         with open(save_path, "w") as f:
             # 写入表头
@@ -122,28 +126,31 @@ class ElasticConstantsSolver:
 
             for i, strain_comp in enumerate(components):
                 for j, stress_comp in enumerate(components):
+                    # 应用与绘图相同的筛选逻辑
                     mask = np.abs(strains[:, i]) > 1e-10
                     x = strains[mask, i]
                     y = stresses[mask, j]
 
                     logger.debug(
-                        f"Fitting Stress {stress_comp} vs Strain {strain_comp}."
+                        f"Fitting Stress {stress_comp} (dependent) vs Strain {strain_comp} (independent)."
                     )
-                    logger.debug(f"x (strain): {x}")
-                    logger.debug(f"y (stress): {y}")
+                    logger.debug(f"Strain {strain_comp} data (x): {x}")
+                    logger.debug(f"Stress {stress_comp} data (y): {y}")
 
                     if len(x) < 2:
                         logger.warning(
-                            f"Not enough data points for fit: {strain_comp} vs {stress_comp}"
+                            f"Not enough data points for fit: Strain {strain_comp} vs Stress {stress_comp}"
                         )
                         slope, intercept, r2 = np.nan, np.nan, np.nan
                     else:
                         try:
+                            # 进行线性拟合
                             coeffs = np.polyfit(x, y, 1)
                             slope, intercept = coeffs
                             fit_line = np.poly1d(coeffs)
                             y_pred = fit_line(x)
                             r2 = r2_score(y, y_pred)
+
                             logger.debug(
                                 f"Fitted {strain_comp} vs {stress_comp}: "
                                 f"Slope={slope:.6f}, Intercept={intercept:.6f}, R^2={r2:.6f}"
@@ -154,17 +161,22 @@ class ElasticConstantsSolver:
                             )
                             slope, intercept, r2 = np.nan, np.nan, np.nan
 
+                    # 写入结果，保留6位小数
                     f.write(
                         f"{strain_comp}\t{stress_comp}\t{strain_comp}\t{slope:.6f}\t{intercept:.6f}\t{r2:.6f}\n"
                     )
                     logger.debug(
-                        f"Written fit result to file: {strain_comp} vs {stress_comp}"
+                        f"Written fit to file: {strain_comp} vs {stress_comp}, "
+                        f"Slope={slope:.6f}, Intercept={intercept:.6f}, R^2={r2:.6f}"
                     )
 
+        logger.info(f"Individual fit results saved to {save_path}")
 
-class ElasticConstantsWorkflow:
+
+class ZeroKElasticConstantsCalculator:
     """
-    管理从初始优化、形变、应力-应变数据采集到最终弹性常数拟合和保存的全流程类。
+    计算弹性常数的模拟类（零温）
+
     Parameters
     ----------
     cell : Cell
@@ -191,39 +203,40 @@ class ElasticConstantsWorkflow:
         num_steps=10,
         optimizer_type="LBFGS",
         optimizer_params=None,
-        save_path=f"../output_new/test_fcc_{current_time}",
+        save_path="./output",
     ):
         self.cell = cell
         self.potential = potential
-        self.delta = delta
-        self.num_steps = num_steps
+        self.delta = delta  # 指的是形变
+        self.num_steps = num_steps  # 每个应变分量的步数
         self.deformer = Deformer(delta, num_steps)
         self.stress_calculator = StressCalculator()
         self.strain_calculator = StrainCalculator()
-        self.visualizer = Visualizer()
+        self.visualizer = Visualizer()  # 初始化 Visualizer 实例
         self.save_path = save_path
         os.makedirs(self.save_path, exist_ok=True)
+
         self.optimizer_type = optimizer_type
         self.optimizer_params = self._get_optimizer_params(
             optimizer_type, optimizer_params
         )
 
-        self.initial_stress_tensor = None
-
-    def run(self):
-        """
-        主流程：执行所有步骤并返回最终的C矩阵和R²值。
-        """
-        self.calculate_initial_stress()
-        self.perform_initial_optimization()
-        strain_data, stress_data = self.apply_and_optimize_deformations()
-
-        self.save_stress_strain_data(strain_data, stress_data)
-        self.process_deformation_visualization(strain_data, stress_data)
-        C_in_GPa, r2 = self.fit_elastic_constants_and_save(strain_data, stress_data)
-        return C_in_GPa, r2
-
     def _get_optimizer_params(self, optimizer_type, optimizer_params):
+        """
+        获取优化器参数，允许外部传入并覆盖默认参数。
+
+        Parameters
+        ----------
+        optimizer_type : str
+            优化器类型
+        optimizer_params : dict or None
+            外部传入的优化器参数
+
+        Returns
+        -------
+        dict
+            优化器参数
+        """
         default_params = {
             "GD": {
                 "max_steps": 200000,
@@ -231,8 +244,16 @@ class ElasticConstantsWorkflow:
                 "step_size": 1e-4,
                 "energy_tol": 1e-6,
             },
-            "BFGS": {"tol": 1e-8, "maxiter": 1000000},
-            "LBFGS": {"ftol": 1e-8, "gtol": 1e-5, "maxls": 100, "maxiter": 10000},
+            "BFGS": {
+                "tol": 1e-8,
+                "maxiter": 1000000,
+            },
+            "LBFGS": {
+                "ftol": 1e-8,
+                "gtol": 1e-5,
+                "maxls": 100,
+                "maxiter": 10000,
+            },
         }
 
         if optimizer_type not in default_params:
@@ -248,6 +269,14 @@ class ElasticConstantsWorkflow:
         return params
 
     def _get_optimizer_instance(self):
+        """
+        根据优化器类型返回相应的优化器实例。
+
+        Returns
+        -------
+        Optimizer
+            优化器实例
+        """
         optimizer_mapping = {
             "GD": GradientDescentOptimizer,
             "BFGS": BFGSOptimizer,
@@ -265,21 +294,36 @@ class ElasticConstantsWorkflow:
         return optimizer
 
     def calculate_initial_stress(self):
+        """
+        计算初始结构的应力，在优化之前验证应力计算是否正确
+
+        Returns
+        -------
+        numpy.ndarray
+            初始应力张量
+        """
         logger.debug("Calculating initial stress before optimization.")
         initial_stress = self.stress_calculator.compute_stress(
             self.cell, self.potential
         )
-        # 对称化
-        initial_stress = 0.5 * (initial_stress + initial_stress.T)
-        logger.debug(f"Initial stress tensor:\n{initial_stress}")
+        logger.debug(f"Initial stress tensor before optimization:\n{initial_stress}")
+
+        # 保存初始应力张量
         self.initial_stress_tensor = initial_stress
 
-    def perform_initial_optimization(self):
+        return initial_stress
+
+    def optimize_initial_structure(self):
+        """
+        在施加变形前对结构进行一次优化，并保存优化过程的动画。
+        """
         logger.debug("Starting initial structure optimization.")
         optimizer = self._get_optimizer_instance()
+
         converged, trajectory = optimizer.optimize(self.cell, self.potential)
         logger.debug("Initial structure optimization completed.")
 
+        # 保存优化过程的动画
         animation_filename = os.path.join(self.save_path, "initial_optimization.gif")
         self.visualizer.create_optimization_animation(
             trajectory,
@@ -289,57 +333,42 @@ class ElasticConstantsWorkflow:
             show=False,
         )
 
+        # 日志记录
         if converged:
             logger.info(f"Saved initial optimization animation to {animation_filename}")
         else:
             logger.warning("Initial structure optimization did not converge.")
 
-    def apply_and_optimize_deformations(self):
-        F_list = self.deformer.generate_deformation_matrices()
-        results = self._compute_stress_strain_for_all(F_list)
-
-        strains, stresses = [], []
-        for result in results:
-            strain_voigt, stress_voigt = self._save_deformation_results(result)
-            strains.append(strain_voigt)
-            stresses.append(stress_voigt)
-
-        strain_data = np.array(strains)
-        stress_data = np.array(stresses)
-        return strain_data, stress_data
-
-    def _compute_stress_strain_for_all(self, F_list):
-        results = [None] * len(F_list)
-        with ThreadPoolExecutor() as executor:
-            future_to_idx = {
-                executor.submit(self.calculate_stress_strain, F, i): i
-                for i, F in enumerate(F_list)
-            }
-
-            for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
-                try:
-                    result = future.result()
-                    results[idx] = result
-                    logger.debug(f"Completed deformation {idx}")
-                except Exception as e:
-                    logger.error(f"Error in deformation {idx}: {e}")
-                    raise RuntimeError(f"Deformation {idx} failed") from e
-
-        if any(r is None for r in results):
-            raise RuntimeError("Some deformations failed to complete")
-
-        return results
-
     def calculate_stress_strain(self, F, deformation_index):
+        """
+        对指定的变形矩阵计算应力和应变
+
+        Parameters
+        ----------
+        F : numpy.ndarray
+            变形矩阵
+        deformation_index : int
+            变形矩阵的编号，便于日志追踪
+
+        Returns
+        -------
+        tuple
+            包含应变（Voigt 表示）、应力（Voigt 表示）、优化轨迹、变形后的晶胞对象的元组
+        """
         logger.info(f"Processing deformation matrix #{deformation_index}")
         logger.debug(f"Deformation matrix F:\n{F}")
 
+        # 复制初始晶胞
         deformed_cell = self.cell.copy()
+
+        # 施加变形
         deformed_cell.apply_deformation(F)
         logger.debug(f"Applied deformation to cell #{deformation_index}.")
 
+        # 获取优化器实例
         optimizer = self._get_optimizer_instance()
+
+        # 对变形后的结构进行优化并生成轨迹
         converged, trajectory = optimizer.optimize(deformed_cell, self.potential)
         logger.debug(f"Optimized deformed structure #{deformation_index}.")
 
@@ -348,18 +377,24 @@ class ElasticConstantsWorkflow:
                 f"Optimization did not converge for deformation #{deformation_index}"
             )
 
+        # 计算变形后的应力张量
         stress_tensor = self.stress_calculator.compute_stress(
             deformed_cell, self.potential
         )
 
-        # 对称化应力张量，消除数值微小非对称性
-        stress_tensor = 0.5 * (stress_tensor + stress_tensor.T)
+        # 减去初始应力张量
         stress_tensor -= self.initial_stress_tensor
+        # 对称化应力张量
+        stress_tensor = 0.5 * (stress_tensor + stress_tensor.T)
 
+        # 计算应变张量，使用小形变理论
         strain_tensor = 0.5 * (F + F.T) - np.eye(3)
+
+        # 使用正确的 Voigt 转换
         strain_voigt = TensorConverter.to_voigt(strain_tensor, tensor_type="strain")
         stress_voigt = TensorConverter.to_voigt(stress_tensor, tensor_type="stress")
 
+        # 日志记录
         logger.info(
             f"Computed stress tensor for deformation #{deformation_index}:\n{stress_tensor}"
         )
@@ -367,15 +402,102 @@ class ElasticConstantsWorkflow:
             f"Computed strain (Voigt) for deformation #{deformation_index}: {strain_voigt}"
         )
         logger.info(
-            f"Converted stress to Voigt for deformation #{deformation_index}: {stress_voigt}"
+            f"Converted stress to Voigt notation for deformation #{deformation_index}: {stress_voigt}"
         )
 
+        # 返回需要的数据，稍后在主线程中处理可视化和文件保存
         return strain_voigt, stress_voigt, trajectory, deformed_cell, deformation_index
 
+    def save_stress_strain_data(self, strain_data, stress_data):
+        """
+        将应力和应变数据合并保存到一个 CSV 文件中
+
+        Parameters
+        ----------
+        strain_data : numpy.ndarray
+            应变数据，形状为 (N, 6)
+        stress_data : numpy.ndarray
+            应力数据，形状为 (N, 6)
+        """
+        combined_data = np.hstack((strain_data, stress_data))
+        headers = [
+            "strain_11",
+            "strain_22",
+            "strain_33",
+            "strain_23",
+            "strain_13",
+            "strain_12",
+            "stress_11",
+            "stress_22",
+            "stress_33",
+            "stress_23",
+            "stress_13",
+            "stress_12",
+        ]
+        filename = os.path.join(self.save_path, "stress_strain_data.csv")
+        with open(filename, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for row in combined_data:
+                # 格式化每个数值，保留 6 位有效数字
+                formatted_row = [f"{value:.6e}" for value in row]
+                writer.writerow(formatted_row)
+        logger.info(f"Stress-strain data saved to {filename}")
+
+    def process_deformation_visualization(self, strain_data, stress_data):
+        """
+        处理所有变形模式的可视化，为每种变形生成单独的PNG
+
+        Parameters
+        ----------
+        strain_data : numpy.ndarray
+            应变数据，形状为 (N, 6)
+        stress_data : numpy.ndarray
+            应力数据，形状为 (N, 6)
+        """
+        logger.info("Processing deformation visualizations.")
+        # 创建可视化保存目录
+        vis_dir = os.path.join(self.save_path, "deformation_analysis")
+        os.makedirs(vis_dir, exist_ok=True)
+
+        # 对每种变形模式分别处理
+        num_modes = 6
+        for i in range(num_modes):
+            # 找出对应于这种变形模式的数据点
+            # 通过检查该模式的应变是否为主导应变来筛选
+            # 使用一个小阈值来避免数值误差
+            mask = np.abs(strain_data[:, i]) > 1e-10
+            mode_strains = strain_data[mask]
+            mode_stresses = stress_data[mask]
+
+            # 确保找到了有效的数据点
+            if len(mode_strains) > 0:
+                self.visualizer.plot_deformation_stress_strain(
+                    mode_strains, mode_stresses, i, vis_dir, show=False
+                )
+                logger.debug(f"Plotted deformation stress-strain for mode {i}.")
+
     def _save_deformation_results(self, result):
-        (strain_voigt, stress_voigt, trajectory, deformed_cell, deformation_index) = (
-            result
-        )
+        """
+        保存单个变形的优化动画和晶胞结构图。
+
+        Parameters
+        ----------
+        result : tuple
+            包含应变、应力、优化轨迹、变形后的晶胞和变形索引的元组
+
+        Returns
+        -------
+        tuple
+            应变和应力的 Voigt 表示
+        """
+        (
+            strain_voigt,
+            stress_voigt,
+            trajectory,
+            deformed_cell,
+            deformation_index,
+        ) = result
 
         deformation_dir = os.path.join(
             self.save_path, f"deformation_{deformation_index}"
@@ -406,58 +528,82 @@ class ElasticConstantsWorkflow:
 
         return strain_voigt, stress_voigt
 
-    def save_stress_strain_data(self, strain_data, stress_data):
-        combined_data = np.hstack((strain_data, stress_data))
-        headers = [
-            "strain_11",
-            "strain_22",
-            "strain_33",
-            "strain_23",
-            "strain_13",
-            "strain_12",
-            "stress_11",
-            "stress_22",
-            "stress_33",
-            "stress_23",
-            "stress_13",
-            "stress_12",
-        ]
-        filename = os.path.join(self.save_path, "stress_strain_data.csv")
-        with open(filename, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            for row in combined_data:
-                formatted_row = [f"{value:.6e}" for value in row]
-                writer.writerow(formatted_row)
-        logger.info(f"Stress-strain data saved to {filename}")
+    def calculate_elastic_constants(self):
+        """
+        计算弹性常数矩阵
 
-    def process_deformation_visualization(self, strain_data, stress_data):
-        logger.info("Processing deformation visualizations.")
-        vis_dir = os.path.join(self.save_path, "deformation_analysis")
-        os.makedirs(vis_dir, exist_ok=True)
+        Returns
+        -------
+        numpy.ndarray
+            弹性常数矩阵，形状为 (6, 6)，单位为 GPa
+        """
+        logger.info("Starting elastic constants calculation.")
 
-        num_modes = 6
-        for i in range(num_modes):
-            mask = np.abs(strain_data[:, i]) > 1e-10
-            mode_strains = strain_data[mask]
-            mode_stresses = stress_data[mask]
+        # 计算初始应力
+        self.calculate_initial_stress()
 
-            if len(mode_strains) > 0:
-                self.visualizer.plot_deformation_stress_strain(
-                    mode_strains, mode_stresses, i, vis_dir, show=False
-                )
-                logger.debug(f"Plotted deformation stress-strain for mode {i}.")
+        # 优化初始结构并保存
+        self.optimize_initial_structure()
 
-    def fit_elastic_constants_and_save(self, strain_data, stress_data):
+        # 生成变形矩阵
+        F_list = self.deformer.generate_deformation_matrices()
+        results = [None] * len(F_list)  # 预分配结果列表，确保顺序
+
+        # 并行计算应力和应变
+        with ThreadPoolExecutor() as executor:
+            # 提交所有任务并立即获取future对象
+            future_to_idx = {
+                executor.submit(self.calculate_stress_strain, F, i): i
+                for i, F in enumerate(F_list)
+            }
+
+            # 按完成顺序处理结果
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    result = future.result()
+                    results[idx] = result
+                    logger.debug(f"Completed deformation {idx}")
+                except Exception as e:
+                    logger.error(f"Error in deformation {idx}: {e}")
+                    raise RuntimeError(f"Deformation {idx} failed") from e
+
+        # 检查是否所有计算都完成
+        if any(r is None for r in results):
+            raise RuntimeError("Some deformations failed to complete")
+
+        strains, stresses = [], []
+
+        # 处理结果并保存相关文件
+        for result in results:
+            strain_voigt, stress_voigt = self._save_deformation_results(result)
+            strains.append(strain_voigt)
+            stresses.append(stress_voigt)
+
+        strain_data = np.array(strains)
+        stress_data = np.array(stresses)
+
+        # 生成每种变形模式的PNG
+        self.process_deformation_visualization(strain_data, stress_data)
+
+        # 保存应力应变数据
+        self.save_stress_strain_data(strain_data, stress_data)
+
+        logger.info(f"Total strain-stress pairs: {len(strains)}")
+        logger.info(f"Strain range: [{strain_data.min():.6e}, {strain_data.max():.6e}]")
+        logger.info(f"Stress range: [{stress_data.min():.6e}, {stress_data.max():.6e}]")
+
+        # 计算弹性常数矩阵和R^2
         logger.debug("Solving for elastic constants.")
-        solver = ElasticConstantsSolver()
+        solver = ZeroKElasticConstantsSolver()
         C, r2 = solver.solve(strain_data, stress_data, regularization=False, alpha=1e-5)
         C_in_GPa = C * EV_TO_GPA
 
+        # 记录R^2值和弹性常数矩阵
         logger.info(f"Elastic constants matrix (GPa):\n{C_in_GPa}")
         logger.info(f"Overall R^2 score: {r2:.6f}")
 
-        # 保存弹性常数矩阵和R²
+        # 保存弹性常数矩阵和R^2到文件
         results_file = os.path.join(self.save_path, "elastic_constants_GPa.txt")
         with open(results_file, "w") as f:
             f.write("Elastic Constants Matrix (GPa):\n")
@@ -466,11 +612,11 @@ class ElasticConstantsWorkflow:
             f.write("\nNote: R^2 closer to 1 indicates better fit quality")
         logger.info(f"Elastic constants and R^2 saved to {results_file}")
 
-        # 个别线性拟合结果
+        # 创建并保存拟合结果到统一的txt文件
         fit_results_file = os.path.join(self.save_path, "individual_fits.txt")
         solver.perform_individual_fits(strain_data, stress_data, fit_results_file)
 
-        # 绘制应力-应变关系图
+        # 保存应力-应变关系图
         fig, ax = self.visualizer.plot_stress_strain_multiple(
             strain_data, stress_data, show=False
         )
@@ -481,15 +627,18 @@ class ElasticConstantsWorkflow:
         plt.close(fig)
         logger.info(f"Saved stress-strain relationship plot to {stress_strain_plot}")
 
-        # 创建应力-应变关系动画
+        # 保留应力-应变关系动画的创建
         animation_filename = os.path.join(
             self.save_path, "stress_strain_relationship.gif"
         )
         self.visualizer.create_stress_strain_animation(
-            strain_data, stress_data, animation_filename, show=False
+            strain_data,
+            stress_data,
+            animation_filename,
+            show=False,
         )
         logger.info(
             f"Saved stress-strain relationship animation to {animation_filename}"
         )
 
-        return C_in_GPa, r2
+        return C_in_GPa

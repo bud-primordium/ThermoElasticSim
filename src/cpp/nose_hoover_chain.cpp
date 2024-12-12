@@ -56,7 +56,7 @@ extern "C"
             return; // 简单的参数检查
 
         const double dt_half = dt * 0.5;
-        const double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
+        const double kB = 8.617332385e-5; // 玻尔兹曼常数，单位 eV/K
 
         // 计算动能
         double kinetic_energy = compute_kinetic_energy(num_atoms, masses, velocities);
