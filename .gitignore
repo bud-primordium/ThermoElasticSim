@@ -49,6 +49,7 @@ Thumbs.db
 
 # 轨迹文件
 output/
+output_new/
 
 # 特殊文件夹（如讲义和笔记）
 .lectures/
