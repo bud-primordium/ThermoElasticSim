@@ -51,7 +51,8 @@ extern "C"
         double target_temperature)
     {
         const double dt_half = dt * 0.5;
-        const double kB = 8.617333262e-5; // 玻尔兹曼常数，单位 eV/K
+        const double kB = 8.617333262e-5;  // 玻尔兹曼常数，单位 eV/K
+        const int dof = 3 * num_atoms - 3; // 减去刚体平移的自由度（如需要）
 
         // 第一半步：更新速度，考虑力
         for (int i = 0; i < num_atoms; ++i)
@@ -67,10 +68,10 @@ extern "C"
         double kinetic_energy = compute_kinetic_energy(num_atoms, masses, velocities);
 
         // 更新 xi（热浴变量） - 第一半步
-        double G_xi = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q;
+        double G_xi = (2.0 * kinetic_energy - dof * kB * target_temperature) / Q;
         *xi += dt_half * G_xi;
 
-        // 缩放速度
+        // 半步缩放速度
         double scale = std::exp(-(*xi) * dt_half);
         for (int i = 0; i < num_atoms; ++i)
         {
@@ -84,8 +85,18 @@ extern "C"
         kinetic_energy = compute_kinetic_energy(num_atoms, masses, velocities);
 
         // 更新 xi（热浴变量） - 第二半步
-        G_xi = (2.0 * kinetic_energy - 3.0 * num_atoms * kB * target_temperature) / Q;
+        G_xi = (2.0 * kinetic_energy - dof * kB * target_temperature) / Q;
         *xi += dt_half * G_xi;
+
+        // 第二次半步缩放速度（对称）
+        scale = std::exp(-(*xi) * dt_half);
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            int idx = 3 * i;
+            velocities[idx] *= scale;
+            velocities[idx + 1] *= scale;
+            velocities[idx + 2] *= scale;
+        }
 
         // 第二半步：更新速度，考虑力
         for (int i = 0; i < num_atoms; ++i)

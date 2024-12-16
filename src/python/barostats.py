@@ -38,12 +38,27 @@ class Barostat:
         raise NotImplementedError
 
     def calculate_internal_pressure(self, stress_tensor: np.ndarray) -> float:
-        """计算内部压力（应力张量的迹的负三分之一）
-
-        Returns:
-            float: 内部压力
         """
-        return -np.trace(stress_tensor) / 3.0
+        根据应力张量计算内部压力
+
+        Parameters
+        ----------
+        stress_tensor : np.ndarray
+            应力张量 (9,)
+
+        Returns
+        -------
+        float
+            内部压力
+        """
+        # if stress_tensor.shape != (9,):
+        #     logger.warning(
+        #         f"Expected stress_tensor shape (9,), got {stress_tensor.shape}"
+        #     )
+        # 计算压力为应力张量的迹除以3
+        pressure = np.trace(stress_tensor.reshape(3, 3)) / 3.0
+        logger.debug(f"Calculated internal pressure: {pressure}")
+        return pressure
 
     def record_state(self, pressure: float, volume: float, stress_tensor: np.ndarray):
         """记录系统状态"""
@@ -243,10 +258,15 @@ class BerendsenBarostat(Barostat):
         self.tau_p = tau_p
         self.compressibility = compressibility
 
-    def apply(self, cell, dt: float):
+    def apply(
+        self,
+        cell,
+        dt: float,
+        potential,
+    ):
         """应用 Berendsen 恒压器"""
         # 计算当前压力
-        stress_tensor = cell.calculate_stress_tensor()  # 应返回 3x3 矩阵
+        stress_tensor = cell.calculate_stress_tensor(potential)
         current_pressure = self.calculate_internal_pressure(stress_tensor.flatten())
 
         # 计算缩放因子
@@ -294,26 +314,28 @@ class AndersenBarostat(Barostat):
         self.volume_velocity = 0.0
         self.kb = KB_IN_EV  # Boltzmann 常数 (eV/K)
 
-    def apply(self, cell, dt: float):
+    def apply(
+        self,
+        cell,
+        dt: float,
+        potential,
+    ):
         """应用 Andersen 恒压器"""
         # 计算当前压力
-        stress_tensor = cell.calculate_stress_tensor()
+        stress_tensor = cell.calculate_stress_tensor(potential)
         current_pressure = self.calculate_internal_pressure(stress_tensor.flatten())
 
-        # 计算体积加速度
+        # 计算体积加速度和缩放因子
         volume = cell.volume
         force = 3 * volume * (current_pressure - self.target_pressure)
-        force += 2 * self.temperature * self.kb / volume  # 热力学项
+        force += 2 * self.temperature * self.kb / volume
         acceleration = force / self.mass
-
-        # 更新体积速度和体积
         self.volume_velocity += acceleration * dt
-        volume_ratio = (volume + self.volume_velocity * dt) / volume
-        scaling_factor = volume_ratio ** (1 / 3)
+        scaling_factor = (1 + self.volume_velocity * dt / volume) ** (1 / 3)
 
-        # 更新晶格向量和原子位置
-        cell.lattice_vectors *= scaling_factor
-        cell.update_volume()
+        # 使用变形矩阵实现缩放
+        deformation_matrix = np.eye(3) * scaling_factor
+        cell.apply_deformation(deformation_matrix)
 
         for atom in cell.atoms:
             atom.position *= scaling_factor

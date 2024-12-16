@@ -195,9 +195,9 @@ class LennardJonesPotential(Potential):
         neighbor_list_flat = [index for pair in neighbor_pairs for index in pair]
         neighbor_list_array = np.ascontiguousarray(neighbor_list_flat, dtype=np.int32)
 
-        logger.debug(
-            f"Number of neighbor pairs for energy calculation: {len(neighbor_pairs)}."
-        )
+        # logger.debug(
+        #     f"Number of neighbor pairs for energy calculation: {len(neighbor_pairs)}."
+        # )
 
         # 调用 C++ 接口计算能量
         # logger.debug("Calling C++ interface to calculate energy.")
@@ -211,7 +211,7 @@ class LennardJonesPotential(Potential):
             neighbor_list_array,
             len(neighbor_pairs),
         )
-        logger.debug(f"Calculated potential energy: {energy} eV.")
+        # logger.debug(f"Calculated potential energy: {energy} eV.")
         return energy
 
 

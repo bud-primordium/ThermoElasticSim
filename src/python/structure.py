@@ -12,6 +12,7 @@
 import numpy as np
 from .utils import AMU_TO_EVFSA2
 import logging
+from .mechanics import StressCalculator
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
@@ -120,6 +121,8 @@ class Cell:
         # 验证周期性边界条件的合理性
         self._validate_pbc_conditions()
 
+        self.stress_calculator = StressCalculator()
+
     def _validate_lattice_vectors(self, lattice_vectors):
         """验证晶格向量的有效性"""
         if not isinstance(lattice_vectors, np.ndarray):
@@ -175,6 +178,10 @@ class Cell:
         """返回模拟盒子在 x、y、z 方向的长度"""
         box_lengths = np.linalg.norm(self.lattice_vectors, axis=1)
         return box_lengths
+
+    def calculate_stress_tensor(self, potential):
+        """计算应力张量"""
+        return self.stress_calculator.compute_stress(self, potential)
 
     def lock_lattice_vectors(self):
         """锁定晶格向量，防止在优化过程中被修改"""

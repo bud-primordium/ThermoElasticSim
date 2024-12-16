@@ -139,7 +139,7 @@ class BerendsenThermostat(Thermostat):
         super().__init__(target_temperature)
         self.tau = tau
 
-    def apply(self, atoms: List, dt: float) -> None:
+    def apply(self, cell, dt: float, potential) -> None:
         """
         应用 Berendsen 恒温器以控制系统温度。
 
@@ -162,6 +162,7 @@ class BerendsenThermostat(Thermostat):
         dt : float
             时间步长。
         """
+        atoms = cell.atoms
         current_temp = self.get_temperature(atoms)
         if current_temp > 0:
             # 计算缩放因子 lambda
@@ -174,9 +175,6 @@ class BerendsenThermostat(Thermostat):
             velocities *= lambda_scale
             for i, atom in enumerate(atoms):
                 atom.velocity = velocities[i]
-
-            # # 移除质心运动
-            # self.remove_com_motion(atoms)
 
         # 记录状态
         current_time = len(self.time_history) * dt if self.time_history else 0.0
@@ -204,7 +202,7 @@ class AndersenThermostat(Thermostat):
         super().__init__(target_temperature)
         self.collision_frequency = collision_frequency
 
-    def apply(self, atoms: List, dt: float) -> None:
+    def apply(self, cell, dt: float, potential) -> None:
         """
         应用 Andersen 恒温器以控制系统温度。
 
@@ -232,6 +230,7 @@ class AndersenThermostat(Thermostat):
         dt : float
             时间步长。
         """
+        atoms = cell.atoms
         velocities = np.array([atom.velocity for atom in atoms], dtype=np.float64)
         masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
 
@@ -263,23 +262,17 @@ class AndersenThermostat(Thermostat):
 
 class NoseHooverThermostat(Thermostat):
     """
-    Nose-Hoover 恒温器
+    Nose-Hoover 恒温器 (Python直接实现版本)
 
-    通过扩展系统哈密顿量实现温度控制，确定性方法。
-    产生正确的正则系综，保持连续的动力学轨迹。
-
-    Parameters
-    ----------
-    target_temperature : float
-        目标温度，单位K
-    time_constant : float
-        时间常数，控制热浴耦合强度。
-        较大的time_constant意味着热浴变量响应较慢，温度调整更加平缓。
-        较小的time_constant则响应较快，但可能导致温度波动。
-    Q : float, optional
-        热浴质量，控制热浴变量的惯性。
-        较大的Q值增加热浴变量的惯性，使其响应更为平缓。
-        较小的Q值则降低惯性，使热浴变量响应更为迅速。
+    使用Velocity-Verlet + Nose-Hoover对称分解的方式：
+    1. 半步更新xi
+    2. 半步速度缩放
+    3. 半步力更新速度
+    4. 更新位置
+    5. 调用potential.calculate_forces(cell)以更新力
+    6. 半步力更新速度
+    7. 半步速度缩放
+    8. 半步更新xi
     """
 
     def __init__(
@@ -287,73 +280,127 @@ class NoseHooverThermostat(Thermostat):
     ):
         super().__init__(target_temperature)
         self.time_constant = time_constant
-        self.cpp_interface = CppInterface("nose_hoover")
 
         if Q is None:
             self.Q = self._calculate_Q()
         else:
             self.Q = Q
 
+        # Nose-Hoover热浴变量xi初始化
         self.xi = np.array([0.0], dtype=np.float64)
 
     def _calculate_Q(self) -> float:
         """计算合适的热浴质量"""
         return 3.0 * self.kb * self.target_temperature * self.time_constant**2
 
-    def apply(self, atoms: List, dt: float) -> None:
+    def apply(self, cell, dt: float, potential) -> None:
         """
-        应用 Nose-Hoover 恒温器
+        应用 Nose-Hoover 恒温器 (Velocity-Verlet 对称分解实现)
 
         Parameters
         ----------
-        atoms : list
-            原子列表
+        cell : Cell
+            包含原子信息的Cell对象，可以通过cell.atoms访问原子列表
         dt : float
             时间步长
+        potential : Potential
+            用于计算力场的对象，必须实现 potential.calculate_forces(cell)
         """
+
+        atoms = cell.atoms
         num_atoms = len(atoms)
+        dof = 3 * num_atoms - 3  # 去除刚体平移自由度(如果需要，不需要则可用3*num_atoms)
 
-        # 提前分配并填充 numpy 数组以避免重复分配
-        masses = np.empty(num_atoms, dtype=np.float64)
-        velocities = np.empty(3 * num_atoms, dtype=np.float64)
-        forces = np.empty(3 * num_atoms, dtype=np.float64)
+        masses = np.array([atom.mass for atom in atoms], dtype=np.float64)
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64).flatten()
 
+        total_mass = np.sum(masses)
+
+        # 可选：移除质心运动，如果不需要可省略
+        com_velocity = np.zeros(3)
         for i, atom in enumerate(atoms):
-            masses[i] = atom.mass
-            velocities[3 * i : 3 * i + 3] = atom.velocity
-            forces[3 * i : 3 * i + 3] = atom.force
+            com_velocity += masses[i] * atom.velocity
+        com_velocity /= total_mass
+        for i in range(num_atoms):
+            velocities[3 * i : 3 * i + 3] -= com_velocity
 
-        try:
-            # 调用 C++ 实现
-            self.cpp_interface.nose_hoover(
-                dt,
-                num_atoms,
-                masses,
-                velocities,
-                forces,
-                self.xi,
-                self.Q,
-                self.target_temperature,
-            )
+        def kinetic_energy_func(masses, velocities):
+            v2 = velocities.reshape(num_atoms, 3) ** 2
+            ke = 0.5 * np.sum(masses[:, np.newaxis] * v2)
+            return ke
 
-            # 更新原子速度
-            velocities = velocities.reshape((num_atoms, 3))
-            for i, atom in enumerate(atoms):
-                atom.velocity = velocities[i]
+        # 当前动能
+        kinetic_energy = kinetic_energy_func(masses, velocities)
 
-            # # 移除质心运动
-            # self.remove_com_motion(atoms)
+        dt_half = 0.5 * dt
 
-        except Exception as e:
-            logger.error(f"Nose-Hoover thermostat error: {e}")
-            raise
+        # 计算G_xi
+        G_xi = (2.0 * kinetic_energy - dof * self.kb * self.target_temperature) / self.Q
+
+        # 半步更新xi
+        self.xi[0] += dt_half * G_xi
+
+        # 半步缩放速度
+        scale = np.exp(-self.xi[0] * dt_half)
+        velocities *= scale
+
+        # 半步力更新速度
+        for i in range(num_atoms):
+            inv_mass = 1.0 / masses[i]
+            velocities[3 * i] += dt_half * forces[3 * i] * inv_mass
+            velocities[3 * i + 1] += dt_half * forces[3 * i + 1] * inv_mass
+            velocities[3 * i + 2] += dt_half * forces[3 * i + 2] * inv_mass
+
+        # 更新位置
+        velocities_reshaped = velocities.reshape(num_atoms, 3)
+        for i, atom in enumerate(atoms):
+            atom.velocity = velocities_reshaped[i] + com_velocity
+            atom.position += atom.velocity * dt
+
+        # 重新计算力
+        potential.calculate_forces(cell)
+
+        # 获取更新后的力并再次移除质心运动（可选）
+        forces = np.array([atom.force for atom in atoms], dtype=np.float64)
+        velocities = np.array(
+            [atom.velocity for atom in atoms], dtype=np.float64
+        ).flatten()
+        com_velocity = np.zeros(3)
+        for i, atom in enumerate(atoms):
+            com_velocity += masses[i] * atom.velocity
+        com_velocity /= total_mass
+        for i in range(num_atoms):
+            velocities[3 * i : 3 * i + 3] -= com_velocity
+
+        # 第二次半步力更新速度
+        for i in range(num_atoms):
+            inv_mass = 1.0 / masses[i]
+            velocities[3 * i] += dt_half * forces[3 * i] * inv_mass
+            velocities[3 * i + 1] += dt_half * forces[3 * i + 1] * inv_mass
+            velocities[3 * i + 2] += dt_half * forces[3 * i + 2] * inv_mass
+
+        # 第二次半步缩放速度
+        velocities *= scale
+
+        # 再次计算动能和G_xi，更新xi
+        kinetic_energy = kinetic_energy_func(masses, velocities)
+        G_xi = (2.0 * kinetic_energy - dof * self.kb * self.target_temperature) / self.Q
+        self.xi[0] += dt_half * G_xi
+
+        # 更新原子速度（加回COM）
+        velocities_reshaped = velocities.reshape(num_atoms, 3)
+        for i, atom in enumerate(atoms):
+            atom.velocity = velocities_reshaped[i] + com_velocity
 
         # 记录状态
         current_time = len(self.time_history) * dt if self.time_history else 0.0
         self.record_state(atoms, current_time)
 
-        # 添加调试日志
-        logger.debug(f"Nose-Hoover xi: {self.xi}")
+        # 调试日志
+        logger.debug(f"Nose-Hoover xi: {self.xi[0]}")
         current_temp = self.get_temperature(atoms)
         logger.debug(f"Current Temperature: {current_temp}K")
 

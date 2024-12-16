@@ -29,3 +29,4 @@ from .visualization import Visualizer
 from .md_simulator import MDSimulator
 from .config import ConfigManager
 from .interfaces.cpp_interface import CppInterface
+from .finite_temp_elasticity import FiniteTempElasticityWorkflow
