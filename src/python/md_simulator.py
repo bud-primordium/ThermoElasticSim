@@ -205,6 +205,8 @@ class MDSimulator:
 
         # 完成后绘制温度演化图
         self.plot_temperature()
+        if self.ensemble == "NPT":
+            self.plot_pressure()
 
     def _record_state(self, current_time):
         """记录系统状态"""
@@ -245,6 +247,19 @@ class MDSimulator:
         plt.xlabel("Time (fs)")
         plt.ylabel("Temperature (K)")
         plt.title("Temperature Evolution")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def plot_pressure(self):
+        """绘制压力演化图"""
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.time, self.pressure, label="Pressure (GPa)")
+
+        plt.xlabel("Time (fs)")
+        plt.ylabel("Pressure (GPa)")
+        plt.title("Pressure Evolution")
         plt.legend()
         plt.grid(True)
         plt.show()
