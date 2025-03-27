@@ -1,6 +1,6 @@
-# md_simulator.py
+# 文件名: md_simulator.py
 # 作者: Gilbert Young
-# 修改日期: 2024-11-01
+# 修改日期: 2025-03-27
 # 文件描述: 实现分子动力学模拟器 MDSimulator 类，用于执行分子动力学模拟。
 
 import matplotlib.pyplot as plt

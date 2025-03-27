@@ -1,6 +1,6 @@
 # 文件名: zeroelasticity.py
 # 作者: Gilbert Young
-# 修改日期: 2024-12-06
+# 修改日期: 2025-03-27
 # 文件描述: 实现用于计算弹性常数的求解器和管理工作流（零温条件下）。
 
 """
@@ -8,6 +8,10 @@
 
 包含 ElasticConstantsSolver 和 ElasticConstantsWorkflow 类，
 用于通过应力应变数据计算材料的弹性常数并管理整个计算流程
+
+Classes:
+    ElasticConstantsSolver: 根据应力应变数据拟合弹性常数矩阵的求解器
+    ElasticConstantsWorkflow: 管理从初始优化到最终弹性常数拟合的全流程
 """
 
 import os
@@ -39,19 +43,30 @@ logger = logging.getLogger(__name__)
 
 
 class ElasticConstantsSolver:
-    """
-    根据应力应变数据拟合弹性常数矩阵的求解器（零温）
+    """根据应力应变数据拟合弹性常数矩阵的求解器（零温）
+
+    Methods
+    -------
+    solve(strains, stresses, regularization=False, alpha=1e-5)
+        通过最小二乘或Ridge回归求解弹性常数矩阵
+    perform_individual_fits(strains, stresses, save_path)
+        对每对应变和应力分量进行线性拟合并保存结果
     """
 
-    def solve(self, strains, stresses, regularization=False, alpha=1e-5):
-        """
-        通过最小二乘或Ridge回归求解弹性常数矩阵，并计算整体拟合优度
+    def solve(
+        self,
+        strains: np.ndarray,
+        stresses: np.ndarray,
+        regularization: bool = False,
+        alpha: float = 1e-5,
+    ) -> tuple[np.ndarray, float]:
+        """通过最小二乘或Ridge回归求解弹性常数矩阵，并计算整体拟合优度
 
         Parameters
         ----------
-        strains : array_like
+        strains : numpy.ndarray
             应变数据，形状为 (N, 6)
-        stresses : array_like
+        stresses : numpy.ndarray
             应力数据，形状为 (N, 6)
         regularization : bool, optional
             是否使用正则化，默认为 False
@@ -63,6 +78,16 @@ class ElasticConstantsSolver:
         tuple
             (C, r2_score)
             C为6x6弹性常数矩阵，r2_score为全局拟合的R²值
+
+        Raises
+        ------
+        ValueError
+            如果输入数组形状不匹配或不是2D数组
+
+        Notes
+        -----
+        使用numpy.linalg.lstsq进行最小二乘拟合
+        使用sklearn.linear_model.Ridge进行正则化拟合
         """
         strains = np.array(strains)
         stresses = np.array(stresses)
@@ -91,9 +116,10 @@ class ElasticConstantsSolver:
         logger.debug(f"Overall R^2 score for elastic constants fitting: {r2_value:.6f}")
         return C, r2_value
 
-    def perform_individual_fits(self, strains, stresses, save_path):
-        """
-        对每一对应变和应力分量进行线性拟合，并保存拟合结果。
+    def perform_individual_fits(
+        self, strains: np.ndarray, stresses: np.ndarray, save_path: str
+    ) -> None:
+        """对每一对应变和应力分量进行线性拟合，并保存拟合结果
 
         Parameters
         ----------
@@ -107,6 +133,12 @@ class ElasticConstantsSolver:
         Returns
         -------
         None
+
+        Notes
+        -----
+        结果文件包含以下列：
+        Deformation_Type, Dependent_Variable, Independent_Variable,
+        Slope, Intercept, R^2
         """
         logger.info(
             "Performing individual linear fits for each stress-strain component."
@@ -163,24 +195,51 @@ class ElasticConstantsSolver:
 
 
 class ElasticConstantsWorkflow:
-    """
-    管理从初始优化、形变、应力-应变数据采集到最终弹性常数拟合和保存的全流程类。
-    Parameters
+    """管理从初始优化到最终弹性常数拟合的全流程类
+
+    Attributes
     ----------
     cell : Cell
         晶胞对象
     potential : Potential
         势能对象
-    delta : float, optional
-        变形大小，默认为 1e-1
-    num_steps : int, optional
-        每个应变分量的步数，默认为 10
-    optimizer_type : str, optional
-        优化器类型，支持 'GD'（梯度下降）、'BFGS'、'LBFGS'，默认为 'LBFGS'
-    optimizer_params : dict, optional
-        优化器的参数，默认为 None。若提供，将覆盖默认参数。
-    save_path : str, optional
-        保存文件的路径，默认为 './output'
+    delta : float
+        变形大小
+    num_steps : int
+        每个应变分量的步数
+    deformer : Deformer
+        变形矩阵生成器
+    stress_calculator : StressCalculator
+        应力计算器
+    strain_calculator : StrainCalculator
+        应变计算器
+    visualizer : Visualizer
+        可视化工具
+    save_path : str
+        结果保存路径
+    optimizer_type : str
+        优化器类型
+    optimizer_params : dict
+        优化器参数
+    initial_stress_tensor : numpy.ndarray
+        初始应力张量
+
+    Methods
+    -------
+    run()
+        执行完整工作流程
+    calculate_initial_stress()
+        计算初始应力
+    perform_initial_optimization()
+        执行初始结构优化
+    apply_and_optimize_deformations()
+        应用变形并优化结构
+    save_stress_strain_data(strains, stresses)
+        保存应力应变数据
+    process_deformation_visualization(strains, stresses)
+        处理变形可视化
+    fit_elastic_constants_and_save(strains, stresses)
+        拟合弹性常数并保存结果
     """
 
     def __init__(

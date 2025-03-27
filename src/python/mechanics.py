@@ -1,6 +1,6 @@
 # 文件名: mechanics.py
 # 作者: Gilbert Young
-# 修改日期: 2024-12-06
+# 修改日期: 2025-03-27
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
 import numpy as np

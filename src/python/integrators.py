@@ -1,11 +1,13 @@
 # 文件名: integrators.py
 # 作者: Gilbert Young
-# 修改日期: 2024-11-02
+# 修改日期: 2025-03-27
 # 文件描述: 实现分子动力学模拟中的积分器，包括速度 Verlet、RK4 和 MTK 积分器。
 
 import numpy as np
 from typing import Optional, List
 import logging
+from .structure import Cell
+from .potentials import Potential
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +22,23 @@ class Integrator:
         self.error_history = []
         self.initial_energy = None
 
-    def integrate(self, cell, potential, dt):
-        """应用积分器，更新晶胞和原子状态"""
+    def integrate(self, cell: Cell, potential: Potential, dt: float) -> None:
+        """应用积分器，更新晶胞和原子状态
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象，用于计算作用力
+        dt : float
+            时间步长
+
+        Raises
+        ------
+        NotImplementedError
+            如果子类没有实现该方法
+        """
         raise NotImplementedError
 
     def calculate_kinetic_energy(self, atoms: List) -> float:
@@ -30,14 +47,48 @@ class Integrator:
             0.5 * atom.mass * np.dot(atom.velocity, atom.velocity) for atom in atoms
         )
 
-    def calculate_total_energy(self, cell, potential) -> float:
-        """计算系统总能量"""
+    def calculate_total_energy(self, cell: Cell, potential: Potential) -> float:
+        """计算系统总能量
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象
+
+        Returns
+        -------
+        float
+            系统总能量(动能+势能)，单位为eV
+        """
         kinetic = self.calculate_kinetic_energy(cell.atoms)
         potential_energy = potential.calculate_energy(cell)
         return kinetic + potential_energy
 
-    def monitor_energy_conservation(self, cell, potential, current_time: float):
-        """监控能量守恒情况"""
+    def monitor_energy_conservation(
+        self, cell: Cell, potential: Potential, current_time: float
+    ) -> float:
+        """监控能量守恒情况
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象
+        current_time : float
+            当前模拟时间
+
+        Returns
+        -------
+        float
+            相对能量误差
+
+        Notes
+        -----
+        当相对能量误差超过1e-3时会记录警告日志
+        """
         current_energy = self.calculate_total_energy(cell, potential)
 
         if self.initial_energy is None:
@@ -61,8 +112,25 @@ class Integrator:
 
         return relative_error
 
-    def suggest_timestep(self, cell, potential) -> float:
-        """基于系统特性建议时间步长"""
+    def suggest_timestep(self, cell: Cell, potential: Potential) -> float:
+        """基于系统特性建议时间步长
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象
+
+        Returns
+        -------
+        float
+            建议的时间步长，单位为fs
+
+        Notes
+        -----
+        时间步长基于系统最高频率周期的1/20计算
+        """
         # 计算系统最高频率（基于力常数的近似）
         max_frequency = self._estimate_max_frequency(cell, potential)
 
@@ -71,8 +139,25 @@ class Integrator:
 
         return suggested_dt
 
-    def _estimate_max_frequency(self, cell, potential) -> float:
-        """估算系统最高频率"""
+    def _estimate_max_frequency(self, cell: Cell, potential: Potential) -> float:
+        """估算系统最高频率
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象
+
+        Returns
+        -------
+        float
+            估算的最高频率，单位为fs^-1
+
+        Notes
+        -----
+        使用有限差分方法近似计算力常数矩阵
+        """
         # 计算力常数矩阵的近似
         # 这里使用简单的有限差分方法
         epsilon = 1e-5
@@ -121,9 +206,8 @@ class VelocityVerletIntegrator(Integrator):
         super().__init__()
         self.name = "Velocity Verlet"
 
-    def integrate(self, cell, potential, dt):
-        """
-        使用速度Verlet算法进行分子动力学积分
+    def integrate(self, cell: Cell, potential: Potential, dt: float) -> None:
+        """使用速度Verlet算法进行分子动力学积分
 
         Parameters
         ----------
@@ -132,7 +216,22 @@ class VelocityVerletIntegrator(Integrator):
         potential : Potential
             势能对象，用于计算作用力
         dt : float
-            时间步长
+            时间步长，单位为fs
+
+        Raises
+        ------
+        RuntimeError
+            如果积分过程中出现严重错误
+        Exception
+            如果其他未捕获的异常发生
+
+        Notes
+        -----
+        该方法执行标准的Velocity Verlet积分步骤：
+        1. 速度更新半步
+        2. 位置更新整步
+        3. 计算新力
+        4. 速度再更新半步
         """
         try:
             atoms = cell.atoms
@@ -198,27 +297,51 @@ class VelocityVerletIntegrator(Integrator):
 
 
 class MTKIntegrator(Integrator):
-    """
-    Martyna-Tobias-Klein (MTK) 积分器实现
+    """Martyna-Tobias-Klein (MTK) 积分器实现
 
     该积分器专门设计用于NPT系综，可以正确处理热浴和压浴的耦合。
     使用多时间尺度积分方案，确保系统的哈密顿量守恒。
 
-    Parameters
+    Attributes
     ----------
     thermostat : Optional[Thermostat]
         恒温器对象
     barostat : Optional[Barostat]
         恒压器对象
     n_chains : int
-        Nose-Hoover链的长度，默认为3
+        Nose-Hoover链的长度
     n_yoshida : int
-        Yoshida积分器的阶数，默认为4
+        Yoshida积分器的阶数
+    w : numpy.ndarray
+        Yoshida积分器权重系数
+
+    Methods
+    -------
+    integrate(cell, potential, dt)
+        执行MTK积分步骤
     """
 
     def __init__(
         self, thermostat=None, barostat=None, n_chains: int = 3, n_yoshida: int = 4
-    ):
+    ) -> None:
+        """初始化MTK积分器
+
+        Parameters
+        ----------
+        thermostat : Optional[Thermostat]
+            恒温器对象
+        barostat : Optional[Barostat]
+            恒压器对象
+        n_chains : int, optional
+            Nose-Hoover链的长度 (默认: 3)
+        n_yoshida : int, optional
+            Yoshida积分器的阶数 (默认: 4)
+
+        Raises
+        ------
+        ValueError
+            如果n_yoshida不是4
+        """
         self.thermostat = thermostat
         self.barostat = barostat
         self.n_chains = n_chains
@@ -232,9 +355,8 @@ class MTKIntegrator(Integrator):
         else:
             raise ValueError("Currently only 4th order Yoshida integrator is supported")
 
-    def integrate(self, cell, potential, dt):
-        """
-        执行MTK积分
+    def integrate(self, cell: Cell, potential: Potential, dt: float) -> None:
+        """执行MTK积分步骤
 
         Parameters
         ----------
@@ -243,7 +365,24 @@ class MTKIntegrator(Integrator):
         potential : Potential
             势能对象
         dt : float
-            时间步长
+            时间步长，单位为fs
+
+        Raises
+        ------
+        Exception
+            如果积分过程中出现错误
+
+        Notes
+        -----
+        该方法执行多时间尺度的MTK积分步骤：
+        1. 更新热浴变量（1/2步）
+        2. 更新压浴变量（1/4步）
+        3. 更新粒子动量（1/2步）
+        4. 更新粒子位置和晶胞参数（1步）
+        5. 计算新的力
+        6. 更新粒子动量（1/2步）
+        7. 更新压浴变量（1/4步）
+        8. 更新热浴变量（1/2步）
         """
         try:
             # 多时间尺度积分

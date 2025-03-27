@@ -1,15 +1,20 @@
 # 文件名: structure.py
 # 作者: Gilbert Young
-# 修改日期: 2024-12-06
+# 修改日期: 2025-03-27
 # 文件描述: 提供原子和晶胞类，用于分子动力学模拟中的结构表示和操作。
 
 """
 结构模块
 
 包含 Atom 和 Cell 类，用于描述分子动力学模拟中的原子和晶胞结构
+
+Classes:
+    Atom: 表示单个原子，包含位置、速度和质量等属性
+    Cell: 表示晶胞结构，包含晶格矢量和原子列表
 """
 
 import numpy as np
+from typing import Optional  # 用于类型注解
 from .utils import AMU_TO_EVFSA2
 import logging
 from .mechanics import StressCalculator
@@ -45,7 +50,14 @@ class Atom:
         作用在原子上的力
     """
 
-    def __init__(self, id, symbol, mass_amu, position, velocity=None):
+    def __init__(
+        self,
+        id: int,
+        symbol: str,
+        mass_amu: float,
+        position: np.ndarray,
+        velocity: Optional[np.ndarray] = None,
+    ) -> None:
         self.id = id
         self.symbol = symbol
         self.mass_amu = mass_amu  # 保留原始质量
@@ -58,16 +70,44 @@ class Atom:
         )
         self.force = np.zeros(3, dtype=np.float64)
 
-    def update_position(self, delta_r):
-        """更新原子的位置"""
+    def update_position(self, delta_r: np.ndarray) -> None:
+        """更新原子的位置
+
+        Parameters
+        ----------
+        delta_r : numpy.ndarray
+            位置增量 (3D 笛卡尔坐标)
+
+        Raises
+        ------
+        ValueError
+            如果delta_r不是3D向量
+        """
         self.position += delta_r
 
-    def update_velocity(self, delta_v):
-        """更新原子的速度"""
+    def update_velocity(self, delta_v: np.ndarray) -> None:
+        """更新原子的速度
+
+        Parameters
+        ----------
+        delta_v : numpy.ndarray
+            速度增量 (3D 笛卡尔坐标)
+
+        Raises
+        ------
+        ValueError
+            如果delta_v不是3D向量
+        """
         self.velocity += delta_v
 
-    def copy(self):
-        """创建 Atom 的深拷贝"""
+    def copy(self) -> "Atom":
+        """创建 Atom 的深拷贝
+
+        Returns
+        -------
+        Atom
+            新的Atom对象，包含当前原子的所有属性的副本
+        """
         return Atom(
             id=self.id,
             symbol=self.symbol,
@@ -104,7 +144,9 @@ class Cell:
         晶格矢量是否被锁定
     """
 
-    def __init__(self, lattice_vectors, atoms, pbc_enabled=True):
+    def __init__(
+        self, lattice_vectors: np.ndarray, atoms: list["Atom"], pbc_enabled: bool = True
+    ) -> None:
         # 验证晶格向量
         if not self._validate_lattice_vectors(lattice_vectors):
             raise ValueError("Invalid lattice vectors")
@@ -123,8 +165,26 @@ class Cell:
 
         self.stress_calculator = StressCalculator()
 
-    def _validate_lattice_vectors(self, lattice_vectors):
-        """验证晶格向量的有效性"""
+    def _validate_lattice_vectors(self, lattice_vectors: np.ndarray) -> bool:
+        """验证晶格向量的有效性
+
+        Parameters
+        ----------
+        lattice_vectors : numpy.ndarray
+            待验证的晶格向量矩阵
+
+        Returns
+        -------
+        bool
+            如果晶格向量有效返回True，否则返回False
+
+        Notes
+        -----
+        检查内容包括：
+        1. 是否为3x3矩阵
+        2. 是否可逆
+        3. 体积是否为正
+        """
         if not isinstance(lattice_vectors, np.ndarray):
             lattice_vectors = np.array(lattice_vectors)
 
@@ -144,8 +204,14 @@ class Cell:
 
         return True
 
-    def _validate_pbc_conditions(self):
-        """验证周期性边界条件的合理性"""
+    def _validate_pbc_conditions(self) -> None:
+        """验证周期性边界条件的合理性
+
+        Raises
+        ------
+        ValueError
+            如果盒子尺寸非正
+        """
         if not self.pbc_enabled:
             return
 
@@ -170,26 +236,59 @@ class Cell:
                         f"Atoms {atom1.id} and {atom2.id} are too close: {dist:.3f} Å"
                     )
 
-    def calculate_volume(self):
-        """计算晶胞的体积"""
+    def calculate_volume(self) -> float:
+        """计算晶胞的体积
+
+        Returns
+        -------
+        float
+            晶胞体积，单位为Å^3
+        """
         return np.linalg.det(self.lattice_vectors)
 
-    def get_box_lengths(self):
-        """返回模拟盒子在 x、y、z 方向的长度"""
+    def get_box_lengths(self) -> np.ndarray:
+        """返回模拟盒子在 x、y、z 方向的长度
+
+        Returns
+        -------
+        numpy.ndarray
+            包含三个方向长度的数组，单位为Å
+        """
         box_lengths = np.linalg.norm(self.lattice_vectors, axis=1)
         return box_lengths
 
-    def calculate_stress_tensor(self, potential):
-        """计算应力张量"""
+    def calculate_stress_tensor(self, potential) -> np.ndarray:
+        """计算应力张量
+
+        Parameters
+        ----------
+        potential : Potential
+            用于计算应力的势能对象
+
+        Returns
+        -------
+        numpy.ndarray
+            3x3应力张量矩阵，单位为eV/Å^3
+        """
         return self.stress_calculator.compute_stress(self, potential)
 
-    def lock_lattice_vectors(self):
-        """锁定晶格向量，防止在优化过程中被修改"""
+    def lock_lattice_vectors(self) -> None:
+        """锁定晶格向量，防止在优化过程中被修改
+
+        Notes
+        -----
+        锁定后，晶格向量将不能被修改，直到调用unlock_lattice_vectors()
+        """
         self.lattice_locked = True
         logger.debug("Lattice vectors have been locked.")
 
-    def unlock_lattice_vectors(self):
-        """解锁晶格向量，允许在需要时修改"""
+    def unlock_lattice_vectors(self) -> None:
+        """解锁晶格向量，允许在需要时修改
+
+        Notes
+        -----
+        解锁后，晶格向量可以被修改，直到再次调用lock_lattice_vectors()
+        """
         self.lattice_locked = False
         logger.debug("Lattice vectors have been unlocked.")
 

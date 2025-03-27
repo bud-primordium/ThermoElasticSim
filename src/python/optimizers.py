@@ -1,47 +1,84 @@
 # 文件名: optimizers.py
 # 作者: Gilbert Young
-# 修改日期: 2024-10-28
-# 文件描述: 实现梯度下降和 BFGS 优化器。
+# 修改日期: 2025-03-27
+# 文件描述: 提供多种优化算法用于原子结构优化
 
 """
-优化器模块
+分子动力学模拟优化器模块
 
-包含 GradientDescentOptimizer 和 BFGSOptimizer，用于分子动力学模拟优化
+提供多种优化算法用于原子结构优化，包括：
+- GradientDescentOptimizer: 带动量项的梯度下降
+- BFGSOptimizer: 基于scipy.optimize.minimize的BFGS
+- LBFGSOptimizer: 改进的L-BFGS(有限内存BFGS)
 """
 
 import numpy as np
 from scipy.optimize import minimize
 import logging
+from .structure import Cell
+from .potentials import Potential
 
 logger = logging.getLogger(__name__)
 
 
 class Optimizer:
-    """
-    优化器基类，定义优化方法的接口
+    """优化器抽象基类，定义优化方法的接口
+
+    子类需要实现optimize()方法来执行具体的优化算法。
+
+    Methods
+    -------
+    optimize(cell, potential)
+        执行优化算法，需子类实现
     """
 
-    def optimize(self, cell, potential):
-        """执行优化，需子类实现"""
+    def optimize(self, cell: Cell, potential: Potential) -> tuple[bool, list]:
+        """执行优化算法
+
+        Parameters
+        ----------
+        cell : Cell
+            晶胞对象
+        potential : Potential
+            势能函数
+
+        Returns
+        -------
+        tuple[bool, list]
+            返回(是否收敛, 轨迹数据)
+
+        Notes
+        -----
+        轨迹数据包含每步的:
+        - 原子位置
+        - 晶胞体积
+        - 晶格矢量
+        """
         raise NotImplementedError
 
 
 class GradientDescentOptimizer(Optimizer):
-    """
-    带动量项的梯度下降优化器
+    """带动量项的梯度下降优化器
 
     Parameters
     ----------
-    max_steps : int
-        最大迭代步数
-    tol : float
-        力的收敛阈值
-    step_size : float
-        更新步长
-    energy_tol : float
-        能量变化的收敛阈值
-    beta : float
-        动量项的系数，范围在 [0, 1)
+    maxiter : int, optional
+        最大迭代步数，默认10000
+    tol : float, optional
+        力收敛阈值，默认1e-3 eV/Å
+    step_size : float, optional
+        步长，默认1e-3 Å
+    energy_tol : float, optional
+        能量变化阈值，默认1e-4 eV
+    beta : float, optional
+        动量系数[0,1)，默认0.9
+
+    Attributes
+    ----------
+    converged : bool
+        优化是否收敛的标志
+    trajectory : list
+        记录优化轨迹的列表
     """
 
     def __init__(
@@ -56,17 +93,28 @@ class GradientDescentOptimizer(Optimizer):
         self.converged = False  # 收敛标志
         self.trajectory = []  # 记录轨迹数据
 
-    def optimize(self, cell, potential):
-        """
-        执行带动量项的梯度下降优化
+    def optimize(self, cell: Cell, potential: Potential) -> tuple[bool, list[dict]]:
+        """执行带动量项的梯度下降优化
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象
+            晶胞对象
         potential : Potential
-            势能对象，用于计算作用力和能量
+            势能函数
+
+        Returns
+        -------
+        tuple[bool, list[dict]]
+            返回(是否收敛, 轨迹数据字典列表)
+
+        Notes
+        -----
+        收敛条件:
+        - 最大原子力 < tol
+        - 能量变化 < energy_tol
         """
+
         logger = logging.getLogger(__name__)
         atoms = cell.atoms
         potential.calculate_forces(cell)
@@ -176,15 +224,26 @@ class GradientDescentOptimizer(Optimizer):
 
 
 class BFGSOptimizer(Optimizer):
-    """
-    BFGS 优化器，基于 scipy.optimize.minimize
+    """BFGS准牛顿优化器
 
     Parameters
     ----------
-    tol : float
-        收敛阈值
-    maxiter : int
-        最大迭代步数
+    tol : float, optional
+        收敛阈值，默认1e-6
+    maxiter : int, optional
+        最大迭代步数，默认10000
+
+    Attributes
+    ----------
+    converged : bool
+        优化是否收敛的标志
+    trajectory : list
+        记录优化轨迹的列表
+
+    Notes
+    -----
+    使用scipy.optimize.minimize的BFGS实现
+    适用于中等规模系统优化
     """
 
     def __init__(self, tol=1e-6, maxiter=10000):
@@ -194,16 +253,20 @@ class BFGSOptimizer(Optimizer):
         self.converged = False
         self.trajectory = []  # 记录轨迹数据
 
-    def optimize(self, cell, potential):
-        """
-        执行 BFGS 优化
+    def optimize(self, cell: Cell, potential: Potential) -> tuple[bool, list[dict]]:
+        """执行 BFGS 优化
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象
+            晶胞对象
         potential : Potential
-            势能对象，用于计算作用力和能量
+            势能函数
+
+        Returns
+        -------
+        tuple[bool, list[dict]]
+            返回(是否收敛, 轨迹数据字典列表)
         """
         logger = logging.getLogger(__name__)
 
@@ -292,21 +355,32 @@ class BFGSOptimizer(Optimizer):
 
 
 class LBFGSOptimizer(Optimizer):
-    """
-    改进的 L-BFGS 优化器
+    """L-BFGS优化器(有限内存BFGS)
 
     Parameters
     ----------
     ftol : float, optional
-        函数值相对变化的收敛阈值，默认为 1e-6
+        函数收敛阈值，默认1e-6
     gtol : float, optional
-        梯度（力）的收敛阈值，默认为 1e-5
+        梯度收敛阈值，默认1e-5
     maxcor : int, optional
-        存储的向量数量，默认为 10
+        存储向量数，默认10
     maxls : int, optional
-        每次迭代中线搜索的最大步数，默认为 20
+        线搜索步数，默认20
     maxiter : int, optional
-        最大迭代步数，默认为 10000
+        最大迭代步数，默认10000
+
+    Attributes
+    ----------
+    converged : bool
+        优化是否收敛的标志
+    trajectory : list
+        记录优化轨迹的列表
+
+    Notes
+    -----
+    相比BFGS内存效率更高
+    适合大规模系统优化
     """
 
     def __init__(
@@ -327,21 +401,20 @@ class LBFGSOptimizer(Optimizer):
         self.converged = False
         self.trajectory = []
 
-    def optimize(self, cell, potential):
-        """
-        执行 L-BFGS 优化
+    def optimize(self, cell: Cell, potential: Potential) -> tuple[bool, list[dict]]:
+        """执行 L-BFGS 优化
 
         Parameters
         ----------
         cell : Cell
-            包含原子的晶胞对象
+            晶胞对象
         potential : Potential
-            势能对象，用于计算作用力和能量
+            势能函数
 
         Returns
         -------
-        tuple
-            (converged: bool, trajectory: list)
+        tuple[bool, list[dict]]
+            返回(是否收敛, 轨迹数据字典列表)
         """
         logger = logging.getLogger(__name__)
 

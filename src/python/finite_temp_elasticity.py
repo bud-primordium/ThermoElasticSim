@@ -1,11 +1,13 @@
 # 文件名: finite_temp_elasticity.py
 # 作者: Gilbert Young
-# 修改日期: 2024-12-06
+# 修改日期: 2025-03-27
 # 文件描述: 实现有限温条件下的弹性常数计算工作流。
 
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from .md_simulator import MDSimulator
+from .structure import Cell
 from .thermostats import NoseHooverChainThermostat, AndersenThermostat
 from .barostats import (
     ParrinelloRahmanHooverBarostat,
@@ -23,7 +25,36 @@ logger = logging.getLogger(__name__)
 
 
 class FiniteTempElasticityWorkflow:
-    """有限温弹性常数计算工作流"""
+    """有限温弹性常数计算工作流
+
+    实现完整的有限温度下弹性常数计算流程，包括：
+    - NPT系综平衡
+    - NVT系综应力采样
+    - 弹性常数拟合
+
+    Parameters
+    ----------
+    cell : Cell
+        初始晶胞对象
+    potential : Potential
+        势能函数对象
+    temperature : float
+        目标温度(K)
+    integrator : Integrator
+        积分器对象
+    deformation_delta : float, optional
+        最大变形量，默认为0.1
+    num_steps : int, optional
+        变形步数，默认为10
+    npt_equilibration_steps : int, optional
+        NPT平衡步数，默认为10000
+    nvt_sampling_steps : int, optional
+        NVT采样步数，默认为500000
+    time_step : int, optional
+        时间步长(fs)，默认为1
+    save_path : str, optional
+        结果保存路径，默认为当前时间戳命名的目录
+    """
 
     def __init__(
         self,
@@ -68,8 +99,19 @@ class FiniteTempElasticityWorkflow:
 
         self.barostat = AndersenBarostat(0, 1, 300)
 
-    def run_npt_equilibration(self, cell):
-        """在NPT系综下进行平衡"""
+    def run_npt_equilibration(self, cell) -> Cell:
+        """在NPT系综下进行平衡
+
+        Parameters
+        ----------
+        cell : Cell
+            待平衡的晶胞对象
+
+        Returns
+        -------
+        Cell
+            平衡后的晶胞对象
+        """
         simulator = MDSimulator(
             cell=cell,
             potential=self.potential,
@@ -105,8 +147,19 @@ class FiniteTempElasticityWorkflow:
 
         return cell
 
-    def run_nvt_sampling(self, cell):
-        """在NVT系综下采样应力"""
+    def run_nvt_sampling(self, cell) -> Tuple[np.ndarray, np.ndarray]:
+        """在NVT系综下采样应力
+
+        Parameters
+        ----------
+        cell : Cell
+            待采样的晶胞对象
+
+        Returns
+        -------
+        tuple
+            (avg_stress: 平均应力张量(3x3), std_stress: 应力标准差(3x3))
+        """
         simulator = MDSimulator(
             cell=cell,
             potential=self.potential,
@@ -142,8 +195,20 @@ class FiniteTempElasticityWorkflow:
 
         return avg_stress, std_stress
 
-    def calculate_elastic_constants(self):
-        """计算弹性常数的主流程"""
+    def calculate_elastic_constants(self) -> np.ndarray:
+        """计算弹性常数的主流程
+
+        执行完整工作流：
+        1. 生成变形矩阵
+        2. 对每个变形进行NPT平衡
+        3. 在NVT系综下采样应力
+        4. 使用最小二乘法拟合弹性常数
+
+        Returns
+        -------
+        np.ndarray
+            6x6弹性常数矩阵(GPa)
+        """
         strain_data = []
         stress_data = []
         stress_std_data = []

@@ -1,6 +1,6 @@
 # 文件名: thermostats.py
 # 作者: Gilbert Young
-# 修改日期: 2024-11-01
+# 修改日期: 2025-03-27
 # 文件描述: 实现分子动力学模拟中的各种恒温器。
 
 import numpy as np
