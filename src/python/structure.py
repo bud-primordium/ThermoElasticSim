@@ -1,6 +1,6 @@
 # 文件名: structure.py
 # 作者: Gilbert Young
-# 修改日期: 2025-03-27
+# 修改日期: 2025-03-30
 # 文件描述: 提供原子和晶胞类，用于分子动力学模拟中的结构表示和操作。
 
 """
@@ -18,9 +18,18 @@ from typing import Optional  # 用于类型注解
 from .utils import AMU_TO_EVFSA2
 import logging
 from .mechanics import StressCalculator
+from numba import jit
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
+
+
+# 在类外部定义可JIT优化的函数
+@jit(nopython=True)
+def _apply_pbc_numba(positions, lattice_inv, lattice_vectors):
+    fractional = np.dot(positions, lattice_inv)
+    fractional = fractional % 1.0
+    return np.dot(fractional, lattice_vectors.T)
 
 
 class Atom:
@@ -70,19 +79,14 @@ class Atom:
         )
         self.force = np.zeros(3, dtype=np.float64)
 
-    def update_position(self, delta_r: np.ndarray) -> None:
-        """更新原子的位置
+    def update_position(self, delta_r):
+        """更新原子的位置"""
+        if not isinstance(delta_r, np.ndarray):
+            delta_r = np.array(delta_r, dtype=np.float64)
 
-        Parameters
-        ----------
-        delta_r : numpy.ndarray
-            位置增量 (3D 笛卡尔坐标)
+        if delta_r.shape != (3,):
+            raise ValueError(f"位置增量必须是3D向量，当前形状: {delta_r.shape}")
 
-        Raises
-        ------
-        ValueError
-            如果delta_r不是3D向量
-        """
         self.position += delta_r
 
     def update_velocity(self, delta_v: np.ndarray) -> None:
@@ -391,7 +395,9 @@ class Cell:
         fractional[(fractional < tol) & (fractional >= 0.0)] = tol
 
         # 转回笛卡尔坐标
-        new_positions = np.dot(fractional, self.lattice_vectors.T)
+        new_positions = _apply_pbc_numba(
+            positions, self.lattice_inv, self.lattice_vectors
+        )
 
         if not np.all(np.isfinite(new_positions)):
             raise ValueError(
@@ -490,8 +496,11 @@ class Cell:
         numpy.ndarray
             最小镜像位移向量
         """
+        if not isinstance(displacement, np.ndarray):
+            displacement = np.array(displacement, dtype=np.float64)
+
         if displacement.shape != (3,):
-            raise ValueError("Displacement must be a 3-dimensional vector")
+            raise ValueError(f"位移向量必须是3D向量，当前形状: {displacement.shape}")
 
         # 转换到分数坐标
         fractional = np.dot(displacement, self.lattice_inv)
