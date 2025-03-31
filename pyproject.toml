@@ -1,0 +1,12 @@
+[project]
+name = "ThermoElasticSim"
+version = "3.0"
+description = "热弹性模拟器"
+dependencies = ['h5py==3.12.1', 'matplotlib==3.10.1', 'nbformat==5.10.4', 'numba==0.60.0', 'numpy==2.2.4', 'pytest==8.3.5','PyYAML==6.0.2', 'scikit_learn==1.6.1', 'scipy==1.15.2', 'setuptools==75.1.0']
+
+[tool."pytest.ini_options"]
+norecursedirs = ["tests/archive"]
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
