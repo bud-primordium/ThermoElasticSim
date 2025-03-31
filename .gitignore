@@ -47,6 +47,7 @@ Thumbs.db
 # # 自动生成的 Sphinx 文档
 build/
 docs/
+source/
 
 # 轨迹文件
 output/
