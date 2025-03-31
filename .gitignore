@@ -45,11 +45,11 @@ tests.txt
 Thumbs.db
 
 # # 自动生成的 Sphinx 文档
-# build/
+build/
+docs/
 
 # 轨迹文件
 output/
-output_new/
 
 # 特殊文件夹（如讲义和笔记）
 .lectures/
