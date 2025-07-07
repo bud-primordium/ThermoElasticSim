@@ -1,12 +1,68 @@
-[project]
-name = "ThermoElasticSim"
-version = "3.0"
-description = "热弹性模拟器"
-dependencies = ['h5py==3.12.1', 'matplotlib==3.10.1', 'nbformat==5.10.4', 'numba==0.60.0', 'numpy==2.2.4', 'pytest==8.3.5','PyYAML==6.0.2', 'scikit_learn==1.6.1', 'scipy==1.15.2', 'setuptools==75.1.0']
-
-[tool."pytest.ini_options"]
-norecursedirs = ["tests/archive"]
-
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "thermoelasticsim"
+version = "4.0.0"
+description = "热弹性模拟器 - 用于计算材料弹性常数的分子动力学模拟工具"
+readme = "README.md"
+license = {text = "GPL-3.0"}
+authors = [
+    {name = "Gilbert"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
+    "pyyaml>=6.0",
+    "h5py>=3.8.0",
+    "numba>=0.57.0",
+    "scikit-learn>=1.3.0",
+    "setuptools>=61.0",
+]
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=22.0",
+    "isort>=5.0",
+    "flake8>=5.0",
+    "pre-commit>=3.0",
+]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme>=1.2",
+    "numpydoc>=1.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+norecursedirs = ["tests/archive"]
+addopts = "--tb=short"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3

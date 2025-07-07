@@ -44,11 +44,6 @@ tests.txt
 .DS_Store
 Thumbs.db
 
-# # 自动生成的 Sphinx 文档
-build/
-docs/
-source/
-
 # 轨迹文件
 output/
 
@@ -56,3 +51,19 @@ output/
 .lectures/
 .notes/
 tests/archive
+
+# Workspace files (not tracked)
+.workspace/
+CLAUDE.local.md
+.claude/
+
+# Additional build artifacts
+*.dll
+*.dylib
+
+# Testing
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
