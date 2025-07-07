@@ -56,6 +56,7 @@ tests/archive
 # Workspace files (not tracked)
 .workspace/
 CLAUDE.local.md
+GEMINI.md
 .claude/
 
 # Additional build artifacts
