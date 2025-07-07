@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from sklearn.metrics import r2_score
 
-from .structure import Cell
+from thermoelasticsim.core.structure import Cell
 
 # 配置日志记录
 logging.basicConfig(

@@ -24,11 +24,11 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 from sklearn.linear_model import Ridge
 
-from .mechanics import StrainCalculator, StressCalculator
-from .deformation import Deformer
-from .optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
-from .utils import TensorConverter, EV_TO_GPA
-from .visualization import Visualizer
+from thermoelasticsim.elastic.mechanics import StrainCalculator, StressCalculator
+from thermoelasticsim.elastic.deformation import Deformer
+from thermoelasticsim.utils.optimizers import GradientDescentOptimizer, BFGSOptimizer, LBFGSOptimizer
+from thermoelasticsim.utils.utils import TensorConverter, EV_TO_GPA
+from thermoelasticsim.utils.visualization import Visualizer
 from datetime import datetime
 
 # 获取当前时间字符串

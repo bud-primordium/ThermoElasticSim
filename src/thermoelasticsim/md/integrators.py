@@ -6,8 +6,8 @@
 import numpy as np
 from typing import Optional, List
 import logging
-from .structure import Cell
-from .potentials import Potential
+from thermoelasticsim.core.structure import Cell
+from thermoelasticsim.potentials.potentials import Potential
 
 logger = logging.getLogger(__name__)
 

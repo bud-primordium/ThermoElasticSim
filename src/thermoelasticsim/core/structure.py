@@ -15,9 +15,8 @@ Classes:
 
 import numpy as np
 from typing import Optional  # 用于类型注解
-from .utils import AMU_TO_EVFSA2
+from thermoelasticsim.utils.utils import AMU_TO_EVFSA2
 import logging
-from .mechanics import StressCalculator
 from numba import jit
 
 # 配置日志记录
@@ -79,38 +78,65 @@ class Atom:
         )
         self.force = np.zeros(3, dtype=np.float64)
 
-    def update_position(self, delta_r):
-        """更新原子的位置"""
-        if not isinstance(delta_r, np.ndarray):
-            delta_r = np.array(delta_r, dtype=np.float64)
-
-        if delta_r.shape != (3,):
-            raise ValueError(f"位置增量必须是3D向量，当前形状: {delta_r.shape}")
-
-        self.position += delta_r
-
-    def update_velocity(self, delta_v: np.ndarray) -> None:
-        """更新原子的速度
-
-        Parameters
-        ----------
-        delta_v : numpy.ndarray
-            速度增量 (3D 笛卡尔坐标)
-
-        Raises
-        ------
-        ValueError
-            如果delta_v不是3D向量
+    def move_by(self, displacement: np.ndarray) -> None:
+        """通过位置增量移动原子
+        
+        Args:
+            displacement: 位置增量向量，形状为(3,)
+            
+        Raises:
+            ValueError: 如果位置增量不是3D向量
+            
+        Examples:
+            >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
+            >>> atom.move_by([0.1, 0.2, 0.3])
+            >>> print(atom.position)
+            [0.1 0.2 0.3]
         """
-        self.velocity += delta_v
+        if not isinstance(displacement, np.ndarray):
+            displacement = np.array(displacement, dtype=np.float64)
+
+        if displacement.shape != (3,):
+            raise ValueError(f"位置增量必须是3D向量，当前形状: {displacement.shape}")
+
+        self.position += displacement
+
+    def accelerate_by(self, velocity_change: np.ndarray) -> None:
+        """通过速度增量改变原子速度
+
+        Args:
+            velocity_change: 速度增量向量，形状为(3,)
+
+        Raises:
+            ValueError: 如果velocity_change不是3D向量
+            
+        Examples:
+            >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
+            >>> atom.accelerate_by([0.1, 0.2, 0.3])
+            >>> print(atom.velocity)
+            [0.1 0.2 0.3]
+        """
+        if not isinstance(velocity_change, np.ndarray):
+            velocity_change = np.array(velocity_change, dtype=np.float64)
+        
+        if velocity_change.shape != (3,):
+            raise ValueError(f"速度增量必须是3D向量，当前形状: {velocity_change.shape}")
+        
+        self.velocity += velocity_change
 
     def copy(self) -> "Atom":
         """创建 Atom 的深拷贝
 
-        Returns
-        -------
-        Atom
+        Returns:
             新的Atom对象，包含当前原子的所有属性的副本
+            
+        Examples:
+            >>> atom1 = Atom(1, 'H', 1.0, [0, 0, 0])
+            >>> atom2 = atom1.copy()
+            >>> atom2.id == atom1.id
+            True
+            >>> atom2.position is atom1.position
+            False
         """
         return Atom(
             id=self.id,
@@ -151,6 +177,10 @@ class Cell:
     def __init__(
         self, lattice_vectors: np.ndarray, atoms: list["Atom"], pbc_enabled: bool = True
     ) -> None:
+        # 验证输入参数
+        if not atoms:
+            raise ValueError("原子列表不能为空")
+        
         # 验证晶格向量
         if not self._validate_lattice_vectors(lattice_vectors):
             raise ValueError("Invalid lattice vectors")
@@ -164,10 +194,13 @@ class Cell:
         # 计算最小图像所需的辅助矩阵
         self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
 
+        # 验证原子属性
+        self._validate_atoms()
+        
         # 验证周期性边界条件的合理性
         self._validate_pbc_conditions()
 
-        self.stress_calculator = StressCalculator()
+        # self.stress_calculator = StressCalculator()  # 移除循环导入
 
     def _validate_lattice_vectors(self, lattice_vectors: np.ndarray) -> bool:
         """验证晶格向量的有效性
@@ -207,6 +240,33 @@ class Cell:
             return False
 
         return True
+    
+    def _validate_atoms(self) -> None:
+        """验证原子属性的有效性
+        
+        Raises
+        ------
+        ValueError
+            如果原子属性无效
+        """
+        atom_ids = set()
+        for atom in self.atoms:
+            # 检查原子ID唯一性
+            if atom.id in atom_ids:
+                raise ValueError(f"原子ID {atom.id} 重复")
+            atom_ids.add(atom.id)
+            
+            # 检查原子质量
+            if atom.mass_amu <= 0:
+                raise ValueError(f"原子 {atom.id} 的质量必须为正数，当前: {atom.mass_amu}")
+            
+            # 检查位置向量
+            if not np.all(np.isfinite(atom.position)):
+                raise ValueError(f"原子 {atom.id} 的位置包含无效值")
+            
+            # 检查速度向量
+            if not np.all(np.isfinite(atom.velocity)):
+                raise ValueError(f"原子 {atom.id} 的速度包含无效值")
 
     def _validate_pbc_conditions(self) -> None:
         """验证周期性边界条件的合理性
@@ -274,7 +334,9 @@ class Cell:
         numpy.ndarray
             3x3应力张量矩阵，单位为eV/Å^3
         """
-        return self.stress_calculator.compute_stress(self, potential)
+        from thermoelasticsim.elastic.mechanics import StressCalculator
+        stress_calculator = StressCalculator()
+        return stress_calculator.compute_stress(self, potential)
 
     def lock_lattice_vectors(self) -> None:
         """锁定晶格向量，防止在优化过程中被修改
@@ -296,17 +358,25 @@ class Cell:
         self.lattice_locked = False
         logger.debug("Lattice vectors have been unlocked.")
 
-    def apply_deformation(self, deformation_matrix):
-        """
-        对晶胞和原子坐标施加变形矩阵F。
+    def apply_deformation(self, deformation_matrix: np.ndarray) -> None:
+        """对晶胞和原子坐标施加变形矩阵F
 
-        当晶格未锁定时：
-        1. 更新晶格矢量： L_new = F * L_old
-        2. 更新原子坐标： r_new = r_old * F^T （因为r是行向量形式表示坐标）
+        Args:
+            deformation_matrix: 3x3变形矩阵F
 
-        当晶格已锁定时：
-        仅对原子坐标施加F变形： r_new = r_old * F^T
-        不修改晶格矢量。
+        Notes:
+            当晶格未锁定时：
+            1. 更新晶格矢量： L_new = F * L_old
+            2. 更新原子坐标： r_new = r_old * F^T
+            
+            当晶格已锁定时：
+            仅对原子坐标施加F变形： r_new = r_old * F^T
+            
+        Examples:
+            >>> import numpy as np
+            >>> # 小幅变形矩阵
+            >>> F = np.array([[1.01, 0, 0], [0, 1, 0], [0, 0, 1]])
+            >>> cell.apply_deformation(F)
         """
         logger = logging.getLogger(__name__)
 
@@ -387,17 +457,11 @@ class Cell:
                 "Non-finite values in fractional coordinates during PBC application"
             )
 
-        # 对接近整数的值进行偏移，避免浮点误差
-        tol = 1e-12
+        # 应用周期性边界条件
         fractional = fractional % 1.0
-        # 将非常接近1的值强制稍微拉回
-        fractional[(fractional > 1.0 - tol) & (fractional <= 1.0)] = 1.0 - tol
-        fractional[(fractional < tol) & (fractional >= 0.0)] = tol
-
+        
         # 转回笛卡尔坐标
-        new_positions = _apply_pbc_numba(
-            positions, self.lattice_inv, self.lattice_vectors
-        )
+        new_positions = np.dot(fractional, self.lattice_vectors.T)
 
         if not np.all(np.isfinite(new_positions)):
             raise ValueError(
@@ -413,11 +477,20 @@ class Cell:
         cell_copy.lattice_locked = self.lattice_locked  # 复制锁定状态
         return cell_copy
 
-    def calculate_temperature(self):
-        """
-        计算当前系统的温度，扣除质心运动。
-        对于多个原子：dof = 3*N - 3
-        对于单个原子：dof = 3*N （不扣除质心自由度）
+    def calculate_temperature(self) -> float:
+        """计算当前系统的温度，扣除质心运动
+
+        Returns:
+            系统温度，单位为K
+            
+        Notes:
+            对于多个原子：dof = 3*N - 3
+            对于单个原子：dof = 3*N
+            
+        Examples:
+            >>> cell = Cell(lattice_vectors, atoms)
+            >>> temp = cell.calculate_temperature()
+            >>> print(f"系统温度: {temp:.2f} K")
         """
 
         kb = 8.617333262e-5  # eV/K
@@ -449,14 +522,15 @@ class Cell:
         temperature = 2.0 * kinetic / (dof * kb)
         return temperature
 
-    def get_positions(self):
-        """
-        获取所有原子的位置信息
+    def get_positions(self) -> np.ndarray:
+        """获取所有原子的位置信息
 
-        Returns
-        -------
-        numpy.ndarray
-            原子位置数组，形状为 (num_atoms, 3)
+        Returns:
+            原子位置数组，形状为(num_atoms, 3)
+            
+        Examples:
+            >>> positions = cell.get_positions()
+            >>> print(f"原子数量: {positions.shape[0]}")
         """
         return np.array([atom.position for atom in self.atoms], dtype=np.float64)
 
@@ -512,14 +586,9 @@ class Cell:
 
         # 应用最小镜像约定
         fractional -= np.round(fractional)
-
-        # 二次检查数值范围与稳定性
-        # 若仍有分量大于0.5或小于-0.5，视为数值不稳定，进行修正
-        if np.any(np.abs(fractional) > 0.5 + 1e-10):
-            logger.warning(
-                "Possible numerical instability in minimum image convention, applying correction."
-            )
-            fractional = np.clip(fractional, -0.5, 0.5)
+        
+        # 确保数值稳定性
+        fractional = np.clip(fractional, -0.5, 0.5)
 
         # 转回笛卡尔坐标
         min_image_vector = np.dot(self.lattice_vectors, fractional)
@@ -556,7 +625,12 @@ class Cell:
         # 获取原始原子的分数坐标
         positions = np.array([atom.position for atom in self.atoms])
         # 确保正确的矩阵运算顺序
-        fractional = np.dot(positions, np.linalg.inv(lattice_vectors))
+        try:
+            lattice_inv = np.linalg.inv(lattice_vectors.T)
+            fractional = np.dot(positions, lattice_inv)
+        except np.linalg.LinAlgError:
+            raise ValueError("晶格矢量不可逆，无法构建超胞")
+        
         # 确保分数坐标在 [0,1) 范围内
         fractional = fractional % 1.0
 

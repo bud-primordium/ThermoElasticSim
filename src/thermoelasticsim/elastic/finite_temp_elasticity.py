@@ -6,17 +6,17 @@
 from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-from .md_simulator import MDSimulator
-from .structure import Cell
-from .thermostats import NoseHooverChainThermostat, AndersenThermostat
-from .barostats import (
+from thermoelasticsim.md.md_simulator import MDSimulator
+from thermoelasticsim.core.structure import Cell
+from thermoelasticsim.md.thermostats import NoseHooverChainThermostat, AndersenThermostat
+from thermoelasticsim.md.barostats import (
     ParrinelloRahmanHooverBarostat,
     BerendsenBarostat,
     AndersenBarostat,
 )
-from .deformation import Deformer
-from .mechanics import StressCalculator
-from .utils import TensorConverter, EV_TO_GPA
+from thermoelasticsim.elastic.deformation import Deformer
+from thermoelasticsim.elastic.mechanics import StressCalculator
+from thermoelasticsim.utils.utils import TensorConverter, EV_TO_GPA
 import logging
 import os
 from datetime import datetime

@@ -13,6 +13,7 @@ ENV/
 env/
 env.bak/
 venv.bak/
+.venv/  # uv 虚拟环境
 
 # # Fortran 编译文件
 # *.o

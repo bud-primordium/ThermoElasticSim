@@ -15,8 +15,8 @@
 import numpy as np
 from scipy.optimize import minimize
 import logging
-from .structure import Cell
-from .potentials import Potential
+from thermoelasticsim.core.structure import Cell
+from thermoelasticsim.potentials.potentials import Potential
 
 logger = logging.getLogger(__name__)
 

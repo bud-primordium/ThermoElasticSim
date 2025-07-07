@@ -6,10 +6,10 @@
 import numpy as np
 import logging
 from typing import List, Dict, Optional
-from .interfaces.cpp_interface import CppInterface
+from thermoelasticsim.interfaces.cpp_interface import CppInterface
 import ctypes
 from numpy.ctypeslib import ndpointer
-from .utils import KB_IN_EV
+from thermoelasticsim.utils.utils import KB_IN_EV
 
 # 配置日志记录
 logger = logging.getLogger(__name__)

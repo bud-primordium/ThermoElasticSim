@@ -4,9 +4,9 @@
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
 import numpy as np
-from .utils import TensorConverter
+from thermoelasticsim.utils.utils import TensorConverter
 from typing import Dict
-from .interfaces.cpp_interface import CppInterface
+from thermoelasticsim.interfaces.cpp_interface import CppInterface
 import logging
 
 import logging

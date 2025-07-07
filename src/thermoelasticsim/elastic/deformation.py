@@ -15,7 +15,7 @@ Classes:
 import numpy as np
 from typing import List, Optional
 import logging
-from .structure import Cell
+from thermoelasticsim.core.structure import Cell
 
 
 class Deformer:

@@ -15,9 +15,9 @@ Classes:
 """
 
 import numpy as np
-from .utils import NeighborList
-from .interfaces.cpp_interface import CppInterface
-from .structure import Cell
+from thermoelasticsim.utils.utils import NeighborList
+from thermoelasticsim.interfaces.cpp_interface import CppInterface
+from thermoelasticsim.core.structure import Cell
 import logging
 
 logger = logging.getLogger(__name__)
