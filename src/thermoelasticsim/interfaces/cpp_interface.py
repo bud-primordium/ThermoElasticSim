@@ -45,11 +45,22 @@ class CppInterface:
             lib_extension = ".so"
             lib_prefix = "lib"
 
-        # 获取当前脚本文件的目录
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        # 使用脚本文件目录来构造 lib_path
+        # --- 健壮的路径查找 ---
+        # 从当前文件位置开始，向上查找项目根目录（以 pyproject.toml 为标志）
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = None
+        while current_dir != os.path.dirname(current_dir): # 循环直到文件系统的根目录
+            if "pyproject.toml" in os.listdir(current_dir):
+                project_root = current_dir
+                break
+            current_dir = os.path.dirname(current_dir)
+
+        if project_root is None:
+            raise FileNotFoundError("无法定位项目根目录 (未找到 pyproject.toml)。")
+
+        # 从项目根目录构建库文件的绝对路径
         lib_path = os.path.join(
-            script_dir, "../../lib", lib_prefix + lib_name + lib_extension
+            project_root, "src", "thermoelasticsim", "lib", lib_prefix + lib_name + lib_extension
         )
 
         if not os.path.exists(lib_path):

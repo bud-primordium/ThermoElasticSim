@@ -72,3 +72,7 @@ htmlcov/
 
 # Legacy scripts (to be refactored later)
 scripts/
+
+# 测试调试输出
+eam_potential_cumulative.png
+eam_vs_lj_potential_comparison.png
