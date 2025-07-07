@@ -67,3 +67,6 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Legacy scripts (to be refactored later)
+scripts/
