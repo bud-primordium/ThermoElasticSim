@@ -1,17 +1,38 @@
-# 文件名: structure.py
-# 作者: Gilbert Young
-# 修改日期: 2025-03-30
-# 文件描述: 提供原子和晶胞类，用于分子动力学模拟中的结构表示和操作。
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-结构模块
+ThermoElasticSim - 结构模块
 
-包含 Atom 和 Cell 类，用于描述分子动力学模拟中的原子和晶胞结构
+该模块提供原子和晶胞类，用于分子动力学模拟中的结构表示和操作。
+
+.. moduleauthor:: Gilbert Young
+.. created:: 2024-10-14
+.. modified:: 2025-07-07
+.. version:: 4.0.0
 
 Classes:
     Atom: 表示单个原子，包含位置、速度和质量等属性
     Cell: 表示晶胞结构，包含晶格矢量和原子列表
+
+Examples:
+    创建原子和晶胞的基本用法::
+
+        >>> from thermoelasticsim.core.structure import Atom, Cell
+        >>> atom = Atom(id=1, symbol="Al", mass_amu=26.98, position=[0, 0, 0])
+        >>> print(atom.symbol)
+        'Al'
+
+Notes:
+    本模块是 ThermoElasticSim 包的核心组件，提供了分子动力学模拟的基础数据结构。
+    
+.. versionadded:: 4.0.0
+   重构版本，增强了数值稳定性和异常处理。
 """
+
+__version__ = "4.0.0"
+__author__ = "Gilbert Young"
+__license__ = "GPL-3.0"
+__copyright__ = "Copyright 2025, Gilbert Young"
 
 import numpy as np
 from typing import Optional  # 用于类型注解
