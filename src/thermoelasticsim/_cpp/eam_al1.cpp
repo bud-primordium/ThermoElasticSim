@@ -39,7 +39,7 @@ extern "C"
      */
     inline double phi(double r)
     {
-        double phi = 0.0;
+        double phi_val = 0.0;
 
         // 定义常数
         const double a0 = 0.65196946237834;
@@ -54,16 +54,17 @@ extern "C"
         // 区域1: [1.5, 2.3]
         if (r >= 1.5 && r <= 2.3)
         {
-            phi += exp(a0 + a1 * r + a2 * r * r + a3 * r * r * r);
+            phi_val += exp(a0 + a1 * r + a2 * r * r + a3 * r * r * r);
         }
 
+        // 根据文献附录格式，以下区间可能是累加的
         // 区域2: (2.3, 3.2]
         if (r > 2.3 && r <= 3.2)
         {
             const double dr = 3.2 - r;
             for (int n = 0; n < 5; ++n)
             {
-                phi += b[n] * pow(dr, n + 4);
+                phi_val += b[n] * pow(dr, n + 4);
             }
         }
 
@@ -73,7 +74,7 @@ extern "C"
             const double dr = 4.8 - r;
             for (int n = 0; n < 5; ++n)
             {
-                phi += c[n] * pow(dr, n + 4);
+                phi_val += c[n] * pow(dr, n + 4);
             }
         }
 
@@ -83,11 +84,11 @@ extern "C"
             const double dr = 6.5 - r;
             for (int n = 0; n < 5; ++n)
             {
-                phi += d[n] * pow(dr, n + 4);
+                phi_val += d[n] * pow(dr, n + 4);
             }
         }
 
-        return phi;
+        return phi_val;
     }
 
     /**
@@ -101,7 +102,7 @@ extern "C"
      */
     inline double psi(double r)
     {
-        double psi = 0.0;
+        double psi_val = 0.0;
 
         // 定义常数
         const int num_terms = 10;
@@ -116,11 +117,11 @@ extern "C"
         {
             if (r <= r_k[i])
             {
-                psi += c_k[i] * pow(r_k[i] - r, 4);
+                psi_val += c_k[i] * pow(r_k[i] - r, 4);
             }
         }
 
-        return psi;
+        return psi_val;
     }
 
     /**
@@ -154,7 +155,7 @@ extern "C"
     }
 
     /**
-     * @brief 对势函数的导数 φ'(r)
+     * @brief 对势函数的导数 dφ/dr
      */
     inline double phi_grad(double r)
     {
@@ -207,11 +208,11 @@ extern "C"
             }
         }
 
-        return -dphi; // 注意：用于力计算的负号
+        return dphi;
     }
 
     /**
-     * @brief 电子密度 ψ(r) 的导数 ψ'(r)
+     * @brief 电子密度 ψ(r) 的导数 dψ/dr
      */
     inline double psi_grad(double r)
     {
@@ -234,11 +235,11 @@ extern "C"
             }
         }
 
-        return -dpsi; // 注意：用于力计算的负号
+        return dpsi;
     }
 
     /**
-     * @brief 嵌入能函数的导数 F'(ρ)
+     * @brief 嵌入能函数的导数 dF/dρ
      */
     inline double Phi_grad(double rho)
     {
@@ -353,7 +354,6 @@ extern "C"
         // 3. 计算原子对之间的力
         for (int i = 0; i < num_atoms; ++i)
         {
-            double dFi = Phi_grad(electron_density[i]);
             for (int j = i + 1; j < num_atoms; ++j)
             {
                 double rij[3];
@@ -365,26 +365,21 @@ extern "C"
                     r2 += rij[k] * rij[k];
                 }
                 double r = sqrt(r2);
-                if (r <= 6.5)
+                if (r > 1e-6 && r <= 6.5)
                 {
-                    // 对势力
-                    double phi_prime = phi_grad(r);
-                    double pair_force = phi_prime;
+                    double d_phi = phi_grad(r);
+                    double d_psi = psi_grad(r);
+                    double d_F_i = Phi_grad(electron_density[i]);
+                    double d_F_j = Phi_grad(electron_density[j]);
 
-                    // 嵌入能力
-                    double psi_prime = psi_grad(r);
-                    double dFj = Phi_grad(electron_density[j]);
-                    double embed_force = (dFi + dFj) * psi_prime;
+                    // F = -dE/dr
+                    double force_magnitude = -(d_phi + (d_F_i + d_F_j) * d_psi);
 
-                    // 总力
-                    double total_force = (pair_force + embed_force) / r;
-
-                    // 应用力
                     for (int k = 0; k < 3; ++k)
                     {
-                        double force_k = total_force * rij[k];
-                        forces[3 * i + k] += force_k;
-                        forces[3 * j + k] -= force_k;
+                        double force_component = force_magnitude * (rij[k] / r);
+                        forces[3 * i + k] += force_component;
+                        forces[3 * j + k] -= force_component;
                     }
                 }
             }
