@@ -1,14 +1,25 @@
-# 文件名: finite_temp_elasticity.py
-# 作者: Gilbert Young
-# 修改日期: 2025-03-27
-# 文件描述: 实现有限温条件下的弹性常数计算工作流。
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+ThermoElasticSim - 有限温弹性常数计算模块
+
+.. moduleauthor:: Gilbert Young
+.. created:: 2025-03-27
+.. modified:: 2025-07-08
+.. version:: 4.0.0
+
+该模块实现了有限温条件下，通过显式形变法计算弹性常数的工作流。
+"""
 
 from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from thermoelasticsim.md.md_simulator import MDSimulator
 from thermoelasticsim.core.structure import Cell
-from thermoelasticsim.md.thermostats import NoseHooverChainThermostat, AndersenThermostat
+from thermoelasticsim.md.thermostats import (
+    NoseHooverChainThermostat,
+    AndersenThermostat,
+)
 from thermoelasticsim.md.barostats import (
     ParrinelloRahmanHooverBarostat,
     BerendsenBarostat,
