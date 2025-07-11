@@ -33,6 +33,6 @@ def test_import_potentials():
 def test_import_elastic():
     """测试弹性模块导入"""
     try:
-        from thermoelasticsim.elastic import ElasticConstantsSolver
+        from thermoelasticsim.elastic import ElasticConstantsWorkflow
     except ImportError as e:
         pytest.fail(f"Failed to import elastic modules: {e}")
