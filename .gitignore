@@ -13,6 +13,8 @@ ENV/
 env/
 env.bak/
 venv.bak/
+.venv/  # uv 虚拟环境
+*envrc
 
 # # Fortran 编译文件
 # *.o
@@ -36,6 +38,20 @@ src.txt
 src_min.txt
 tests.txt
 
+# Debug 文件
+debug/
+
+# 临时测试文件
+temp_*.py
+scratch_*.py
+
+# 计算结果数据文件
+*.dat
+*.xyz
+*.dump
+results_*.txt
+
+
 # IDE 配置文件
 .vscode/
 .idea/
@@ -44,11 +60,6 @@ tests.txt
 .DS_Store
 Thumbs.db
 
-# # 自动生成的 Sphinx 文档
-build/
-docs/
-source/
-
 # 轨迹文件
 output/
 
@@ -56,3 +67,30 @@ output/
 .lectures/
 .notes/
 tests/archive
+
+# Workspace files (not tracked)
+.workspace/
+CLAUDE.local.md
+GEMINI.md
+.claude/
+
+# Additional build artifacts
+*.dll
+*.dylib
+
+# Testing
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Legacy scripts (to be refactored later)
+scripts/
+
+# 测试调试输出
+eam_potential_cumulative.png
+eam_vs_lj_potential_comparison.png
+
+# Ignore scripts directory
+scripts/

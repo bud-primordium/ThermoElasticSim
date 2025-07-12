@@ -1,9 +1,9 @@
 # scripts/calculate_elastic_constants.py
 
 import numpy as np
-from python.structure import Atom, Cell
-from python.potentials import LennardJonesPotential
-from python.elasticity import ElasticConstantsCalculator
+from thermoelasticsim.core import Atom, Cell
+from thermoelasticsim.potentials import LennardJonesPotential
+from thermoelasticsim.elastic import ElasticConstantsSolver
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
     potential = LennardJonesPotential(epsilon=epsilon, sigma=sigma, cutoff=cutoff)
 
     # 创建弹性常数计算器
-    calculator = ElasticConstantsCalculator(cell, potential)
+    calculator = ElasticConstantsSolver(cell, potential)
     C = calculator.calculate_elastic_constants()
     print("弹性常数矩阵 (GPa):")
     print(C * 160.21766208)  # 将 eV/Å³ 转换为 GPa

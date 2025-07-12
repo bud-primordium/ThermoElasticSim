@@ -5,25 +5,22 @@ COMPILER = g++
 CFLAGS = -shared -O2 -fPIC -std=c++11
 
 # 源代码目录和目标库文件目录
-SRC_DIR = src/cpp
-LIB_DIR = src/lib
+SRC_DIR = src/thermoelasticsim/_cpp
+LIB_DIR = src/thermoelasticsim/lib
 
 # 动态库扩展名，根据不同平台设置
 ifeq ($(OS),Windows_NT)
     LIB_EXT = .dll
     LIB_PREFIX =
-    $(info LIB_PREFIX is set to $(LIB_PREFIX))
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
         LIB_EXT = .so
         LIB_PREFIX = lib
-        $(info LIB_PREFIX is set to $(LIB_PREFIX))
     endif
     ifeq ($(UNAME_S),Darwin)
         LIB_EXT = .dylib
         LIB_PREFIX = lib
-        $(info LIB_PREFIX is set to $(LIB_PREFIX))
     endif
 endif
 
@@ -34,27 +31,27 @@ $(LIB_DIR):
 # 编译共享库的规则
 $(LIB_DIR)/$(LIB_PREFIX)lennard_jones$(LIB_EXT): $(SRC_DIR)/lennard_jones.cpp | $(LIB_DIR)
 	@echo "编译 lennard_jones$(LIB_EXT) ..."
-	$(COMPILER) $(SRC_DIR)/lennard_jones.cpp -o $(LIB_DIR)/$(LIB_PREFIX)lennard_jones$(LIB_EXT) $(CFLAGS)
+	$(COMPILER) $(SRC_DIR)/lennard_jones.cpp -o $@ $(CFLAGS)
 
 $(LIB_DIR)/$(LIB_PREFIX)eam_al1$(LIB_EXT): $(SRC_DIR)/eam_al1.cpp | $(LIB_DIR)
 	@echo "编译 eam_al1$(LIB_EXT) ..."
-	$(COMPILER) $(SRC_DIR)/eam_al1.cpp -o $(LIB_DIR)/$(LIB_PREFIX)eam_al1$(LIB_EXT) $(CFLAGS)
+	$(COMPILER) $(SRC_DIR)/eam_al1.cpp -o $@ $(CFLAGS)
 
 $(LIB_DIR)/$(LIB_PREFIX)nose_hoover$(LIB_EXT): $(SRC_DIR)/nose_hoover.cpp | $(LIB_DIR)
 	@echo "编译 nose_hoover$(LIB_EXT) ..."
-	$(COMPILER) $(SRC_DIR)/nose_hoover.cpp -o $(LIB_DIR)/$(LIB_PREFIX)nose_hoover$(LIB_EXT) $(CFLAGS)
+	$(COMPILER) $(SRC_DIR)/nose_hoover.cpp -o $@ $(CFLAGS)
 
 $(LIB_DIR)/$(LIB_PREFIX)nose_hoover_chain$(LIB_EXT): $(SRC_DIR)/nose_hoover_chain.cpp | $(LIB_DIR)
 	@echo "编译 nose_hoover_chain$(LIB_EXT) ..."
-	$(COMPILER) $(SRC_DIR)/nose_hoover_chain.cpp -o $(LIB_DIR)/$(LIB_PREFIX)nose_hoover_chain$(LIB_EXT) $(CFLAGS)
+	$(COMPILER) $(SRC_DIR)/nose_hoover_chain.cpp -o $@ $(CFLAGS)
 
 $(LIB_DIR)/$(LIB_PREFIX)stress_calculator$(LIB_EXT): $(SRC_DIR)/stress_calculator.cpp | $(LIB_DIR)
 	@echo "编译 stress_calculator$(LIB_EXT) ..."
-	$(COMPILER) $(SRC_DIR)/stress_calculator.cpp -o $(LIB_DIR)/$(LIB_PREFIX)stress_calculator$(LIB_EXT) $(CFLAGS)
+	$(COMPILER) $(SRC_DIR)/stress_calculator.cpp -o $@ $(CFLAGS)
 
 $(LIB_DIR)/$(LIB_PREFIX)parrinello_rahman_hoover$(LIB_EXT): $(SRC_DIR)/parrinello_rahman_hoover.cpp | $(LIB_DIR)
 	@echo "编译 parrinello_rahman_hoover$(LIB_EXT) ..."
-	$(COMPILER) $(SRC_DIR)/parrinello_rahman_hoover.cpp -o $(LIB_DIR)/$(LIB_PREFIX)parrinello_rahman_hoover$(LIB_EXT) $(CFLAGS)
+	$(COMPILER) $(SRC_DIR)/parrinello_rahman_hoover.cpp -o $@ $(CFLAGS)
 
 # 定义一个总的构建目标
 build_libs: $(LIB_DIR)/$(LIB_PREFIX)lennard_jones$(LIB_EXT) \
