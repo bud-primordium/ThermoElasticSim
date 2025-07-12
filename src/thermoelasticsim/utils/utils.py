@@ -1,6 +1,6 @@
 # 文件名: utils.py
 # 作者: Gilbert Young
-# 修改日期: 2025-03-27
+# 修改日期: 2025-07-11
 # 文件描述: 实现张量转换工具类和数据收集类，并定义了一些常用的单位转换常量。
 
 """
@@ -26,125 +26,78 @@ KB_IN_EV = 8.617332385e-5
 
 class TensorConverter:
     """
-    张量转换工具类，支持应力和应变张量的 Voigt 表示转换
-
-    提供了在全张量和 Voigt 表示之间转换的方法，同时处理应力和应变张量的特殊需求。
+    张量转换工具类，支持应力和应变张量的 Voigt 与 3x3 矩阵表示之间的相互转换。
     """
 
-    TENSOR_TYPES = {"stress", "strain"}
-
     @staticmethod
-    def to_voigt(tensor: np.ndarray, tensor_type: Optional[str] = None) -> np.ndarray:
+    def to_voigt(tensor: np.ndarray, tensor_type: str, tol: float = 1e-8) -> np.ndarray:
         """
-        将 3x3 张量转换为 Voigt 表示的 6 元素向量
-
-        Parameters
-        ----------
-        tensor : numpy.ndarray
-            形状为 (3, 3) 的张量
-        tensor_type : str, optional
-            张量类型，可以是 'stress' 或 'strain'
-
-        Returns
-        -------
-        numpy.ndarray
-            形状为 (6,) 的 Voigt 表示向量
-
-        Raises
-        ------
-        ValueError
-            当输入张量维度错误或不对称时
-        """
-        if tensor.shape != (3, 3):
-            raise ValueError(f"Expected shape (3, 3), got {tensor.shape}")
-
-        if tensor_type and tensor_type not in TensorConverter.TENSOR_TYPES:
-            raise ValueError(f"Invalid tensor_type: {tensor_type}")
-
-        # 添加对称性检查
-        if not np.allclose(tensor, tensor.T, rtol=1e-10):
-            raise ValueError("Tensor must be symmetric")
-
-        factor = 2.0 if tensor_type == "strain" else 1.0
-
-        try:
-            voigt = np.array(
-                [
-                    tensor[0, 0],  # xx
-                    tensor[1, 1],  # yy
-                    tensor[2, 2],  # zz
-                    tensor[1, 2] * factor,  # yz
-                    tensor[0, 2] * factor,  # xz
-                    tensor[0, 1] * factor,  # xy
-                ]
-            )
-            return voigt
-        except Exception as e:
-            raise RuntimeError(f"Error converting tensor to Voigt: {e}")
-
-    @staticmethod
-    def to_voigt(
-        tensor: np.ndarray, tensor_type: Optional[str] = None, tol: float = 1e-10
-    ) -> np.ndarray:
-        """
-        将 3x3 张量转换为 Voigt 表示的 6 元素向量
+        将一个对称的 3x3 张量转换为 Voigt 表示的 6 元素向量。
 
         Parameters
         ----------
         tensor : np.ndarray
-            形状为 (3, 3) 的张量
-        tensor_type : str, optional
-            张量类型，可以是 'stress' 或 'strain'
+            形状为 (3, 3) 的张量。
+        tensor_type : str
+            张量类型，必须是 'stress' 或 'strain'。
         tol : float, optional
-            对称性检查的公差，当非对称部分大于该值时会记录警告信息
+            用于检查张量对称性的容差。如果非对称分量差异大于此值，将记录警告。
 
         Returns
         -------
         np.ndarray
-            形状为 (6,) 的 Voigt 表示向量
+            形状为 (6,) 的 Voigt 表示向量。
         """
         if tensor.shape != (3, 3):
-            raise ValueError(f"Expected shape (3, 3), got {tensor.shape}")
+            raise ValueError(f"输入张量必须是 3x3 矩阵，但得到形状 {tensor.shape}")
+        if tensor_type not in {"stress", "strain"}:
+            raise ValueError(f"无效的张量类型 '{tensor_type}'，必须是 'stress' 或 'strain'")
 
-        if tensor_type and tensor_type not in TensorConverter.TENSOR_TYPES:
-            raise ValueError(f"Invalid tensor_type: {tensor_type}")
+        # 检查对称性
+        if not np.allclose(tensor, tensor.T, atol=tol):
+            logger.warning("输入张量不对称。将使用其对称部分进行计算。")
+            tensor = 0.5 * (tensor + tensor.T)
 
         factor = 2.0 if tensor_type == "strain" else 1.0
 
-        # 对称处理逻辑：对于 off-diagonal 元素，采用对称均值
-        xy_avg = 0.5 * (tensor[0, 1] + tensor[1, 0])
-        yz_avg = 0.5 * (tensor[1, 2] + tensor[2, 1])
-        xz_avg = 0.5 * (tensor[0, 2] + tensor[2, 0])
+        return np.array([
+            tensor[0, 0],
+            tensor[1, 1],
+            tensor[2, 2],
+            tensor[1, 2] * factor,
+            tensor[0, 2] * factor,
+            tensor[0, 1] * factor,
+        ])
 
-        # 如果非对称程度超过 tol，则记录日志
-        # 注：这里检查非对称程度，比如 |tensor[0,1] - tensor[1,0]| 是否超过tol
-        if abs(tensor[0, 1] - tensor[1, 0]) > tol:
-            logger.warning(
-                f"Non-symmetric component xy differs by {abs(tensor[0,1] - tensor[1,0])}"
-            )
-        if abs(tensor[1, 2] - tensor[2, 1]) > tol:
-            logger.warning(
-                f"Non-symmetric component yz differs by {abs(tensor[1,2] - tensor[2,1])}"
-            )
-        if abs(tensor[0, 2] - tensor[2, 0]) > tol:
-            logger.warning(
-                f"Non-symmetric component xz differs by {abs(tensor[0,2] - tensor[2,0])}"
-            )
+    @staticmethod
+    def from_voigt(voigt: np.ndarray, tensor_type: str) -> np.ndarray:
+        """
+        将 Voigt 表示的 6 元素向量转换为 3x3 的对称张量。
 
-        try:
-            voigt = np.array(
-                [
-                    tensor[0, 0],  # xx
-                    tensor[1, 1],  # yy
-                    tensor[2, 2],  # zz
-                    yz_avg * factor,  # yz
-                    xz_avg * factor,  # xz
-                    xy_avg * factor,  # xy
-                ]
-            )
-            return voigt
-        except Exception as e:
-            raise RuntimeError(f"Error converting tensor to Voigt: {e}")
+        Parameters
+        ----------
+        voigt : np.ndarray
+            形状为 (6,) 的 Voigt 向量。
+        tensor_type : str
+            张量类型，必须是 'stress' 或 'strain'。
+
+        Returns
+        -------
+        np.ndarray
+            形状为 (3, 3) 的对称张量。
+        """
+        if voigt.shape != (6,):
+            raise ValueError(f"输入 Voigt 向量必须有 6 个元素，但得到 {voigt.shape[0]} 个")
+        if tensor_type not in {"stress", "strain"}:
+            raise ValueError(f"无效的张量类型 '{tensor_type}'，必须是 'stress' 或 'strain'")
+
+        factor = 0.5 if tensor_type == "strain" else 1.0
+
+        return np.array([
+            [voigt[0], voigt[5] * factor, voigt[4] * factor],
+            [voigt[5] * factor, voigt[1], voigt[3] * factor],
+            [voigt[4] * factor, voigt[3] * factor, voigt[2]],
+        ])
 
 
 class DataCollector:
@@ -556,3 +509,34 @@ class NeighborList:
                 logger.info(f"  Position: {pos}")
                 logger.info(f"  Number of neighbors: {len(self.neighbor_list[i])}")
                 logger.info(f"  Neighbors: {self.neighbor_list[i]}")
+
+
+def get_atomic_mass(symbol: str) -> float:
+    """
+    根据原子符号获取原子质量（amu）
+
+    Parameters
+    ----------
+    symbol : str
+        原子符号，例如 'Al', 'Si'
+
+    Returns
+    -------
+    float
+        原子质量（amu）
+
+    Raises
+    ------
+    KeyError
+        如果原子符号不存在
+    """
+    atomic_masses = {
+        "Al": 26.9815386,
+        "Si": 28.0855,
+        "C": 12.0107,
+        # ... 其他元素
+    }
+    try:
+        return atomic_masses[symbol]
+    except KeyError:
+        raise KeyError(f"Atomic mass for symbol '{symbol}' not found.")
