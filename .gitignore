@@ -14,6 +14,7 @@ env/
 env.bak/
 venv.bak/
 .venv/  # uv 虚拟环境
+*envrc
 
 # # Fortran 编译文件
 # *.o
@@ -36,6 +37,20 @@ all.txt
 src.txt
 src_min.txt
 tests.txt
+
+# Debug 文件
+debug/
+
+# 临时测试文件
+temp_*.py
+scratch_*.py
+
+# 计算结果数据文件
+*.dat
+*.xyz
+*.dump
+results_*.txt
+
 
 # IDE 配置文件
 .vscode/
