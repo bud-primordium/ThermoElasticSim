@@ -334,7 +334,10 @@ class TestZeroTempDeformationCalculator:
     
     def test_initialization_custom(self, sample_cell, sample_potential):
         """测试自定义参数初始化"""
-        relaxer_params = {'ftol': 1e-10}
+        relaxer_params = {
+            'optimizer_type': 'L-BFGS',
+            'optimizer_params': {'ftol': 1e-10}
+        }
         calculator = ZeroTempDeformationCalculator(
             sample_cell, sample_potential,
             delta=0.001, num_steps=3,
