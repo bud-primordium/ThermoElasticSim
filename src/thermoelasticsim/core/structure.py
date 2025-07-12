@@ -275,7 +275,7 @@ class Cell:
             # 检查原子ID唯一性
             if atom.id in atom_ids:
                 raise ValueError(f"原子ID {atom.id} 重复")
-            atom_ids.add(atom.id)
+            atom_ids.add(atom.id);
             
             # 检查原子质量
             if atom.mass_amu <= 0:
@@ -472,7 +472,6 @@ class Cell:
         # 转换到分数坐标
         fractional = np.dot(positions, self.lattice_inv)
 
-        # 数值稳定检查
         if not np.all(np.isfinite(fractional)):
             raise ValueError(
                 "Non-finite values in fractional coordinates during PBC application"
@@ -621,9 +620,10 @@ class Cell:
 
         return min_image_vector
 
-    def build_supercell(self, repetition):
+    def build_supercell(self, repetition: tuple) -> "Cell":
         """
-        构建超胞，返回一个新的 Cell 对象
+        构建超胞，返回一个新的 Cell 对象。
+        采用更简单、更健壮的算法，直接在笛卡尔坐标系下操作。
 
         Parameters
         ----------
@@ -636,40 +636,28 @@ class Cell:
             新的超胞对象
         """
         nx, ny, nz = repetition
-
-        # 获取并复制基本晶胞的晶格矢量
-        lattice_vectors = self.lattice_vectors.copy()
-
-        # 计算超胞的晶格矢量
-        super_lattice_vectors = lattice_vectors * np.array([nx, ny, nz])[:, np.newaxis]
-
-        # 获取原始原子的分数坐标
-        positions = np.array([atom.position for atom in self.atoms])
-        # 确保正确的矩阵运算顺序
-        try:
-            lattice_inv = np.linalg.inv(lattice_vectors.T)
-            fractional = np.dot(positions, lattice_inv)
-        except np.linalg.LinAlgError:
-            raise ValueError("晶格矢量不可逆，无法构建超胞")
         
-        # 确保分数坐标在 [0,1) 范围内
-        fractional = fractional % 1.0
+        # 1. 计算新的超胞晶格矢量
+        super_lattice_vectors = self.lattice_vectors.copy()
+        super_lattice_vectors[0] *= nx
+        super_lattice_vectors[1] *= ny
+        super_lattice_vectors[2] *= nz
 
         super_atoms = []
         atom_id = 0
-
+        
+        # 2. 循环创建新的原子
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
-                    # 使用整数偏移
-                    # 对分数坐标进行拓展：加上(i,j,k)，然后除以(nx,ny,nz)
-                    # 这样就保证了扩展后的分数坐标仍然落在[0,1)内，并且分布正确
-                    for idx, atom in enumerate(self.atoms):
-                        frac_coord = (fractional[idx] + np.array([i, j, k])) / np.array(
-                            [nx, ny, nz]
-                        )
-                        new_position = np.dot(frac_coord, super_lattice_vectors)
-
+                    # 3. 计算每个单胞的平移向量（笛卡尔坐标）
+                    translation_vector = i * self.lattice_vectors[0] + \
+                                         j * self.lattice_vectors[1] + \
+                                         k * self.lattice_vectors[2]
+                    
+                    # 4. 复制并平移原子
+                    for atom in self.atoms:
+                        new_position = atom.position + translation_vector
                         new_atom = Atom(
                             id=atom_id,
                             symbol=atom.symbol,
@@ -680,7 +668,7 @@ class Cell:
                         super_atoms.append(new_atom)
                         atom_id += 1
 
-        # 创建新的超胞对象
+        # 5. 创建新的超胞对象
         super_cell = Cell(
             lattice_vectors=super_lattice_vectors,
             atoms=super_atoms,
@@ -734,3 +722,34 @@ class Cell:
     def num_atoms(self):
         """返回原子数量"""
         return len(self.atoms)
+
+    def set_positions(self, positions: np.ndarray):
+        """
+        设置所有原子的位置。
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            原子位置数组，形状为 (num_atoms, 3)。
+        """
+        if positions.shape != (self.num_atoms, 3):
+            raise ValueError(f"位置数组形状应为 ({self.num_atoms}, 3)，但得到 {positions.shape}")
+        for i, atom in enumerate(self.atoms):
+            atom.position = positions[i]
+
+    def set_lattice_vectors(self, lattice_vectors: np.ndarray):
+        """
+        设置新的晶格矢量并更新相关属性。
+
+        Parameters
+        ----------
+        lattice_vectors : np.ndarray
+            新的 3x3 晶格矢量矩阵。
+        """
+        if not self._validate_lattice_vectors(lattice_vectors):
+            raise ValueError("设置的晶格矢量无效。")
+        
+        self.lattice_vectors = np.array(lattice_vectors, dtype=np.float64)
+        self.volume = self.calculate_volume()
+        self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
+        logger.debug("晶格矢量已更新。")
