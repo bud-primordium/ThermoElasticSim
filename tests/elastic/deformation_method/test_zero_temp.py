@@ -75,6 +75,7 @@ def mock_potential():
     potential = Mock()
     potential.calculate_energy.return_value = -10.0  # 固定能量值
     potential.calculate_forces.return_value = None   # 不需要返回值
+    potential.cutoff = 10.0  # 添加cutoff属性
     return potential
 
 

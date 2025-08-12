@@ -1,14 +1,12 @@
 # 文件名: thermostats.py
 # 作者: Gilbert Young
-# 修改日期: 2025-03-27
+# 修改日期: 2025-08-12
 # 文件描述: 实现分子动力学模拟中的各种恒温器。
 
 import numpy as np
 import logging
 from typing import List, Dict, Optional
 from thermoelasticsim.interfaces.cpp_interface import CppInterface
-import ctypes
-from numpy.ctypeslib import ndpointer
 from thermoelasticsim.utils.utils import KB_IN_EV
 
 # 配置日志记录

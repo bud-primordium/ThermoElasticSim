@@ -27,158 +27,86 @@
 
 ```plaintext
 ThermoElasticSim/
-├── LICENSE
-├── Makefile
-├── Makefile.libs
+├── pyproject.toml          # 项目配置（依赖管理、构建设置）
+├── CMakeLists.txt          # C++ 构建配置
 ├── README.md
-├── build/                   # Sphinx 构建输出目录
-├── config/                  # 配置文件
-│   └── pytest.ini
-├── docs/                    # 文档生成目录，包含 Doxygen 和 Sphinx 配置
-│   ├── Doxyfile
-│   ├── custom.css
-│   └── xml/
-│       ├── combine.xslt
-│       ├── compound.xsd
-│       ├── doxyfile.xsd
-│       ├── index.xsd
-│       └── xml.xsd
-├── examples/                # 使用示例
-│   └── calculate_elastic_constants.py
-├── logs/                    # 运行pytest后会生成此目录
-├── scripts/                 # 脚本文件，自动化任务
-│   ├── build_libs.bat
-│   ├── collect.py
-│   ├── datetime_updater.py
-│   └── make.bat
-├── setup.py                 # 项目安装脚本
-├── source/                  # Sphinx 文档的源文件
-│   ├── _static
-│   ├── _templates
-│   ├── conf.py
-│   └── index.rst
-├── src/                     # 项目源代码
-│   ├── ThermoElasticSim.egg-info/
-│   │   └── PKG-INFO
-│   ├── cpp/                 # C++ 文件实现物理计算
-│   │   ├── lennard_jones.cpp
-│   │   ├── nose_hoover.cpp
-│   │   ├── nose_hoover_chain.cpp
-│   │   ├── parrinello_rahman_hoover.cpp
-│   │   └── stress_calculator.cpp
-│   ├── lib/                 # 动态库，编译后的 C++ 文件
-│   │   ├── lennard_jones.dll
-│   │   ├── nose_hoover.dll
-│   │   ├── nose_hoover_chain.dll
-│   │   ├── parrinello_rahman_hoover.dll
-│   │   └── stress_calculator.dll
-│   └── python/              # Python 代码，用于控制流程和集成 C++ 计算
-│       ├── __init__.py
-│       ├── __pycache__
-│       ├── barostats.py
-│       ├── config.py
-│       ├── deformation.py
-│       ├── elasticity.py
-│       ├── integrators.py
-│       ├── interfaces/
-│       │   ├── __init__.py
-│       │   ├── __pycache__
-│       │   └── cpp_interface.py
-│       ├── md_simulator.py
-│       ├── mechanics.py
-│       ├── optimizers.py
-│       ├── ploy_lj.py
-│       ├── potentials.py
-│       ├── structure.py
-│       ├── thermostats.py
-│       ├── utils.py
-│       └── visualization.py
-└── tests/                   # 自动化测试
-    ├── __pycache__
-    ├── config.yaml
-    ├── test_cpp_interface.py
-    ├── test_deformation.py
-    ├── test_elasticity.py
-    ├── test_lj.py
-    ├── test_md.py
-    ├── test_mechanics.py
-    ├── test_nose_hoover.py
-    ├── test_optimizers.py
-    ├── test_pbc.py
-    ├── test_potentials.py
-    ├── test_simple_optimizer.py
-    ├── test_structure.py
-    ├── test_utils.py
-    └── test_visualization.py
+├── src/
+│   └── thermoelasticsim/
+│       ├── _cpp/           # C++ 源码和 pybind11 绑定
+│       │   ├── bindings/   # 模块化的绑定文件
+│       │   └── *.cpp       # 核心计算实现
+│       ├── core/           # 核心数据结构
+│       ├── potentials/     # 势能模型
+│       ├── elastic/        # 弹性常数计算
+│       ├── md/             # 分子动力学
+│       └── utils/          # 工具函数
+├── tests/                  # 测试文件（镜像 src 结构）
+├── examples/               # 使用示例
+└── docs/                   # 文档
 ```
 
 ## 安装指南
 
 ### 前置条件
 
-- **Python 3.8+**
-- **C++ 编译器**（如 `g++` 或 `clang++`）
-- **pip** 包管理工具
-- **make** 工具（Windows 用户可使用 MinGW 或 MSYS2）
+- **Python 3.9+**
+- **C++ 编译器**（支持 C++11）
+- **uv**（推荐）或 pip
 
-### 安装步骤
+### 快速安装
 
-1. **克隆仓库**
+```bash
+# 1. 克隆仓库
+git clone https://github.com/bud-primordium/ThermoElasticSim.git
+cd ThermoElasticSim
 
-   ```bash
-   git clone https://github.com/bud-primordium/ThermoElasticSim.git
-   cd ThermoElasticSim
-   ```
+# 2. 清理旧的构建产物（如果有）
+rm -rf .venv build .cmake src/thermoelasticsim/_cpp_core*.so
 
-2. **创建并激活虚拟环境**
+# 3. 创建虚拟环境
+uv venv
 
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # 在 Windows 上使用 `venv\Scripts\activate`
-   ```
+# 4. 安装项目（editable 模式）
+uv pip install -e .
 
-3. **安装依赖**
+# 5. 安装测试依赖（如需运行测试）
+uv pip install pytest
 
-   ```bash
-   make install-deps
-   ```
+# 6. 验证安装
+uv run python -c "import thermoelasticsim._cpp_core; print('✓ 安装成功')"
+```
 
-4. **编译 C++ 模块**
+### 运行测试
 
-   使用 `Makefile.libs` 编译 C++ 文件并生成动态库：
+```bash
+uv run pytest
+```
 
-   ```bash
-   make build_libs
-   ```
+### 安装说明
+
+- **自动化构建**：使用 `scikit-build-core` + `pybind11` 自动编译 C++ 扩展
+- **已知问题**：由于 scikit-build-core 与 uv 的兼容性问题，目前只支持 editable 安装（`-e`）
+- **重要提示**：运行任何命令都需要加 `uv run` 前缀，确保使用正确的 Python 环境
 
 ## 使用说明
 
 ### 运行示例
 
-当前提供了一个示例脚本，用于计算弹性常数：
-
 ```bash
-python examples/calculate_elastic_constants.py
+uv run python examples/calculate_elastic_constants.py
 ```
-
-该脚本将根据实现的算法进行弹性常数的计算。更多功能正在开发中，后续将提供更多示例。
-
-### 文档生成
-
-项目使用 Sphinx 和 Doxygen 生成详细的文档。通过 `Makefile` 可以自动化文档的生成过程：
-
-```bash
-make html
-```
-
-生成的文档位于 `build/` 目录中。
 
 ### 运行测试
 
-自动化测试使用 pytest 进行管理，通过 `Makefile` 可以方便地运行所有测试：
-
 ```bash
-make test
+# 运行所有测试
+uv run pytest
+
+# 运行特定测试
+uv run pytest tests/potentials/
+
+# 显示详细输出
+uv run pytest -v
 ```
 
 ## 配置文件

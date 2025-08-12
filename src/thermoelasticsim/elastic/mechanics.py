@@ -1,6 +1,6 @@
 # 文件名: mechanics.py
 # 作者: Gilbert Young
-# 修改日期: 2025-03-27
+# 修改日期: 2025-08-12
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
 import numpy as np
@@ -53,8 +53,14 @@ class StressCalculator:
         try:
             logger.debug("Starting basic stress calculation.")
 
+            # 创建邻居列表
+            from thermoelasticsim.utils.utils import NeighborList
+            cutoff = getattr(potential, 'cutoff', 10.0)  # 从势函数获取截断半径，默认10.0
+            neighbor_list = NeighborList(cutoff=cutoff)
+            neighbor_list.build(cell)
+            
             # 首先根据给定的势函数计算原子力
-            potential.calculate_forces(cell)
+            potential.calculate_forces(cell, neighbor_list)
 
             # 获取原子数、位置、速度、力和质量
             num_atoms = len(cell.atoms)
