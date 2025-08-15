@@ -301,10 +301,18 @@ class StructureRelaxer:
                 maxiter = params.get("maxiter", 10000)
                 return BFGSOptimizer(tol=tol, maxiter=maxiter)
             if opt_type == "L-BFGS":
+                # 传递所有参数，包括maxls和maxfun
                 return LBFGSOptimizer(
-                    supercell_dims=self.supercell_dims,
-                    ftol=params.get("ftol", 1e-9),
-                    gtol=params.get("gtol", 1e-7),
+                    supercell_dims=self.supercell_dims, **params  # 传递所有参数
+                )
+            elif opt_type == "BFGS":
+                return BFGSOptimizer(
+                    tol=params.get("gtol", 1e-7),
+                    maxiter=params.get("maxiter", 10000),
+                )
+            elif opt_type == "CG":
+                return CGOptimizer(
+                    tol=params.get("gtol", 1e-7),
                     maxiter=params.get("maxiter", 10000),
                 )
             raise ValueError(f"未知优化器类型: {opt_type}")
@@ -352,6 +360,148 @@ class StructureRelaxer:
         if not converged:
             logger.warning("内部弛豫未收敛，可能影响应力计算精度")
 
+        return converged
+
+    def uniform_lattice_relax(self, cell: Cell, potential: Potential) -> bool:
+        """
+        等比例晶格弛豫：只优化晶格常数，保持原子相对位置不变
+        
+        这种弛豫方式特别适合基态制备，既避免了原子位置的数值噪声，
+        又保持了晶体结构的完美对称性，同时计算效率极高。
+        
+        Parameters
+        ----------
+        cell : Cell
+            待优化的晶胞对象，会被直接修改
+        potential : Potential
+            势能函数对象
+            
+        Returns
+        -------
+        bool
+            优化是否成功收敛
+            
+        Notes
+        -----
+        数学表述：
+        
+        .. math::
+            \\min_{s} E(r_{\\text{scaled}}, s \\cdot L) \\quad \\text{其中} \\quad r_{\\text{scaled}} = s \\cdot r_{\\text{frac}} \\cdot L
+            
+        其中：
+        - :math:`s`：等比例缩放因子（唯一优化变量）
+        - :math:`r_{\\text{frac}}`：固定的分数坐标
+        - :math:`L`：原始晶格矢量矩阵
+        - :math:`E`：总能量
+        
+        优势：
+        - 自由度仅为1，计算极快
+        - 保持晶体结构完美对称性
+        - 避免原子位置数值噪声
+        - 适合各种晶系（不限于FCC）
+        
+        Examples
+        --------
+        >>> relaxer = StructureRelaxer()
+        >>> converged = relaxer.uniform_lattice_relax(cell, potential)
+        >>> if converged:
+        ...     print("成功优化晶格常数，保持结构对称性")
+        """
+        logger.info("开始等比例晶格弛豫：只优化晶格常数")
+        
+        # 记录初始状态
+        initial_energy = potential.calculate_energy(cell)
+        original_lattice = cell.lattice_vectors.copy()
+        original_fractional_coords = cell.get_fractional_coordinates()
+        
+        logger.debug(f"初始总能量: {initial_energy:.6f} eV")
+        logger.debug(f"原始晶格体积: {cell.calculate_volume():.6f} Å³")
+        
+        def objective_function(scale_factor):
+            """目标函数：计算缩放因子对应的能量"""
+            try:
+                # 等比例缩放晶格矢量
+                scaled_lattice = original_lattice * scale_factor[0]
+                cell.lattice_vectors = scaled_lattice
+                
+                # 原子保持相同的分数坐标，笛卡尔坐标随晶格缩放
+                cell.set_fractional_coordinates(original_fractional_coords)
+                
+                # 计算能量
+                energy = potential.calculate_energy(cell)
+                return energy
+                
+            except Exception as e:
+                logger.warning(f"缩放因子 {scale_factor[0]:.6f} 计算失败: {e}")
+                return 1e10  # 返回一个很大的值表示失败
+        
+        # 1D优化设置
+        from scipy.optimize import minimize_scalar, minimize
+        
+        initial_scale = 1.0
+        
+        # 使用标量优化（1D专用，更稳定）
+        try:
+            result = minimize_scalar(
+                lambda s: objective_function([s]),
+                bounds=(0.8, 1.2),  # 缩放范围±20%
+                method='bounded',
+                options={
+                    'xatol': self.optimizer_params.get('ftol', 1e-8),
+                    'maxiter': self.optimizer_params.get('maxiter', 500)
+                }
+            )
+            converged = result.success
+            optimal_scale = result.x
+            
+        except Exception as e:
+            logger.warning(f"标量优化失败，尝试通用优化器: {e}")
+            # 回退到通用优化器
+            try:
+                result = minimize(
+                    objective_function,
+                    [initial_scale],
+                    method='BFGS',
+                    options={
+                        'ftol': self.optimizer_params.get('ftol', 1e-8),
+                        'gtol': self.optimizer_params.get('gtol', 1e-6),
+                        'maxiter': self.optimizer_params.get('maxiter', 500)
+                    }
+                )
+                converged = result.success
+                optimal_scale = result.x[0]
+                
+            except Exception as e2:
+                logger.error(f"所有优化方法都失败: {e2}")
+                # 恢复原始状态
+                cell.lattice_vectors = original_lattice
+                cell.set_fractional_coordinates(original_fractional_coords)
+                return False
+        
+        # 设置到最优状态
+        if converged:
+            optimal_lattice = original_lattice * optimal_scale
+            cell.lattice_vectors = optimal_lattice
+            cell.set_fractional_coordinates(original_fractional_coords)
+            
+            # 记录优化结果
+            final_energy = potential.calculate_energy(cell)
+            energy_change = final_energy - initial_energy
+            volume_change = cell.calculate_volume() / np.linalg.det(original_lattice)
+            
+            logger.info("等比例晶格弛豫成功")
+            logger.debug(f"最优缩放因子: {optimal_scale:.6f}")
+            logger.debug(f"最终总能量: {final_energy:.6f} eV")
+            logger.debug(f"能量变化: {energy_change:.6f} eV")
+            logger.debug(f"体积变化: {volume_change:.6f} (比值)")
+            logger.debug(f"最终体积: {cell.calculate_volume():.6f} Å³")
+            
+        else:
+            logger.warning("等比例晶格弛豫未收敛，恢复原始状态")
+            # 恢复原始状态
+            cell.lattice_vectors = original_lattice
+            cell.set_fractional_coordinates(original_fractional_coords)
+        
         return converged
 
 

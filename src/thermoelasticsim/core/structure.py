@@ -753,3 +753,58 @@ class Cell:
         self.volume = self.calculate_volume()
         self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
         logger.debug("晶格矢量已更新。")
+
+    def get_fractional_coordinates(self) -> np.ndarray:
+        """获取所有原子的分数坐标
+        
+        Returns
+        -------
+        numpy.ndarray
+            原子分数坐标数组，形状为(num_atoms, 3)
+            
+        Notes
+        -----
+        分数坐标：r_frac = (L^T)^-1 * r_cart
+        其中L是晶格矢量矩阵，r_cart是笛卡尔坐标
+        """
+        positions = self.get_positions()  # shape (N, 3)
+        # 转换到分数坐标：(L^T)^-1 * r
+        fractional_coords = np.dot(positions, self.lattice_inv)
+        return fractional_coords
+    
+    def set_fractional_coordinates(self, fractional_coords: np.ndarray) -> None:
+        """根据分数坐标设置所有原子的笛卡尔坐标
+        
+        Parameters
+        ----------
+        fractional_coords : numpy.ndarray
+            分数坐标数组，形状为(num_atoms, 3)
+            
+        Notes
+        -----
+        笛卡尔坐标：r_cart = L^T * r_frac
+        其中L是晶格矢量矩阵，r_frac是分数坐标
+        """
+        if fractional_coords.shape != (len(self.atoms), 3):
+            raise ValueError(f"分数坐标数组形状错误: 期望({len(self.atoms)}, 3), 实际{fractional_coords.shape}")
+        
+        # 转换到笛卡尔坐标：L^T * r_frac
+        cartesian_coords = np.dot(fractional_coords, self.lattice_vectors.T)
+        
+        # 更新原子位置
+        for i, atom in enumerate(self.atoms):
+            atom.position = cartesian_coords[i].copy()
+    
+    def set_positions(self, positions: np.ndarray) -> None:
+        """设置所有原子的笛卡尔坐标
+        
+        Parameters
+        ----------
+        positions : numpy.ndarray
+            笛卡尔坐标数组，形状为(num_atoms, 3)
+        """
+        if positions.shape != (len(self.atoms), 3):
+            raise ValueError(f"位置数组形状错误: 期望({len(self.atoms)}, 3), 实际{positions.shape}")
+        
+        for i, atom in enumerate(self.atoms):
+            atom.position = positions[i].copy()

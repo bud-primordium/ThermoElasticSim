@@ -573,9 +573,10 @@ class LBFGSOptimizer(Optimizer):
                 logger.warning(f"  jac norm: {np.linalg.norm(result.jac):.6e}")
             logger.warning(f"  完整result对象: {result}")
                 
-            # 记录maxls参数是否生效
-            logger.debug(f"  设置的maxls: {self.extra_options.get('maxls', '未设置')}")
-            logger.debug(f"  设置的maxfun: {self.extra_options.get('maxfun', '未设置')}")
+            # 记录maxls参数是否生效 - 检查实际传递的options字典
+            logger.debug(f"  设置的maxls: {options.get('maxls', '未设置')}")
+            logger.debug(f"  设置的maxfun: {options.get('maxfun', '未设置')}")
+            logger.debug(f"  完整options: {options}")
 
         return self.converged, []
 
