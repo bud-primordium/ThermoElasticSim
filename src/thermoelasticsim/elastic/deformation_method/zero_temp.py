@@ -331,7 +331,7 @@ class StructureRelaxer:
             logger.info(
                 "内部弛豫尝试优化器: %s (%d/%d)", opt_type, idx + 1, len(sequence)
             )
-            if isinstance(optimizer, LBFGSOptimizer):
+            if opt_type == "L-BFGS":
                 converged, _ = optimizer.optimize(cell, potential, relax_cell=False)
             else:
                 converged, _ = optimizer.optimize(cell, potential)
@@ -1303,7 +1303,7 @@ class ElasticConstantsSolver:
 
         # 求解线性方程组：strains @ C = stresses
         # 注意：lstsq求解的是 X @ beta = y 形式，所以结果需要转置
-        C, residuals, rank, s = np.linalg.lstsq(strains, stresses, rcond=None)
+        C, _, rank, _ = np.linalg.lstsq(strains, stresses, rcond=None)
         C = C.T  # 转置得到(6,6)弹性常数矩阵
 
         # 计算拟合优度R²

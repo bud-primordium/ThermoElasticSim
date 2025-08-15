@@ -268,17 +268,29 @@ class TestElasticConstantsSolver:
     
     def test_ridge_regression(self):
         """测试岭回归求解"""
-        # 创建测试数据
-        strains = np.random.random((10, 6)) * 0.01
+        # 创建确定性测试数据（避免随机性导致的问题）
+        np.random.seed(42)  # 设置种子确保可重现性
+        strains = np.array([
+            [0.01, 0.00, 0.00, 0.00, 0.00, 0.00],  # 单轴应变
+            [0.00, 0.01, 0.00, 0.00, 0.00, 0.00],
+            [0.00, 0.00, 0.01, 0.00, 0.00, 0.00],
+            [0.00, 0.00, 0.00, 0.01, 0.00, 0.00],
+            [0.00, 0.00, 0.00, 0.00, 0.01, 0.00],
+            [0.00, 0.00, 0.00, 0.00, 0.00, 0.01],
+            [0.005, 0.005, 0.00, 0.00, 0.00, 0.00],  # 双轴应变
+            [0.002, 0.00, 0.002, 0.00, 0.00, 0.00],
+            [0.00, 0.003, 0.003, 0.00, 0.00, 0.00],
+            [0.001, 0.001, 0.001, 0.001, 0.001, 0.001],  # 混合应变
+        ])
         C_true = np.diag([100, 100, 100, 50, 50, 50])
         stresses = (C_true @ strains.T).T
         
         solver = ElasticConstantsSolver()
         C_solved, r2_score = solver.solve(strains, stresses, method='ridge', alpha=1e-3)
         
-        # Ridge回归可能会降低拟合优度但改善数值稳定性
+        # Ridge回归对于好的数据应该仍有合理的拟合优度
         assert C_solved.shape == (6, 6)
-        assert r2_score > 0.0  # 降低期望，Ridge回归的R²可能较低
+        assert r2_score > 0.5  # 合理期望：应该能有较好拟合
     
     def test_invalid_method(self):
         """测试无效求解方法"""
@@ -499,7 +511,7 @@ class TestEdgeCases:
     
     def test_large_strain_warning(self, sample_cell, sample_potential):
         """测试大应变的警告"""
-        with warnings.catch_warnings(record=True) as warning_list:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             calculator = ZeroTempDeformationCalculator(
                 sample_cell, sample_potential, delta=0.05  # 5%的大应变
