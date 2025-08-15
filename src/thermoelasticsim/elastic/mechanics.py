@@ -4,7 +4,7 @@
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
 import numpy as np
-from thermoelasticsim.utils.utils import TensorConverter
+from thermoelasticsim.utils.utils import TensorConverter, EV_TO_GPA
 from typing import Dict
 from thermoelasticsim.interfaces.cpp_interface import CppInterface
 import logging
@@ -33,90 +33,415 @@ class StressCalculator:
         self.cpp_interface = CppInterface("stress_calculator")
         logger.debug("Initialized StressCalculator with C++ interface")
 
-    def calculate_stress_basic(self, cell, potential) -> np.ndarray:
+    def calculate_kinetic_stress(self, cell) -> np.ndarray:
         """
-        计算动能和维里应力张量（基础应力张量）
+        计算纯动能应力张量
+
+        使用公式：σ_αβ^kinetic = -1/V * Σᵢ m_i v_iα v_iβ
+        在零温下此项为零
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+
+        Returns
+        -------
+        np.ndarray
+            动能应力张量 (3x3)
+        """
+        try:
+            logger.debug("Starting kinetic stress calculation.")
+            
+            num_atoms = len(cell.atoms)
+            velocities = cell.get_velocities()  # shape: (num_atoms, 3)
+            masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
+            volume = cell.volume
+
+            # 初始化动能应力张量 (3,3)
+            kinetic_stress = np.zeros((3, 3), dtype=np.float64)
+
+            # 动能应力项：-1/V * Σᵢ m_i v_iα v_iβ
+            for i in range(num_atoms):
+                for α in range(3):
+                    for β in range(3):
+                        kinetic_stress[α, β] -= (
+                            masses[i] * velocities[i, α] * velocities[i, β]
+                        )
+
+            kinetic_stress /= volume
+            
+            logger.debug(f"Kinetic stress magnitude: {np.linalg.norm(kinetic_stress):.2e}")
+            return kinetic_stress
+
+        except Exception as e:
+            logger.error(f"Error in kinetic stress calculation: {e}")
+            raise
+
+    def calculate_virial_stress(self, cell, potential) -> np.ndarray:
+        """
+        计算纯维里应力张量（原子间相互作用力项）
+
+        使用公式：σ_αβ^virial = -1/V * Σ(i<j) r_ij^α * F_ij^β
+        其中：
+        - r_ij = r_i - r_j (从原子j指向原子i的向量)
+        - F_ij是原子j对原子i的力
 
         Parameters
         ----------
         cell : Cell
             包含原子的晶胞对象
         potential : Potential
-            势能对象，用于计算力
+            势能对象
 
         Returns
         -------
         np.ndarray
-            基础应力张量 (3x3)，顺序为[α, β]，其中α为行（x, y, z），β为列（x, y, z）
-            应力定义为 (动能项 + 维里项) / 体积
+            维里应力张量 (3x3)
         """
         try:
-            logger.debug("Starting basic stress calculation.")
-
-            # 创建邻居列表
-            from thermoelasticsim.utils.utils import NeighborList
-            cutoff = getattr(potential, 'cutoff', 10.0)  # 从势函数获取截断半径，默认10.0
-            neighbor_list = NeighborList(cutoff=cutoff)
-            neighbor_list.build(cell)
+            logger.debug("Starting virial stress calculation.")
             
-            # 首先根据给定的势函数计算原子力
-            potential.calculate_forces(cell, neighbor_list)
-
-            # 获取原子数、位置、速度、力和质量
-            num_atoms = len(cell.atoms)
-            positions = (
-                cell.get_positions()
-            )  # shape: (num_atoms, 3), positions[i] = [x_i, y_i, z_i]
-            velocities = (
-                cell.get_velocities()
-            )  # shape: (num_atoms, 3), velocities[i] = [v_xi, v_yi, v_zi]
-            forces = (
-                cell.get_forces()
-            )  # shape: (num_atoms, 3), forces[i] = [F_xi, F_yi, F_zi]
-            masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
             volume = cell.volume
-
-            logger.debug(f"num_atoms: {num_atoms}")
-            logger.debug(f"volume: {volume}")
-
-            # 初始化应力张量数组 (3,3)
-            # stress_tensor[α, β]: α、β分别表示 x=0, y=1, z=2 方向
-            stress_tensor = np.zeros((3, 3), dtype=np.float64)
-
-            # 动能应力项 (Kinetic part of the stress)
-            # 对应公式中: Σ m_i v_iα v_iβ
-            # α, β均从0到2，对应x, y, z分量
-            for i in range(num_atoms):
-                for α in range(3):
-                    for β in range(3):
-                        # m_i v_{iα} v_{iβ}
-                        stress_tensor[α, β] += (
-                            masses[i] * velocities[i, α] * velocities[i, β]
-                        )
-
-            # 维里应力项 (Virial part of the stress)
-            # 对应公式中: Σ r_{iα} F_{iβ}
-            # α, β均从0到2，对应x, y, z分量
-            for i in range(num_atoms):
-                for α in range(3):
-                    for β in range(3):
-                        stress_tensor[α, β] += positions[i, α] * forces[i, β]
-
-            # 将总和除以体积得到应力
-            # 应力张量公式: σ_{αβ} = ( Σ_i m_i v_{iα} v_{iβ} + Σ_i r_{iα} F_{iβ} ) / V
-            stress_tensor /= volume
-
-            logger.debug(f"Computed basic stress_tensor: {stress_tensor}")
-
-            return stress_tensor
+            # 计算EAM维里贡献
+            virial_contribution = self._calculate_eam_virial_contribution(cell, potential)
+            virial_stress = virial_contribution / volume
+            
+            logger.debug(f"Virial stress magnitude: {np.linalg.norm(virial_stress):.2e}")
+            return virial_stress
 
         except Exception as e:
-            logger.error(f"Error in stress calculation: {e}")
+            logger.error(f"Error in virial stress calculation: {e}")
             raise
 
-    def calculate_lattice_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
+    def calculate_total_stress(self, cell, potential) -> np.ndarray:
         """
-        计算晶格应变应力张量
+        计算总应力张量（动能+维里项）
+
+        使用公式：σ_αβ = -1/V * (Σᵢ m_i v_iα v_iβ + Σ(i<j) r_ij^α * F_ij^β)
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            势能对象
+
+        Returns
+        -------
+        np.ndarray
+            总应力张量 (3x3)
+        """
+        try:
+            logger.debug("Starting total stress calculation.")
+            
+            kinetic_stress = self.calculate_kinetic_stress(cell)
+            virial_stress = self.calculate_virial_stress(cell, potential)
+            total_stress = kinetic_stress + virial_stress
+            
+            logger.debug(f"Total stress magnitude: {np.linalg.norm(total_stress):.2e}")
+            return total_stress
+
+        except Exception as e:
+            logger.error(f"Error in total stress calculation: {e}")
+            raise
+
+    def _calculate_eam_virial_contribution(self, cell, potential) -> np.ndarray:
+        """
+        计算EAM势的维里贡献
+
+        基于公式: -1/V * Σ(i<j) r_ij^α * F_ij^β
+        其中：
+        - r_ij = r_i - r_j (原子i指向原子j的向量)
+        - F_ij是原子j对原子i的力
+
+        Parameters
+        ----------
+        cell : Cell
+            包含原子的晶胞对象
+        potential : Potential
+            EAM势能对象
+
+        Returns
+        -------
+        np.ndarray
+            维里贡献张量 (3x3)
+        """
+        try:
+            logger.debug(
+                "Calculating EAM virial contribution from pairwise interactions."
+            )
+
+            num_atoms = len(cell.atoms)
+            positions = cell.get_positions()
+            box_lengths = cell.get_box_lengths()
+
+            # 初始化维里张量
+            virial_tensor = np.zeros((3, 3), dtype=np.float64)
+
+            # 首先计算电子密度
+            electron_density = np.zeros(num_atoms, dtype=np.float64)
+
+            # 计算每个原子的电子密度
+            for i in range(num_atoms):
+                for j in range(num_atoms):
+                    if i == j:
+                        continue
+
+                    # 计算原子间距离向量（应用PBC）
+                    # r_ij = r_i - r_j (从原子j指向原子i的向量)
+                    rij = positions[i] - positions[j]
+                    for k in range(3):
+                        rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k])
+                    r = np.linalg.norm(rij)
+
+                    if r <= 6.5:  # EAM Al1的截断半径
+                        electron_density[i] += self._psi(r)
+
+            # 计算原子间相互作用力和维里贡献
+            for i in range(num_atoms):
+                for j in range(i + 1, num_atoms):  # j > i 避免重复计算
+
+                    # 计算原子间距离向量（应用PBC）
+                    # r_ij = r_i - r_j (从原子j指向原子i的向量)
+                    rij = positions[i] - positions[j]
+                    for k in range(3):
+                        rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k])
+                    r = np.linalg.norm(rij)
+
+                    if r > 1e-6 and r <= 6.5:  # 在截断半径内
+                        # 计算EAM力的各个分量
+                        d_phi = self._phi_grad(r)
+                        d_psi = self._psi_grad(r)
+                        d_F_i = self._F_grad(electron_density[i])
+                        d_F_j = self._F_grad(electron_density[j])
+
+                        # 计算力的大小
+                        force_magnitude = -(d_phi + (d_F_i + d_F_j) * d_psi)
+
+                        # 计算力向量 F_ij（原子j对原子i的力）
+                        # 由于r_ij = r_i - r_j，力的方向是沿着-∇_i方向
+                        # F_ij = force_magnitude * r_ij/|r_ij|
+                        force_ij = force_magnitude * (rij / r)
+
+                        # 计算维里贡献: -1/V * Σ(i<j) r_ij^α * F_ij^β
+                        # 由于只计算i<j，已经包含了求和的1/2因子
+                        for α in range(3):
+                            for β in range(3):
+                                virial_tensor[α, β] -= rij[α] * force_ij[β]
+
+            logger.debug(
+                f"Calculated EAM virial tensor magnitude: {np.linalg.norm(virial_tensor):.2e}"
+            )
+            return virial_tensor
+
+        except Exception as e:
+            logger.error(f"Error in EAM virial contribution calculation: {e}")
+            raise
+
+    def _phi(self, r):
+        """EAM Al1对势函数"""
+        phi_val = 0.0
+
+        # 定义常数
+        a0 = 0.65196946237834
+        a1 = 7.6046051582736
+        a2 = -5.8187505542843
+        a3 = 1.0326940511805
+
+        b = [
+            13.695567100510,
+            -44.514029786506,
+            95.853674731436,
+            -83.744769235189,
+            29.906639687889,
+        ]
+        c = [
+            -2.3612121457801,
+            2.5279092055084,
+            -3.3656803584012,
+            0.94831589893263,
+            -0.20965407907747,
+        ]
+        d = [
+            0.24809459274509,
+            -0.54072248340384,
+            0.46579408228733,
+            -0.18481649031556,
+            0.028257788274378,
+        ]
+
+        # 区域1: [1.5, 2.3]
+        if 1.5 <= r <= 2.3:
+            phi_val += np.exp(a0 + a1 * r + a2 * r * r + a3 * r * r * r)
+
+        # 区域2: (2.3, 3.2]
+        if 2.3 < r <= 3.2:
+            dr = 3.2 - r
+            for n in range(5):
+                phi_val += b[n] * (dr ** (n + 4))
+
+        # 区域3: (2.3, 4.8]
+        if 2.3 < r <= 4.8:
+            dr = 4.8 - r
+            for n in range(5):
+                phi_val += c[n] * (dr ** (n + 4))
+
+        # 区域4: (2.3, 6.5]
+        if 2.3 < r <= 6.5:
+            dr = 6.5 - r
+            for n in range(5):
+                phi_val += d[n] * (dr ** (n + 4))
+
+        return phi_val
+
+    def _phi_grad(self, r):
+        """EAM Al1对势函数的导数"""
+        dphi = 0.0
+
+        # 定义常数
+        a0 = 0.65196946237834
+        a1 = 7.6046051582736
+        a2 = -5.8187505542843
+        a3 = 1.0326940511805
+
+        b = [
+            13.695567100510,
+            -44.514029786506,
+            95.853674731436,
+            -83.744769235189,
+            29.906639687889,
+        ]
+        c = [
+            -2.3612121457801,
+            2.5279092055084,
+            -3.3656803584012,
+            0.94831589893263,
+            -0.20965407907747,
+        ]
+        d = [
+            0.24809459274509,
+            -0.54072248340384,
+            0.46579408228733,
+            -0.18481649031556,
+            0.028257788274378,
+        ]
+
+        if r < 1.5:
+            return -1e10
+
+        if 1.5 <= r <= 2.3:
+            exp_term = np.exp(a0 + a1 * r + a2 * r * r + a3 * r * r * r)
+            dphi += (a1 + 2.0 * a2 * r + 3.0 * a3 * r * r) * exp_term
+
+        if 2.3 < r <= 3.2:
+            dr = 3.2 - r
+            for n in range(5):
+                dphi += -(n + 4) * b[n] * (dr ** (n + 3))
+
+        if 2.3 < r <= 4.8:
+            dr = 4.8 - r
+            for n in range(5):
+                dphi += -(n + 4) * c[n] * (dr ** (n + 3))
+
+        if 2.3 < r <= 6.5:
+            dr = 6.5 - r
+            for n in range(5):
+                dphi += -(n + 4) * d[n] * (dr ** (n + 3))
+
+        return dphi
+
+    def _psi(self, r):
+        """EAM Al1电子密度贡献函数"""
+        psi_val = 0.0
+
+        c_k = [
+            0.00019850823042883,
+            0.10046665347629,
+            0.10054338881951,
+            0.099104582963213,
+            0.090086286376778,
+            0.0073022698419468,
+            0.014583614223199,
+            -0.0010327381407070,
+            0.0073219994475288,
+            0.0095726042919017,
+        ]
+        r_k = [2.5, 2.6, 2.7, 2.8, 3.0, 3.4, 4.2, 4.8, 5.6, 6.5]
+
+        for i in range(10):
+            if r <= r_k[i]:
+                psi_val += c_k[i] * ((r_k[i] - r) ** 4)
+
+        return psi_val
+
+    def _psi_grad(self, r):
+        """EAM Al1电子密度贡献函数的导数"""
+        dpsi = 0.0
+
+        c_k = [
+            0.00019850823042883,
+            0.10046665347629,
+            0.10054338881951,
+            0.099104582963213,
+            0.090086286376778,
+            0.0073022698419468,
+            0.014583614223199,
+            -0.0010327381407070,
+            0.0073219994475288,
+            0.0095726042919017,
+        ]
+        r_k = [2.5, 2.6, 2.7, 2.8, 3.0, 3.4, 4.2, 4.8, 5.6, 6.5]
+
+        for i in range(10):
+            if r <= r_k[i]:
+                dpsi += -4.0 * c_k[i] * ((r_k[i] - r) ** 3)
+
+        return dpsi
+
+    def _F(self, rho):
+        """EAM Al1嵌入能函数"""
+        F_val = -np.sqrt(rho)  # 对所有ρ的基本项
+
+        if rho >= 16.0:
+            dr = rho - 16.0
+            D_n = [
+                -6.1596236428225e-5,
+                1.4856817073764e-5,
+                -1.4585661621587e-6,
+                7.2242013524147e-8,
+                -1.7925388537626e-9,
+                1.7720686711226e-11,
+            ]
+
+            for n in range(6):
+                F_val += D_n[n] * (dr ** (n + 4))
+
+        return F_val
+
+    def _F_grad(self, rho):
+        """EAM Al1嵌入能函数的导数"""
+        dF = -0.5 / np.sqrt(rho)  # 对所有ρ的基本项
+
+        if rho >= 16.0:
+            dr = rho - 16.0
+            D_n = [
+                -6.1596236428225e-5,
+                1.4856817073764e-5,
+                -1.4585661621587e-6,
+                7.2242013524147e-8,
+                -1.7925388537626e-9,
+                1.7720686711226e-11,
+            ]
+
+            for n in range(6):
+                dF += (n + 4) * D_n[n] * (dr ** (n + 3))
+
+        return dF
+
+    def calculate_finite_difference_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
+        """
+        计算有限差分应力张量（基于能量导数）
 
         Parameters
         ----------
@@ -130,10 +455,10 @@ class StressCalculator:
         Returns
         -------
         np.ndarray
-            晶格应变应力张量 (3x3)
+            有限差分应力张量 (3x3)
         """
         try:
-            logger.debug("Starting lattice stress calculation.")
+            logger.debug("Starting finite difference stress calculation.")
 
             # 初始化能量导数矩阵
             dUdh = np.zeros((3, 3), dtype=np.float64)
@@ -172,59 +497,76 @@ class StressCalculator:
                     logger.debug(f"dUdh[{i}, {j}] = {dUdh[i, j]}")
 
             # 转换为应力张量
-            lattice_stress = dUdh / original_cell.volume
-            logger.debug(f"Lattice stress tensor:\n{lattice_stress}")
+            finite_diff_stress = dUdh / original_cell.volume
+            logger.debug(f"Finite difference stress tensor:\n{finite_diff_stress}")
 
-            return lattice_stress
+            return finite_diff_stress
 
         except Exception as e:
-            logger.error(f"Error in lattice stress calculation: {e}")
+            logger.error(f"Error in finite difference stress calculation: {e}")
             raise
+
+    def calculate_lattice_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
+        """
+        为保持向后兼容性的别名方法 - 指向有限差分应力方法
+        """
+        return self.calculate_finite_difference_stress(cell, potential, dr)
 
     def get_all_stress_components(self, cell, potential) -> Dict[str, np.ndarray]:
         """
-        计算总应力张量及其组成，请先计算力
+        计算应力张量的所有分量
 
         Parameters
         ----------
         cell : Cell
             包含原子的晶胞对象
         potential : Potential
-            势能对象，用于计算能量
+            势能对象
 
         Returns
         -------
         Dict[str, np.ndarray]
-            包含 "basic", "lattice", "total" 的应力张量字典
+            包含应力张量分量的字典，键包括：
+            - "kinetic": 动能应力张量
+            - "virial": 维里应力张量  
+            - "total": 总应力张量（kinetic + virial）
+            - "finite_diff": 有限差分应力张量（用于验证）
         """
         try:
-            logger.debug("Starting total stress calculation.")
+            logger.debug("Starting stress calculation with all components.")
             components = {}
 
-            # 获取基础张量组成(动能+维里)
-            basic = self.calculate_stress_basic(cell, potential)
-            components["basic"] = basic
+            # 计算各个分量
+            kinetic_stress = self.calculate_kinetic_stress(cell)
+            virial_stress = self.calculate_virial_stress(cell, potential)
+            total_stress = self.calculate_total_stress(cell, potential)
+            finite_diff_stress = self.calculate_finite_difference_stress(cell, potential)
 
-            # 计算晶格应变张量
-            lattice_stress = self.calculate_lattice_stress(cell, potential)
-
-            # 组合总张量(基础 + 晶格)
-            total_stress = basic + lattice_stress
-
-            components["lattice"] = lattice_stress
+            # 标准键名
+            components["kinetic"] = kinetic_stress
+            components["virial"] = virial_stress
             components["total"] = total_stress
+            components["finite_diff"] = finite_diff_stress
 
-            logger.debug(f"Total stress tensor:\n{total_stress}")
+            logger.debug(
+                f"Kinetic stress magnitude: {np.linalg.norm(kinetic_stress * EV_TO_GPA):.6f} GPa"
+            )
+            logger.debug(
+                f"Virial stress magnitude: {np.linalg.norm(virial_stress * EV_TO_GPA):.6f} GPa"
+            )
+            logger.debug(
+                f"Total stress magnitude: {np.linalg.norm(total_stress * EV_TO_GPA):.6f} GPa"
+            )
 
             return components
 
         except Exception as e:
-            logger.error(f"Error calculating total stress tensors: {e}")
+            logger.error(f"Error calculating stress tensors: {e}")
             raise
 
     def compute_stress(self, cell, potential):
         """
-        计算应力张量
+        计算应力张量（使用总应力作为主要方法）
 
         Parameters
         ----------
@@ -236,12 +578,19 @@ class StressCalculator:
         Returns
         -------
         np.ndarray
-            3x3 应力张量矩阵
+            3x3 应力张量矩阵（总应力 = 动能 + 维里）
         """
-        basic = self.calculate_stress_basic(cell, potential)
-        lattice_stress = self.calculate_lattice_stress(cell, potential)
-        total_stress = basic + lattice_stress
-        return total_stress
+        # 使用总应力作为主要计算方法
+        return self.calculate_total_stress(cell, potential)
+
+    # 向后兼容的别名方法
+    def calculate_virial_kinetic_stress(self, cell, potential) -> np.ndarray:
+        """向后兼容别名 - 指向总应力方法"""
+        return self.calculate_total_stress(cell, potential)
+
+    def calculate_stress_basic(self, cell, potential) -> np.ndarray:
+        """向后兼容别名 - 指向总应力方法"""
+        return self.calculate_total_stress(cell, potential)
 
     def validate_tensor_symmetry(
         self, tensor: np.ndarray, tolerance: float = 1e-10

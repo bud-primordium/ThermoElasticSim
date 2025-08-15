@@ -113,6 +113,6 @@ class EAMAl1Potential(Potential):
         energy = self.cpp_interface.calculate_eam_al1_energy(
             num_atoms, positions, box_lengths
         )
-        logger.debug(f"Calculated EAM potential energy: {energy} eV.")
+        # logger.debug(f"Calculated EAM potential energy: {energy} eV.")  # 暂时关闭以减少输出
 
         return energy

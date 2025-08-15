@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # 保持原有的单位转换常量
 AMU_TO_EVFSA2 = 104.3968445
-EV_TO_GPA = 160.2176565
+EV_TO_GPA = 160.2176634
 KB_IN_EV = 8.617332385e-5
 
 
@@ -51,7 +51,9 @@ class TensorConverter:
         if tensor.shape != (3, 3):
             raise ValueError(f"输入张量必须是 3x3 矩阵，但得到形状 {tensor.shape}")
         if tensor_type not in {"stress", "strain"}:
-            raise ValueError(f"无效的张量类型 '{tensor_type}'，必须是 'stress' 或 'strain'")
+            raise ValueError(
+                f"无效的张量类型 '{tensor_type}'，必须是 'stress' 或 'strain'"
+            )
 
         # 检查对称性
         if not np.allclose(tensor, tensor.T, atol=tol):
@@ -60,14 +62,16 @@ class TensorConverter:
 
         factor = 2.0 if tensor_type == "strain" else 1.0
 
-        return np.array([
-            tensor[0, 0],
-            tensor[1, 1],
-            tensor[2, 2],
-            tensor[1, 2] * factor,
-            tensor[0, 2] * factor,
-            tensor[0, 1] * factor,
-        ])
+        return np.array(
+            [
+                tensor[0, 0],
+                tensor[1, 1],
+                tensor[2, 2],
+                tensor[1, 2] * factor,
+                tensor[0, 2] * factor,
+                tensor[0, 1] * factor,
+            ]
+        )
 
     @staticmethod
     def from_voigt(voigt: np.ndarray, tensor_type: str) -> np.ndarray:
@@ -87,17 +91,23 @@ class TensorConverter:
             形状为 (3, 3) 的对称张量。
         """
         if voigt.shape != (6,):
-            raise ValueError(f"输入 Voigt 向量必须有 6 个元素，但得到 {voigt.shape[0]} 个")
+            raise ValueError(
+                f"输入 Voigt 向量必须有 6 个元素，但得到 {voigt.shape[0]} 个"
+            )
         if tensor_type not in {"stress", "strain"}:
-            raise ValueError(f"无效的张量类型 '{tensor_type}'，必须是 'stress' 或 'strain'")
+            raise ValueError(
+                f"无效的张量类型 '{tensor_type}'，必须是 'stress' 或 'strain'"
+            )
 
         factor = 0.5 if tensor_type == "strain" else 1.0
 
-        return np.array([
-            [voigt[0], voigt[5] * factor, voigt[4] * factor],
-            [voigt[5] * factor, voigt[1], voigt[3] * factor],
-            [voigt[4] * factor, voigt[3] * factor, voigt[2]],
-        ])
+        return np.array(
+            [
+                [voigt[0], voigt[5] * factor, voigt[4] * factor],
+                [voigt[5] * factor, voigt[1], voigt[3] * factor],
+                [voigt[4] * factor, voigt[3] * factor, voigt[2]],
+            ]
+        )
 
 
 class DataCollector:
@@ -318,10 +328,15 @@ class NeighborList:
                 f"Cutoff radius ({self.cutoff_with_skin:.3f}) is too large "
                 f"compared to box size ({min_box_length/2:.3f})"
             )
-            # 自动调整截断半径
-            self.cutoff = min_box_length / 3
-            self.cutoff_with_skin = self.cutoff + self.skin
-            logger.info(f"Adjusted cutoff radius to {self.cutoff:.3f}")
+            # 禁用自动调整以保持cutoff一致性（修复C44计算问题）
+            logger.warning(
+                "Cutoff adjustment disabled to maintain consistency with EAM potential. "
+                "This may affect neighbor list accuracy but preserves virial theorem."
+            )
+            # 注释掉自动调整代码
+            # self.cutoff = min_box_length / 3
+            # self.cutoff_with_skin = self.cutoff + self.skin
+            # logger.info(f"Adjusted cutoff radius to {self.cutoff:.3f}")
 
     def _compute_optimal_grid_size(self, box_size: np.ndarray, num_atoms: int) -> float:
         """计算最优网格大小"""
