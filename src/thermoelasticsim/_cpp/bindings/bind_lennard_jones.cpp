@@ -10,7 +10,8 @@
 
 namespace py = pybind11;
 
-extern "C" {
+extern "C"
+{
     // Lennard-Jones 势能函数 C 接口声明
     void calculate_lj_forces(
         int num_atoms,
@@ -34,9 +35,10 @@ extern "C" {
         int num_pairs);
 }
 
-void bind_lennard_jones(py::module_ &m) {
+void bind_lennard_jones(py::module_ &m)
+{
     // ============ Lennard-Jones 势函数绑定 ============
-    
+
     // 绑定能量计算函数
     m.def(
         "calculate_lj_energy",
@@ -46,16 +48,20 @@ void bind_lennard_jones(py::module_ &m) {
            double sigma,
            double cutoff,
            py::array_t<double, py::array::c_style | py::array::forcecast> box_lengths,
-           py::array_t<int,    py::array::c_style | py::array::forcecast> neighbor_pairs,
-           int num_pairs) {
+           py::array_t<int, py::array::c_style | py::array::forcecast> neighbor_pairs,
+           int num_pairs)
+        {
             // 输入参数验证
-            if (positions.ndim() != 1 || positions.size() != 3 * num_atoms) {
+            if (positions.ndim() != 1 || positions.size() != 3 * num_atoms)
+            {
                 throw std::runtime_error("positions must be 1D with length 3*num_atoms");
             }
-            if (box_lengths.ndim() != 1 || box_lengths.size() != 3) {
-                throw std::runtime_error("box_lengths must be 1D with length 3");
+            if (box_lengths.ndim() != 1 || box_lengths.size() != 3)
+            {
+                throw std::runtime_error("box_lengths must be 1D with length 3 (orthorhombic assumption for LJ)");
             }
-            if (neighbor_pairs.ndim() != 1 || neighbor_pairs.size() != 2 * num_pairs) {
+            if (neighbor_pairs.ndim() != 1 || neighbor_pairs.size() != 2 * num_pairs)
+            {
                 throw std::runtime_error("neighbor_pairs must be 1D with length 2*num_pairs");
             }
 
@@ -96,19 +102,24 @@ void bind_lennard_jones(py::module_ &m) {
            double sigma,
            double cutoff,
            py::array_t<double, py::array::c_style | py::array::forcecast> box_lengths,
-           py::array_t<int,    py::array::c_style | py::array::forcecast> neighbor_pairs,
-           int num_pairs) {
+           py::array_t<int, py::array::c_style | py::array::forcecast> neighbor_pairs,
+           int num_pairs)
+        {
             // 输入参数验证
-            if (positions.ndim() != 1 || positions.size() != 3 * num_atoms) {
+            if (positions.ndim() != 1 || positions.size() != 3 * num_atoms)
+            {
                 throw std::runtime_error("positions must be 1D with length 3*num_atoms");
             }
-            if (forces.ndim() != 1 || forces.size() != 3 * num_atoms) {
+            if (forces.ndim() != 1 || forces.size() != 3 * num_atoms)
+            {
                 throw std::runtime_error("forces must be 1D with length 3*num_atoms");
             }
-            if (box_lengths.ndim() != 1 || box_lengths.size() != 3) {
+            if (box_lengths.ndim() != 1 || box_lengths.size() != 3)
+            {
                 throw std::runtime_error("box_lengths must be 1D with length 3");
             }
-            if (neighbor_pairs.ndim() != 1 || neighbor_pairs.size() != 2 * num_pairs) {
+            if (neighbor_pairs.ndim() != 1 || neighbor_pairs.size() != 2 * num_pairs)
+            {
                 throw std::runtime_error("neighbor_pairs must be 1D with length 2*num_pairs");
             }
 

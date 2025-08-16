@@ -24,7 +24,7 @@ Examples:
 
 Notes:
     本模块是 ThermoElasticSim 包的核心组件，提供了分子动力学模拟的基础数据结构。
-    
+
 .. versionadded:: 4.0.0
    重构版本，增强了数值稳定性和异常处理。
 """
@@ -101,13 +101,13 @@ class Atom:
 
     def move_by(self, displacement: np.ndarray) -> None:
         """通过位置增量移动原子
-        
+
         Args:
             displacement: 位置增量向量，形状为(3,)
-            
+
         Raises:
             ValueError: 如果位置增量不是3D向量
-            
+
         Examples:
             >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
             >>> atom.move_by([0.1, 0.2, 0.3])
@@ -130,7 +130,7 @@ class Atom:
 
         Raises:
             ValueError: 如果velocity_change不是3D向量
-            
+
         Examples:
             >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
             >>> atom.accelerate_by([0.1, 0.2, 0.3])
@@ -139,10 +139,10 @@ class Atom:
         """
         if not isinstance(velocity_change, np.ndarray):
             velocity_change = np.array(velocity_change, dtype=np.float64)
-        
+
         if velocity_change.shape != (3,):
             raise ValueError(f"速度增量必须是3D向量，当前形状: {velocity_change.shape}")
-        
+
         self.velocity += velocity_change
 
     def copy(self) -> "Atom":
@@ -150,7 +150,7 @@ class Atom:
 
         Returns:
             新的Atom对象，包含当前原子的所有属性的副本
-            
+
         Examples:
             >>> atom1 = Atom(1, 'H', 1.0, [0, 0, 0])
             >>> atom2 = atom1.copy()
@@ -201,7 +201,7 @@ class Cell:
         # 验证输入参数
         if not atoms:
             raise ValueError("原子列表不能为空")
-        
+
         # 验证晶格向量
         if not self._validate_lattice_vectors(lattice_vectors):
             raise ValueError("Invalid lattice vectors")
@@ -217,7 +217,7 @@ class Cell:
 
         # 验证原子属性
         self._validate_atoms()
-        
+
         # 验证周期性边界条件的合理性
         self._validate_pbc_conditions()
 
@@ -261,10 +261,10 @@ class Cell:
             return False
 
         return True
-    
+
     def _validate_atoms(self) -> None:
         """验证原子属性的有效性
-        
+
         Raises
         ------
         ValueError
@@ -275,16 +275,18 @@ class Cell:
             # 检查原子ID唯一性
             if atom.id in atom_ids:
                 raise ValueError(f"原子ID {atom.id} 重复")
-            atom_ids.add(atom.id);
-            
+            atom_ids.add(atom.id)
+
             # 检查原子质量
             if atom.mass_amu <= 0:
-                raise ValueError(f"原子 {atom.id} 的质量必须为正数，当前: {atom.mass_amu}")
-            
+                raise ValueError(
+                    f"原子 {atom.id} 的质量必须为正数，当前: {atom.mass_amu}"
+                )
+
             # 检查位置向量
             if not np.all(np.isfinite(atom.position)):
                 raise ValueError(f"原子 {atom.id} 的位置包含无效值")
-            
+
             # 检查速度向量
             if not np.all(np.isfinite(atom.velocity)):
                 raise ValueError(f"原子 {atom.id} 的速度包含无效值")
@@ -356,6 +358,7 @@ class Cell:
             3x3应力张量矩阵，单位为eV/Å^3
         """
         from thermoelasticsim.elastic.mechanics import StressCalculator
+
         stress_calculator = StressCalculator()
         return stress_calculator.compute_stress(self, potential)
 
@@ -389,10 +392,10 @@ class Cell:
             当晶格未锁定时：
             1. 更新晶格矢量： L_new = F * L_old
             2. 更新原子坐标： r_new = r_old * F^T
-            
+
             当晶格已锁定时：
             仅对原子坐标施加F变形： r_new = r_old * F^T
-            
+
         Examples:
             >>> import numpy as np
             >>> # 小幅变形矩阵
@@ -479,7 +482,7 @@ class Cell:
 
         # 应用周期性边界条件
         fractional = fractional % 1.0
-        
+
         # 转回笛卡尔坐标
         new_positions = np.dot(fractional, self.lattice_vectors.T)
 
@@ -502,11 +505,11 @@ class Cell:
 
         Returns:
             系统温度，单位为K
-            
+
         Notes:
             对于多个原子：dof = 3*N - 3
             对于单个原子：dof = 3*N
-            
+
         Examples:
             >>> cell = Cell(lattice_vectors, atoms)
             >>> temp = cell.calculate_temperature()
@@ -547,7 +550,7 @@ class Cell:
 
         Returns:
             原子位置数组，形状为(num_atoms, 3)
-            
+
         Examples:
             >>> positions = cell.get_positions()
             >>> print(f"原子数量: {positions.shape[0]}")
@@ -606,12 +609,12 @@ class Cell:
 
         # 应用最小镜像约定
         fractional -= np.round(fractional)
-        
+
         # 确保数值稳定性
         fractional = np.clip(fractional, -0.5, 0.5)
 
         # 转回笛卡尔坐标
-        min_image_vector = np.dot(self.lattice_vectors, fractional)
+        min_image_vector = np.dot(fractional, self.lattice_vectors.T)
 
         if not np.all(np.isfinite(min_image_vector)):
             raise ValueError(
@@ -636,7 +639,7 @@ class Cell:
             新的超胞对象
         """
         nx, ny, nz = repetition
-        
+
         # 1. 计算新的超胞晶格矢量
         super_lattice_vectors = self.lattice_vectors.copy()
         super_lattice_vectors[0] *= nx
@@ -645,16 +648,18 @@ class Cell:
 
         super_atoms = []
         atom_id = 0
-        
+
         # 2. 循环创建新的原子
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
                     # 3. 计算每个单胞的平移向量（笛卡尔坐标）
-                    translation_vector = i * self.lattice_vectors[0] + \
-                                         j * self.lattice_vectors[1] + \
-                                         k * self.lattice_vectors[2]
-                    
+                    translation_vector = (
+                        i * self.lattice_vectors[0]
+                        + j * self.lattice_vectors[1]
+                        + k * self.lattice_vectors[2]
+                    )
+
                     # 4. 复制并平移原子
                     for atom in self.atoms:
                         new_position = atom.position + translation_vector
@@ -733,7 +738,9 @@ class Cell:
             原子位置数组，形状为 (num_atoms, 3)。
         """
         if positions.shape != (self.num_atoms, 3):
-            raise ValueError(f"位置数组形状应为 ({self.num_atoms}, 3)，但得到 {positions.shape}")
+            raise ValueError(
+                f"位置数组形状应为 ({self.num_atoms}, 3)，但得到 {positions.shape}"
+            )
         for i, atom in enumerate(self.atoms):
             atom.position = positions[i]
 
@@ -748,7 +755,7 @@ class Cell:
         """
         if not self._validate_lattice_vectors(lattice_vectors):
             raise ValueError("设置的晶格矢量无效。")
-        
+
         self.lattice_vectors = np.array(lattice_vectors, dtype=np.float64)
         self.volume = self.calculate_volume()
         self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
@@ -756,12 +763,12 @@ class Cell:
 
     def get_fractional_coordinates(self) -> np.ndarray:
         """获取所有原子的分数坐标
-        
+
         Returns
         -------
         numpy.ndarray
             原子分数坐标数组，形状为(num_atoms, 3)
-            
+
         Notes
         -----
         分数坐标：r_frac = (L^T)^-1 * r_cart
@@ -771,40 +778,44 @@ class Cell:
         # 转换到分数坐标：(L^T)^-1 * r
         fractional_coords = np.dot(positions, self.lattice_inv)
         return fractional_coords
-    
+
     def set_fractional_coordinates(self, fractional_coords: np.ndarray) -> None:
         """根据分数坐标设置所有原子的笛卡尔坐标
-        
+
         Parameters
         ----------
         fractional_coords : numpy.ndarray
             分数坐标数组，形状为(num_atoms, 3)
-            
+
         Notes
         -----
         笛卡尔坐标：r_cart = L^T * r_frac
         其中L是晶格矢量矩阵，r_frac是分数坐标
         """
         if fractional_coords.shape != (len(self.atoms), 3):
-            raise ValueError(f"分数坐标数组形状错误: 期望({len(self.atoms)}, 3), 实际{fractional_coords.shape}")
-        
+            raise ValueError(
+                f"分数坐标数组形状错误: 期望({len(self.atoms)}, 3), 实际{fractional_coords.shape}"
+            )
+
         # 转换到笛卡尔坐标：L^T * r_frac
         cartesian_coords = np.dot(fractional_coords, self.lattice_vectors.T)
-        
+
         # 更新原子位置
         for i, atom in enumerate(self.atoms):
             atom.position = cartesian_coords[i].copy()
-    
+
     def set_positions(self, positions: np.ndarray) -> None:
         """设置所有原子的笛卡尔坐标
-        
+
         Parameters
         ----------
         positions : numpy.ndarray
             笛卡尔坐标数组，形状为(num_atoms, 3)
         """
         if positions.shape != (len(self.atoms), 3):
-            raise ValueError(f"位置数组形状错误: 期望({len(self.atoms)}, 3), 实际{positions.shape}")
-        
+            raise ValueError(
+                f"位置数组形状错误: 期望({len(self.atoms)}, 3), 实际{positions.shape}"
+            )
+
         for i, atom in enumerate(self.atoms):
             atom.position = positions[i].copy()

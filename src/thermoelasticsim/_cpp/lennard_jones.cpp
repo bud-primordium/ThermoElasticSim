@@ -84,7 +84,7 @@ extern "C"
             for (int k = 0; k < 3; ++k)
             {
                 rij[k] = positions[3 * i + k] - positions[3 * j + k];
-                // 最小镜像法已经在 Python 中处理
+                // 最小镜像法已经在 Python/NeighborList 中处理（对LJ而言）
             }
 
             double r2 = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];

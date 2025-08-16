@@ -81,12 +81,14 @@ class EAMAl1Potential(Potential):
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
         ).flatten()
-        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+        lattice_vectors = np.ascontiguousarray(
+            cell.lattice_vectors, dtype=np.float64
+        ).flatten()
 
         forces = np.zeros_like(positions, dtype=np.float64)
 
         self.cpp_interface.calculate_eam_al1_forces(
-            num_atoms, positions, box_lengths, forces
+            num_atoms, positions, lattice_vectors, forces
         )
 
         forces = forces.reshape((num_atoms, 3))
@@ -108,10 +110,12 @@ class EAMAl1Potential(Potential):
         positions = np.ascontiguousarray(
             cell.get_positions(), dtype=np.float64
         ).flatten()
-        box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
+        lattice_vectors = np.ascontiguousarray(
+            cell.lattice_vectors, dtype=np.float64
+        ).flatten()
 
         energy = self.cpp_interface.calculate_eam_al1_energy(
-            num_atoms, positions, box_lengths
+            num_atoms, positions, lattice_vectors
         )
         # logger.debug(f"Calculated EAM potential energy: {energy} eV.")  # 暂时关闭以减少输出
 

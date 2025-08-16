@@ -268,10 +268,47 @@ extern "C"
     void calculate_eam_al1_energy(
         int num_atoms,
         const double *positions,
-        const double *box_lengths,
-        double *energy // 输出参数
+        const double *lattice_vectors, // row-major 3x3
+        double *energy                 // 输出参数
     )
     {
+        // 读取晶格矩阵及其转置与逆
+        // L is row-major: rows are a1, a2, a3
+        double L[3][3];
+        for (int r = 0; r < 3; ++r)
+        {
+            for (int c = 0; c < 3; ++c)
+            {
+                L[r][c] = lattice_vectors[3 * r + c];
+            }
+        }
+        // compute LT and inverse of LT
+        double LT[3][3];
+        for (int r = 0; r < 3; ++r)
+        {
+            for (int c = 0; c < 3; ++c)
+            {
+                LT[r][c] = L[c][r];
+            }
+        }
+        // invert LT (3x3 inverse)
+        auto det3 = [&](double A[3][3])
+        {
+            return A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+        };
+        double detLT = det3(LT);
+        // assume valid lattice (non-singular)
+        double invLT[3][3];
+        invLT[0][0] = (LT[1][1] * LT[2][2] - LT[1][2] * LT[2][1]) / detLT;
+        invLT[0][1] = -(LT[0][1] * LT[2][2] - LT[0][2] * LT[2][1]) / detLT;
+        invLT[0][2] = (LT[0][1] * LT[1][2] - LT[0][2] * LT[1][1]) / detLT;
+        invLT[1][0] = -(LT[1][0] * LT[2][2] - LT[1][2] * LT[2][0]) / detLT;
+        invLT[1][1] = (LT[0][0] * LT[2][2] - LT[0][2] * LT[2][0]) / detLT;
+        invLT[1][2] = -(LT[0][0] * LT[1][2] - LT[0][2] * LT[1][0]) / detLT;
+        invLT[2][0] = (LT[1][0] * LT[2][1] - LT[1][1] * LT[2][0]) / detLT;
+        invLT[2][1] = -(LT[0][0] * LT[2][1] - LT[0][1] * LT[2][0]) / detLT;
+        invLT[2][2] = (LT[0][0] * LT[1][1] - LT[0][1] * LT[1][0]) / detLT;
+
         double pair_energy = 0.0;
         std::vector<double> electron_density(num_atoms, 0.0);
 
@@ -281,15 +318,26 @@ extern "C"
             for (int j = i + 1; j < num_atoms; ++j)
             {
                 // 计算位移向量
+                // rij = r_j - r_i
                 double rij[3];
-                double r2 = 0.0;
-                for (int k = 0; k < 3; ++k)
+                rij[0] = positions[3 * j + 0] - positions[3 * i + 0];
+                rij[1] = positions[3 * j + 1] - positions[3 * i + 1];
+                rij[2] = positions[3 * j + 2] - positions[3 * i + 2];
+                // s = inv(L^T) * rij  (fractional)
+                double s[3];
+                for (int a = 0; a < 3; ++a)
                 {
-                    rij[k] = positions[3 * j + k] - positions[3 * i + k];
-                    // 使用最小镜像原则
-                    rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k]);
-                    r2 += rij[k] * rij[k];
+                    s[a] = invLT[a][0] * rij[0] + invLT[a][1] * rij[1] + invLT[a][2] * rij[2];
+                    // wrap to [-0.5,0.5)
+                    s[a] -= std::floor(s[a] + 0.5);
                 }
+                // rij_mic = L^T * s
+                double rij_mic[3];
+                for (int a = 0; a < 3; ++a)
+                {
+                    rij_mic[a] = LT[a][0] * s[0] + LT[a][1] * s[1] + LT[a][2] * s[2];
+                }
+                double r2 = rij_mic[0] * rij_mic[0] + rij_mic[1] * rij_mic[1] + rij_mic[2] * rij_mic[2];
 
                 double r = sqrt(r2);
                 if (r <= 6.5)
@@ -318,10 +366,43 @@ extern "C"
     void calculate_eam_al1_forces(
         int num_atoms,
         const double *positions,
-        const double *box_lengths,
+        const double *lattice_vectors,
         double *forces // 输出参数
     )
     {
+        // lattice matrices and inv(L^T)
+        double L[3][3];
+        for (int r = 0; r < 3; ++r)
+        {
+            for (int c = 0; c < 3; ++c)
+            {
+                L[r][c] = lattice_vectors[3 * r + c];
+            }
+        }
+        double LT[3][3];
+        for (int r = 0; r < 3; ++r)
+        {
+            for (int c = 0; c < 3; ++c)
+            {
+                LT[r][c] = L[c][r];
+            }
+        }
+        auto det3 = [&](double A[3][3])
+        {
+            return A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+        };
+        double detLT = det3(LT);
+        double invLT[3][3];
+        invLT[0][0] = (LT[1][1] * LT[2][2] - LT[1][2] * LT[2][1]) / detLT;
+        invLT[0][1] = -(LT[0][1] * LT[2][2] - LT[0][2] * LT[2][1]) / detLT;
+        invLT[0][2] = (LT[0][1] * LT[1][2] - LT[0][2] * LT[1][1]) / detLT;
+        invLT[1][0] = -(LT[1][0] * LT[2][2] - LT[1][2] * LT[2][0]) / detLT;
+        invLT[1][1] = (LT[0][0] * LT[2][2] - LT[0][2] * LT[2][0]) / detLT;
+        invLT[1][2] = -(LT[0][0] * LT[1][2] - LT[0][2] * LT[1][0]) / detLT;
+        invLT[2][0] = (LT[1][0] * LT[2][1] - LT[1][1] * LT[2][0]) / detLT;
+        invLT[2][1] = -(LT[0][0] * LT[2][1] - LT[0][1] * LT[2][0]) / detLT;
+        invLT[2][2] = (LT[0][0] * LT[1][1] - LT[0][1] * LT[1][0]) / detLT;
+
         // 1. 计算电子密度
         std::vector<double> electron_density(num_atoms, 0.0);
         for (int i = 0; i < num_atoms; ++i)
@@ -332,13 +413,21 @@ extern "C"
                     continue;
 
                 double rij[3];
-                double r2 = 0.0;
-                for (int k = 0; k < 3; ++k)
+                rij[0] = positions[3 * j + 0] - positions[3 * i + 0];
+                rij[1] = positions[3 * j + 1] - positions[3 * i + 1];
+                rij[2] = positions[3 * j + 2] - positions[3 * i + 2];
+                double s[3];
+                for (int a = 0; a < 3; ++a)
                 {
-                    rij[k] = positions[3 * j + k] - positions[3 * i + k];
-                    rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k]);
-                    r2 += rij[k] * rij[k];
+                    s[a] = invLT[a][0] * rij[0] + invLT[a][1] * rij[1] + invLT[a][2] * rij[2];
+                    s[a] -= std::floor(s[a] + 0.5);
                 }
+                double rij_mic[3];
+                for (int a = 0; a < 3; ++a)
+                {
+                    rij_mic[a] = LT[a][0] * s[0] + LT[a][1] * s[1] + LT[a][2] * s[2];
+                }
+                double r2 = rij_mic[0] * rij_mic[0] + rij_mic[1] * rij_mic[1] + rij_mic[2] * rij_mic[2];
                 double r = sqrt(r2);
 
                 if (r <= 6.5)
@@ -357,14 +446,21 @@ extern "C"
             for (int j = i + 1; j < num_atoms; ++j)
             {
                 double rij[3];
-                double r2 = 0.0;
-                for (int k = 0; k < 3; ++k)
+                rij[0] = positions[3 * j + 0] - positions[3 * i + 0];
+                rij[1] = positions[3 * j + 1] - positions[3 * i + 1];
+                rij[2] = positions[3 * j + 2] - positions[3 * i + 2];
+                double s[3];
+                for (int a = 0; a < 3; ++a)
                 {
-                    rij[k] = positions[3 * j + k] - positions[3 * i + k];
-                    rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k]);
-                    r2 += rij[k] * rij[k];
+                    s[a] = invLT[a][0] * rij[0] + invLT[a][1] * rij[1] + invLT[a][2] * rij[2];
+                    s[a] -= std::floor(s[a] + 0.5);
                 }
-                double r = sqrt(r2);
+                double rij_mic[3];
+                for (int a = 0; a < 3; ++a)
+                {
+                    rij_mic[a] = LT[a][0] * s[0] + LT[a][1] * s[1] + LT[a][2] * s[2];
+                }
+                double r = std::sqrt(rij_mic[0] * rij_mic[0] + rij_mic[1] * rij_mic[1] + rij_mic[2] * rij_mic[2]);
                 if (r > 1e-6 && r <= 6.5)
                 {
                     double d_phi = phi_grad(r);
@@ -375,9 +471,10 @@ extern "C"
                     // F = -dE/dr
                     double force_magnitude = -(d_phi + (d_F_i + d_F_j) * d_psi);
 
+                    // direction along rij_mic
                     for (int k = 0; k < 3; ++k)
                     {
-                        double force_component = force_magnitude * (rij[k] / r);
+                        double force_component = force_magnitude * (rij_mic[k] / r);
                         forces[3 * i + k] += force_component;
                         forces[3 * j + k] -= force_component;
                     }

@@ -52,7 +52,7 @@ class StressCalculator:
         """
         try:
             logger.debug("Starting kinetic stress calculation.")
-            
+
             num_atoms = len(cell.atoms)
             velocities = cell.get_velocities()  # shape: (num_atoms, 3)
             masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
@@ -70,8 +70,10 @@ class StressCalculator:
                         )
 
             kinetic_stress /= volume
-            
-            logger.debug(f"Kinetic stress magnitude: {np.linalg.norm(kinetic_stress):.2e}")
+
+            logger.debug(
+                f"Kinetic stress magnitude: {np.linalg.norm(kinetic_stress):.2e}"
+            )
             return kinetic_stress
 
         except Exception as e:
@@ -101,13 +103,17 @@ class StressCalculator:
         """
         try:
             logger.debug("Starting virial stress calculation.")
-            
+
             volume = cell.volume
             # 计算EAM维里贡献
-            virial_contribution = self._calculate_eam_virial_contribution(cell, potential)
+            virial_contribution = self._calculate_eam_virial_contribution(
+                cell, potential
+            )
             virial_stress = virial_contribution / volume
-            
-            logger.debug(f"Virial stress magnitude: {np.linalg.norm(virial_stress):.2e}")
+
+            logger.debug(
+                f"Virial stress magnitude: {np.linalg.norm(virial_stress):.2e}"
+            )
             return virial_stress
 
         except Exception as e:
@@ -134,11 +140,11 @@ class StressCalculator:
         """
         try:
             logger.debug("Starting total stress calculation.")
-            
+
             kinetic_stress = self.calculate_kinetic_stress(cell)
             virial_stress = self.calculate_virial_stress(cell, potential)
             total_stress = kinetic_stress + virial_stress
-            
+
             logger.debug(f"Total stress magnitude: {np.linalg.norm(total_stress):.2e}")
             return total_stress
 
@@ -174,7 +180,9 @@ class StressCalculator:
 
             num_atoms = len(cell.atoms)
             positions = cell.get_positions()
-            box_lengths = cell.get_box_lengths()
+            lattice = cell.lattice_vectors
+            LT = lattice.T
+            invLT = np.linalg.inv(LT)
 
             # 初始化维里张量
             virial_tensor = np.zeros((3, 3), dtype=np.float64)
@@ -188,11 +196,11 @@ class StressCalculator:
                     if i == j:
                         continue
 
-                    # 计算原子间距离向量（应用PBC）
-                    # r_ij = r_i - r_j (从原子j指向原子i的向量)
-                    rij = positions[i] - positions[j]
-                    for k in range(3):
-                        rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k])
+                    # 计算原子间最小镜像距离向量（通用于三斜晶胞）
+                    rij_cart = positions[i] - positions[j]
+                    s = invLT @ rij_cart
+                    s -= np.round(s)
+                    rij = LT @ s
                     r = np.linalg.norm(rij)
 
                     if r <= 6.5:  # EAM Al1的截断半径
@@ -202,11 +210,11 @@ class StressCalculator:
             for i in range(num_atoms):
                 for j in range(i + 1, num_atoms):  # j > i 避免重复计算
 
-                    # 计算原子间距离向量（应用PBC）
-                    # r_ij = r_i - r_j (从原子j指向原子i的向量)
-                    rij = positions[i] - positions[j]
-                    for k in range(3):
-                        rij[k] -= box_lengths[k] * round(rij[k] / box_lengths[k])
+                    # 计算原子间最小镜像距离向量（通用于三斜晶胞）
+                    rij_cart = positions[i] - positions[j]
+                    s = invLT @ rij_cart
+                    s -= np.round(s)
+                    rij = LT @ s
                     r = np.linalg.norm(rij)
 
                     if r > 1e-6 and r <= 6.5:  # 在截断半径内
@@ -439,7 +447,9 @@ class StressCalculator:
 
         return dF
 
-    def calculate_finite_difference_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
+    def calculate_finite_difference_stress(
+        self, cell, potential, dr=1e-6
+    ) -> np.ndarray:
         """
         计算有限差分应力张量（基于能量导数）
 
@@ -528,7 +538,7 @@ class StressCalculator:
         Dict[str, np.ndarray]
             包含应力张量分量的字典，键包括：
             - "kinetic": 动能应力张量
-            - "virial": 维里应力张量  
+            - "virial": 维里应力张量
             - "total": 总应力张量（kinetic + virial）
             - "finite_diff": 有限差分应力张量（用于验证）
         """
@@ -540,7 +550,9 @@ class StressCalculator:
             kinetic_stress = self.calculate_kinetic_stress(cell)
             virial_stress = self.calculate_virial_stress(cell, potential)
             total_stress = self.calculate_total_stress(cell, potential)
-            finite_diff_stress = self.calculate_finite_difference_stress(cell, potential)
+            finite_diff_stress = self.calculate_finite_difference_stress(
+                cell, potential
+            )
 
             # 标准键名
             components["kinetic"] = kinetic_stress
