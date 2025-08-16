@@ -110,6 +110,7 @@ class StructureRelaxer:
         optimizer_type: str = "L-BFGS",
         optimizer_params: Optional[Dict[str, Any]] = None,
         supercell_dims: Optional[Tuple[int, int, int]] = None,
+        trajectory_recorder=None,
     ):
         """
         初始化结构弛豫器
@@ -122,6 +123,8 @@ class StructureRelaxer:
             优化器参数，如果为None则使用默认参数
         supercell_dims : tuple, optional
             超胞维度(nx, ny, nz)，用于正确显示等效单胞参数
+        trajectory_recorder : ElasticTrajectoryRecorder, optional
+            轨迹记录器，用于记录优化过程中的系统状态
 
         Raises
         ------
@@ -155,6 +158,9 @@ class StructureRelaxer:
 
         logger.debug(f"初始化StructureRelaxer，优化器: {optimizer_type}")
         logger.debug(f"优化器参数: {self.optimizer_params}")
+        
+        # 设置轨迹记录器
+        self.trajectory_recorder = trajectory_recorder
 
     def full_relax(self, cell: Cell, potential: Potential) -> bool:
         """
@@ -289,6 +295,18 @@ class StructureRelaxer:
         initial_energy = potential.calculate_energy(cell)
         logger.debug(f"形变后初始能量: {initial_energy:.6f} eV")
 
+        # 记录弛豫前状态到轨迹
+        if self.trajectory_recorder:
+            initial_stress = cell.calculate_stress_tensor(potential)
+            self.trajectory_recorder.record_deformation_step(
+                cell, 
+                getattr(self.trajectory_recorder, 'current_strain', 0.0), 
+                "before_internal_relax",
+                stress_tensor=initial_stress,
+                energy=initial_energy,
+                converged=False
+            )
+
         # 内部弛豫（固定晶胞）优先采用用户指定的优化器，推荐 BFGS。
 
         def _build_optimizer(opt_type: str):
@@ -351,6 +369,18 @@ class StructureRelaxer:
         # 记录优化结果
         final_energy = potential.calculate_energy(cell)
         energy_change = final_energy - initial_energy
+
+        # 记录弛豫后状态到轨迹
+        if self.trajectory_recorder:
+            final_stress = cell.calculate_stress_tensor(potential)
+            self.trajectory_recorder.record_deformation_step(
+                cell, 
+                getattr(self.trajectory_recorder, 'current_strain', 0.0), 
+                "after_internal_relax",
+                stress_tensor=final_stress,
+                energy=final_energy,
+                converged=converged
+            )
 
         logger.debug(f"内部弛豫{'成功' if converged else '失败'}")
         logger.debug(f"最终能量: {final_energy:.6f} eV")

@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+
+{% block title %}弹性常数分析仪表板 - {{ metadata.elastic_constants | join(', ') }}{% endblock %}
+
+{% block header_subtitle %}
+生成时间: {{ generation_time }} | 
+数据源: {{ metadata.source_file | default('H5轨迹文件') }} | 
+弹性常数: {{ metadata.elastic_constants | join(', ') }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 弹性常数专用样式 */
+    .elastic-constant-card {
+        border-left-color: var(--constant-color, #007bff);
+    }
+    
+    .elastic-constant-card[data-constant="C11"] { --constant-color: #2E86C1; }
+    .elastic-constant-card[data-constant="C12"] { --constant-color: #E74C3C; }
+    .elastic-constant-card[data-constant="C44"] { --constant-color: #2E86C1; }
+    .elastic-constant-card[data-constant="C55"] { --constant-color: #E74C3C; }
+    .elastic-constant-card[data-constant="C66"] { --constant-color: #58D68D; }
+    
+    .convergence-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    
+    .convergence-excellent { background-color: #28a745; }
+    .convergence-good { background-color: #17a2b8; }
+    .convergence-fair { background-color: #ffc107; }
+    .convergence-poor { background-color: #dc3545; }
+    
+    .stress-strain-plot {
+        max-height: 600px;
+        overflow: hidden;
+    }
+    
+    .data-quality-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    
+    .trajectory-preview {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% set overview_content %}
+<div class="section">
+    <div class="section-title">汇总统计</div>
+    <div class="stats-grid">
+        <!-- 总体统计卡片 -->
+        <div class="stat-card">
+            <div class="stat-title">弹性常数总数</div>
+            <div class="stat-value">{{ summary_statistics.overall.total_constants }}</div>
+            <div class="stat-detail">
+                数据点总数: {{ summary_statistics.overall.total_data_points }}<br>
+                平均收敛率: {{ "%.1f" | format(summary_statistics.overall.average_convergence_rate * 100) }}%
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-title">计算质量</div>
+            <div class="stat-value">{{ "%.3f" | format(summary_statistics.overall.average_r_squared) }}</div>
+            <div class="stat-detail">
+                平均R²值<br>
+                拟合质量指标
+            </div>
+        </div>
+        
+        <!-- 各弹性常数卡片 -->
+        {% for const_type, const_stats in summary_statistics.elastic_constants.items() %}
+        <div class="stat-card elastic-constant-card" data-constant="{{ const_type }}">
+            <div class="stat-title">{{ const_type }}</div>
+            <div class="stat-value">{{ "%.1f" | format(const_stats.value_GPa) }}</div>
+            <div class="stat-detail">
+                文献值: {{ "%.1f" | format(const_stats.literature_GPa) }} GPa<br>
+                <span class="{% if const_stats.error_percent|abs <= 10 %}success{% elif const_stats.error_percent|abs <= 25 %}warning{% else %}error{% endif %}">
+                    误差: {{ "%+.1f" | format(const_stats.error_percent) }}%
+                </span><br>
+                <span class="data-quality-badge 
+                    {% if const_stats.data_quality == 'Excellent' %}badge success
+                    {% elif const_stats.data_quality == 'Good' %}badge success  
+                    {% elif const_stats.data_quality == 'Fair' %}badge warning
+                    {% else %}badge error{% endif %}">
+                    {{ const_stats.data_quality }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="section">
+    <h3>数据源信息</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>属性</th>
+                    <th>值</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>源文件</td>
+                    <td>{{ metadata.source_file | default('N/A') }}</td>
+                </tr>
+                <tr>
+                    <td>识别的弹性常数</td>
+                    <td>{{ metadata.elastic_constants | join(', ') }}</td>
+                </tr>
+                <tr>
+                    <td>数据点数量</td>
+                    <td>{{ metadata.data_points | default(0) }}</td>
+                </tr>
+                <tr>
+                    <td>加载时间</td>
+                    <td>{{ metadata.load_time | default('N/A') }}</td>
+                </tr>
+                {% if metadata.has_trajectory %}
+                <tr>
+                    <td>轨迹文件</td>
+                    <td>✓ 包含轨迹数据</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="section">
+    <h3>计算结果概览</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>弹性常数</th>
+                    <th>计算值 (GPa)</th>
+                    <th>文献值 (GPa)</th>
+                    <th>相对误差</th>
+                    <th>R²</th>
+                    <th>收敛率</th>
+                    <th>数据质量</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for const_type, result in analysis_results.items() %}
+                <tr>
+                    <td><strong>{{ const_type }}</strong></td>
+                    <td>{{ "%.1f" | format(result.elastic_constant) }}</td>
+                    <td>{{ "%.1f" | format(result.literature_value) }}</td>
+                    <td class="{% if result.relative_error|abs <= 10 %}success{% elif result.relative_error|abs <= 25 %}warning{% else %}error{% endif %}">
+                        {{ "%+.1f" | format(result.relative_error) }}%
+                    </td>
+                    <td>{{ "%.4f" | format(result.r_squared) }}</td>
+                    <td>
+                        <span class="convergence-indicator 
+                            {% if result.convergence_rate >= 0.9 %}convergence-excellent
+                            {% elif result.convergence_rate >= 0.7 %}convergence-good
+                            {% elif result.convergence_rate >= 0.5 %}convergence-fair
+                            {% else %}convergence-poor{% endif %}"></span>
+                        {{ "%.1f" | format(result.convergence_rate * 100) }}%
+                        ({{ result.converged_count }}/{{ result.total_count }})
+                    </td>
+                    <td>
+                        <span class="data-quality-badge 
+                            {% if result.data_quality == 'Excellent' %}badge success
+                            {% elif result.data_quality == 'Good' %}badge success  
+                            {% elif result.data_quality == 'Fair' %}badge warning
+                            {% else %}badge error{% endif %}">
+                            {{ result.data_quality }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endset %}
+
+{% set plots_content %}
+<div class="section">
+    <div class="section-title">可视化图表</div>
+    
+    {% if plot_files %}
+        {% for plot_type, plot_path in plot_files.items() %}
+        <div class="plot-container">
+            <h3>{{ plot_type.replace('_', ' ').title() }}</h3>
+            <img src="{{ plot_path }}" 
+                 alt="{{ plot_type.replace('_', ' ').title() }}" 
+                 class="plot-image"
+                 onclick="togglePlotFullscreen(this)"
+                 style="cursor: pointer;"
+                 title="点击查看全屏">
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">
+            <h4>暂无可视化图表</h4>
+            <p>图表正在生成中，或者数据不足以生成可视化内容。</p>
+        </div>
+    {% endif %}
+</div>
+{% endset %}
+
+{% set details_content %}
+<div class="section">
+    <div class="section-title">详细分析</div>
+    
+    {% for const_type, result in analysis_results.items() %}
+    <div class="section">
+        <h3>{{ const_type }} 详细分析</h3>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-title">弹性常数值</div>
+                <div class="stat-value">{{ "%.2f" | format(result.elastic_constant) }}</div>
+                <div class="stat-detail">GPa</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-title">拟合质量</div>
+                <div class="stat-value">{{ "%.4f" | format(result.r_squared) }}</div>
+                <div class="stat-detail">R² 决定系数</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-title">收敛统计</div>
+                <div class="stat-value">{{ result.converged_count }}/{{ result.total_count }}</div>
+                <div class="stat-detail">
+                    收敛率: {{ "%.1f" | format(result.convergence_rate * 100) }}%
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-title">相对误差</div>
+                <div class="stat-value {% if result.relative_error|abs <= 10 %}success{% elif result.relative_error|abs <= 25 %}warning{% else %}error{% endif %}">
+                    {{ "%+.1f" | format(result.relative_error) }}%
+                </div>
+                <div class="stat-detail">
+                    文献值: {{ "%.1f" | format(result.literature_value) }} GPa
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>指标</th>
+                        <th>值</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>弹性常数类型</td>
+                        <td>{{ const_type }}</td>
+                        <td>
+                            {% if const_type == 'C11' %}轴向压缩模量
+                            {% elif const_type == 'C12' %}横向压缩模量  
+                            {% elif const_type in ['C44', 'C55', 'C66'] %}剪切模量
+                            {% else %}弹性模量{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>计算值</td>
+                        <td>{{ "%.2f" | format(result.elastic_constant) }} GPa</td>
+                        <td>线性拟合斜率</td>
+                    </tr>
+                    <tr>
+                        <td>文献值</td>
+                        <td>{{ "%.1f" | format(result.literature_value) }} GPa</td>
+                        <td>EAM Al1势函数理论值</td>
+                    </tr>
+                    <tr>
+                        <td>相对误差</td>
+                        <td class="{% if result.relative_error|abs <= 10 %}success{% elif result.relative_error|abs <= 25 %}warning{% else %}error{% endif %}">
+                            {{ "%+.1f" | format(result.relative_error) }}%
+                        </td>
+                        <td>
+                            {% if result.relative_error|abs <= 10 %}
+                                <span class="badge success">优秀</span> 误差在可接受范围内
+                            {% elif result.relative_error|abs <= 25 %}
+                                <span class="badge warning">良好</span> 误差较小
+                            {% else %}
+                                <span class="badge error">需改进</span> 误差较大
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>拟合质量 (R²)</td>
+                        <td>{{ "%.4f" | format(result.r_squared) }}</td>
+                        <td>
+                            {% if result.r_squared >= 0.95 %}
+                                <span class="badge success">优秀</span> 线性关系很强
+                            {% elif result.r_squared >= 0.9 %}
+                                <span class="badge success">良好</span> 线性关系较强
+                            {% elif result.r_squared >= 0.8 %}
+                                <span class="badge warning">一般</span> 存在一定散度
+                            {% else %}
+                                <span class="badge error">较差</span> 线性关系较弱
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>数据质量</td>
+                        <td>
+                            <span class="data-quality-badge 
+                                {% if result.data_quality == 'Excellent' %}badge success
+                                {% elif result.data_quality == 'Good' %}badge success  
+                                {% elif result.data_quality == 'Fair' %}badge warning
+                                {% else %}badge error{% endif %}">
+                                {{ result.data_quality }}
+                            </span>
+                        </td>
+                        <td>综合评估结果</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endset %}
+
+{% set trajectory_content %}
+<div class="section">
+    <div class="section-title">轨迹动画</div>
+    
+    {% if metadata.has_trajectory %}
+    <div class="trajectory-preview">
+        <h4>轨迹数据概览</h4>
+        <p>该计算包含完整的形变过程轨迹数据，包括：</p>
+        <ul>
+            <li><strong>形变步骤</strong>：记录每个应变点的原子位置和晶格变化</li>
+            <li><strong>优化过程</strong>：记录结构弛豫的收敛轨迹</li>
+            <li><strong>应力演化</strong>：追踪应力张量随应变的变化</li>
+            <li><strong>能量变化</strong>：监测系统能量在形变过程中的变化</li>
+        </ul>
+        
+        <div class="alert alert-info">
+            <h5>功能开发中</h5>
+            <p>轨迹动画和交互式3D可视化功能正在开发中。当前版本可以：</p>
+            <ul>
+                <li>读取和分析H5轨迹文件</li>
+                <li>提取形变过程数据</li>
+                <li>生成静态可视化图表</li>
+            </ul>
+            <p>未来版本将支持：</p>
+            <ul>
+                <li>交互式3D原子动画</li>
+                <li>形变过程的实时回放</li>
+                <li>应力场的3D可视化</li>
+                <li>轨迹数据的导出和分享</li>
+            </ul>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        <h4>无轨迹数据</h4>
+        <p>当前数据集不包含轨迹信息。要使用轨迹功能，请：</p>
+        <ol>
+            <li>使用带轨迹记录的计算方法</li>
+            <li>或者加载包含轨迹数据的H5文件</li>
+        </ol>
+    </div>
+    {% endif %}
+</div>
+{% endset %}
+
+<!-- 定义标签页内容 -->
+{% set tabs = [
+    {"id": "overview", "title": "概览", "content": overview_content},
+    {"id": "plots", "title": "可视化图表", "content": plots_content},
+    {"id": "details", "title": "详细数据", "content": details_content},
+    {"id": "trajectory", "title": "轨迹动画", "content": trajectory_content}
+] %}
+
+{% block extra_js %}
+<script>
+    // 弹性常数专用JavaScript功能
+    
+    // 添加图表交互功能
+    document.addEventListener('DOMContentLoaded', function() {
+        // 为表格添加排序功能
+        const tables = document.querySelectorAll('table');
+        tables.forEach(table => {
+            const headers = table.querySelectorAll('th');
+            headers.forEach((header, index) => {
+                header.style.cursor = 'pointer';
+                header.title = '点击排序';
+                header.addEventListener('click', () => {
+                    sortTable(table, index);
+                });
+            });
+        });
+        
+        // 添加数据导出功能
+        addExportButtons();
+        
+        // 工具提示初始化
+        initializeTooltips();
+    });
+    
+    // 数据导出功能
+    function addExportButtons() {
+        const sections = document.querySelectorAll('.section');
+        sections.forEach(section => {
+            const table = section.querySelector('table');
+            if (table) {
+                const exportBtn = document.createElement('button');
+                exportBtn.textContent = '导出CSV';
+                exportBtn.className = 'btn btn-sm btn-outline-primary';
+                exportBtn.style.float = 'right';
+                exportBtn.onclick = () => exportTableToCSV(table);
+                
+                const title = section.querySelector('.section-title, h3');
+                if (title) {
+                    title.appendChild(exportBtn);
+                }
+            }
+        });
+    }
+    
+    // 导出表格为CSV
+    function exportTableToCSV(table) {
+        const rows = table.querySelectorAll('tr');
+        const csv = Array.from(rows).map(row => {
+            const cells = row.querySelectorAll('th, td');
+            return Array.from(cells).map(cell => {
+                // 清理HTML标签和特殊字符
+                const text = cell.textContent.trim();
+                return '"' + text.replace(/"/g, '""') + '"';
+            }).join(',');
+        }).join('\n');
+        
+        // 下载CSV文件
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'elastic_constants_data.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    // 工具提示功能
+    function initializeTooltips() {
+        const tooltips = document.querySelectorAll('[data-tooltip]');
+        tooltips.forEach(element => {
+            element.classList.add('tooltip');
+        });
+    }
+    
+    // 数据筛选功能
+    function filterTableData(table, columnIndex, filterValue) {
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const cell = row.cells[columnIndex];
+            if (cell) {
+                const cellText = cell.textContent.toLowerCase();
+                const shouldShow = cellText.includes(filterValue.toLowerCase());
+                row.style.display = shouldShow ? '' : 'none';
+            }
+        });
+    }
+    
+    // 图表全屏功能增强
+    function togglePlotFullscreen(img) {
+        if (img.requestFullscreen) {
+            img.requestFullscreen();
+        } else if (img.webkitRequestFullscreen) {
+            img.webkitRequestFullscreen();
+        } else if (img.msRequestFullscreen) {
+            img.msRequestFullscreen();
+        }
+    }
+</script>
+{% endblock %}
