@@ -18,7 +18,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
+from thermoelasticsim.utils.plot_config import plt
 import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
 import logging

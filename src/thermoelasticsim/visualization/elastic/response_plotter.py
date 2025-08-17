@@ -11,16 +11,13 @@ Created: 2025-08-15
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
+from thermoelasticsim.utils.plot_config import plt
 import matplotlib.font_manager as fm
 import pandas as pd
 import os
 from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 
-# 设置中文字体避免乱码
-plt.rcParams["font.sans-serif"] = ["Arial Unicode MS", "SimHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
 
 
 class ResponsePlotter:
