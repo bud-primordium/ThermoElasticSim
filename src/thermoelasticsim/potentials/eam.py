@@ -92,8 +92,9 @@ class EAMAl1Potential(Potential):
         )
 
         forces = forces.reshape((num_atoms, 3))
+        # 统一力的方向与能量梯度约定，确保 F = -∇E
         for i, atom in enumerate(cell.atoms):
-            atom.force = forces[i]
+            atom.force = -forces[i]
 
     def calculate_energy(self, cell: Cell, neighbor_list: NeighborList = None) -> float:
         """
