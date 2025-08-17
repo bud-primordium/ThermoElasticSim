@@ -480,8 +480,8 @@ class Cell:
                 "Non-finite values in fractional coordinates during PBC application"
             )
 
-        # 应用周期性边界条件
-        fractional = fractional % 1.0
+        # 应用周期性边界条件 - 使用最小镜像原理
+        fractional = fractional - np.floor(fractional + 0.5)
 
         # 转回笛卡尔坐标
         new_positions = np.dot(fractional, self.lattice_vectors.T)
