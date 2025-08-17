@@ -234,10 +234,10 @@ class TestNumericalStability:
         
         wrapped = sample_cell.apply_periodic_boundary(positions_near_boundary)
         
-        # 所有位置应该仍然有效且在盒子内
+        # 所有位置应该仍然有效且在最小镜像约定范围内
         assert np.all(np.isfinite(wrapped))
-        assert np.all(wrapped >= 0)
-        assert np.all(wrapped <= box_lengths)
+        assert np.all(wrapped >= -box_lengths/2)
+        assert np.all(wrapped < box_lengths/2)
 
 
 class TestPhysicalRealism:
@@ -275,11 +275,13 @@ class TestPhysicalRealism:
         original_volume = sample_cell.volume
         original_distances = []
         
-        # 计算原始原子间距离
+        # 计算原始原子间距离（使用最小镜像约定）
         positions = sample_cell.get_positions()
         for i in range(len(positions)):
             for j in range(i+1, len(positions)):
-                dist = np.linalg.norm(positions[i] - positions[j])
+                rij = positions[j] - positions[i]
+                min_image_rij = sample_cell.minimum_image(rij)
+                dist = np.linalg.norm(min_image_rij)
                 original_distances.append(dist)
         
         # 应用均匀缩放
@@ -290,12 +292,14 @@ class TestPhysicalRealism:
         expected_volume = original_volume * (scale_factor ** 3)
         assert np.isclose(new_volume, expected_volume)
         
-        # 检查距离缩放
+        # 检查距离缩放（使用最小镜像约定）
         new_positions = sample_cell.get_positions()
         new_distances = []
         for i in range(len(new_positions)):
             for j in range(i+1, len(new_positions)):
-                dist = np.linalg.norm(new_positions[i] - new_positions[j])
+                rij = new_positions[j] - new_positions[i]
+                min_image_rij = sample_cell.minimum_image(rij)
+                dist = np.linalg.norm(min_image_rij)
                 new_distances.append(dist)
         
         # 所有距离应该按相同因子缩放

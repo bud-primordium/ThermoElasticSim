@@ -225,7 +225,8 @@ def test_eam_force_two_atom(eam_potential):
     d_psi = cpp_psi_grad(r)
     d_F = cpp_F_grad(cpp_psi(r))
     force_magnitude = -(d_phi + 2 * d_F * d_psi)
-    expected_force_on_atom2 = np.array([force_magnitude * (-1), 0, 0])
+    # 修复后的EAM实现已经应用了F = -∇E，所以力直接是梯度的负数
+    expected_force_on_atom2 = np.array([force_magnitude, 0, 0])
     eam_potential.calculate_forces(cell)
     calculated_force_on_atom2 = cell.atoms[1].force
     assert np.allclose(calculated_force_on_atom2, expected_force_on_atom2, atol=1e-9)
