@@ -24,6 +24,12 @@ extern "C"
         const double *positions,
         const double *lattice_vectors,
         double *forces);
+
+    void calculate_eam_al1_virial(
+        int num_atoms,
+        const double *positions,
+        const double *lattice_vectors,
+        double *virial_tensor);
 }
 
 void bind_eam_al1(py::module_ &m)
@@ -106,4 +112,34 @@ void bind_eam_al1(py::module_ &m)
         py::arg("lattice_vectors"),
         py::arg("forces"),
         "计算 EAM Al1 势能作用力");
+
+    // 绑定维里张量计算函数（不除以体积）
+    m.def(
+        "calculate_eam_al1_virial",
+        [](int num_atoms,
+           py::array_t<double, py::array::c_style | py::array::forcecast> positions,
+           py::array_t<double, py::array::c_style | py::array::forcecast> lattice_vectors) {
+            if (positions.ndim() != 1 || positions.size() != 3 * num_atoms) {
+                throw std::runtime_error("positions must be 1D with length 3*num_atoms");
+            }
+            if (lattice_vectors.ndim() != 1 || lattice_vectors.size() != 9) {
+                throw std::runtime_error("lattice_vectors must be 1D with length 9 (row-major)");
+            }
+            const double *pos_ptr = positions.data();
+            const double *lat_ptr = lattice_vectors.data();
+            py::array_t<double> virial(9);
+            py::buffer_info info = virial.request();
+            double *vir_ptr = static_cast<double *>(info.ptr);
+            calculate_eam_al1_virial(
+                num_atoms,
+                pos_ptr,
+                lat_ptr,
+                vir_ptr
+            );
+            return virial;
+        },
+        py::arg("num_atoms"),
+        py::arg("positions"),
+        py::arg("lattice_vectors"),
+        "计算 EAM Al1 维里张量 (3x3, row-major展开，未除以体积)");
 }

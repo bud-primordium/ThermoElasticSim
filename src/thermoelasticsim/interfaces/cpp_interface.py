@@ -246,6 +246,16 @@ class CppInterface:
             ]
             self.lib.calculate_eam_al1_energy.restype = None
 
+            # 可选：维里计算（如果提供C接口）
+            if hasattr(self.lib, "calculate_eam_al1_virial"):
+                self.lib.calculate_eam_al1_virial.argtypes = [
+                    ctypes.c_int,
+                    ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
+                    ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
+                    ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
+                ]
+                self.lib.calculate_eam_al1_virial.restype = None
+
         elif lib_name == "nose_hoover":
             self.lib.nose_hoover.argtypes = [
                 ctypes.c_double,  # dt
@@ -621,6 +631,25 @@ class CppInterface:
                 energy,
             )
             return energy[0]
+
+    def calculate_eam_al1_virial(self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray) -> np.ndarray:
+        """计算EAM Al1的维里张量（未除以体积）。返回形状(3,3)。"""
+        pos = np.ascontiguousarray(positions, dtype=np.float64)
+        if pos.ndim == 2 and pos.shape[1] == 3:
+            pos = pos.reshape(-1)
+        lat = np.ascontiguousarray(lattice_vectors, dtype=np.float64)
+        if lat.shape != (9,):
+            lat = lat.reshape(9)
+
+        if self._use_pybind and hasattr(self._cpp, "calculate_eam_al1_virial"):
+            vir = self._cpp.calculate_eam_al1_virial(num_atoms, pos, lat)
+            vir = np.ascontiguousarray(vir, dtype=np.float64)
+        else:
+            if not hasattr(self, "lib") or not hasattr(self.lib, "calculate_eam_al1_virial"):
+                raise RuntimeError("C++ backend for EAM virial not available")
+            vir = np.zeros(9, dtype=np.float64)
+            self.lib.calculate_eam_al1_virial(num_atoms, pos, lat, vir)
+        return vir.reshape(3, 3)
 
     def nose_hoover(
         self, dt, num_atoms, masses, velocities, forces, xi_array, Q, target_temperature

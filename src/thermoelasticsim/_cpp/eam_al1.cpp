@@ -483,4 +483,120 @@ extern "C"
         }
     }
 
+    /**
+     * @brief 计算 EAM Al1 的维里张量 (不除以体积)
+     *
+     * 维里定义（与Python实现一致）：
+     * virial = - Σ_{i<j} r_ij^(mic) ⊗ F_ij
+     * 其中 F_ij 是 j 对 i 的力（对称相反）
+     *
+     * @param num_atoms 原子数
+     * @param positions 位置(3N)
+     * @param lattice_vectors 晶格(3x3 row-major)
+     * @param virial_tensor 输出(9, row-major)
+     */
+    void calculate_eam_al1_virial(
+        int num_atoms,
+        const double *positions,
+        const double *lattice_vectors,
+        double *virial_tensor)
+    {
+        // 初始化输出
+        for (int i = 0; i < 9; ++i)
+            virial_tensor[i] = 0.0;
+
+        // 构造 L, LT, inv(LT)
+        double L[3][3];
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c)
+                L[r][c] = lattice_vectors[3 * r + c];
+
+        double LT[3][3];
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c)
+                LT[r][c] = L[c][r];
+
+        auto det3 = [&](double A[3][3])
+        {
+            return A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+        };
+        double detLT = det3(LT);
+        double invLT[3][3];
+        invLT[0][0] = (LT[1][1] * LT[2][2] - LT[1][2] * LT[2][1]) / detLT;
+        invLT[0][1] = -(LT[0][1] * LT[2][2] - LT[0][2] * LT[2][1]) / detLT;
+        invLT[0][2] = (LT[0][1] * LT[1][2] - LT[0][2] * LT[1][1]) / detLT;
+        invLT[1][0] = -(LT[1][0] * LT[2][2] - LT[1][2] * LT[2][0]) / detLT;
+        invLT[1][1] = (LT[0][0] * LT[2][2] - LT[0][2] * LT[2][0]) / detLT;
+        invLT[1][2] = -(LT[0][0] * LT[1][2] - LT[0][2] * LT[1][0]) / detLT;
+        invLT[2][0] = (LT[1][0] * LT[2][1] - LT[1][1] * LT[2][0]) / detLT;
+        invLT[2][1] = -(LT[0][0] * LT[2][1] - LT[0][1] * LT[2][0]) / detLT;
+        invLT[2][2] = (LT[0][0] * LT[1][1] - LT[0][1] * LT[1][0]) / detLT;
+
+        // 1) 电子密度
+        std::vector<double> electron_density(num_atoms, 0.0);
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            for (int j = 0; j < num_atoms; ++j)
+            {
+                if (i == j)
+                    continue;
+                double rij[3] = {positions[3 * j + 0] - positions[3 * i + 0],
+                                 positions[3 * j + 1] - positions[3 * i + 1],
+                                 positions[3 * j + 2] - positions[3 * i + 2]};
+                double s[3];
+                for (int a = 0; a < 3; ++a)
+                {
+                    s[a] = invLT[a][0] * rij[0] + invLT[a][1] * rij[1] + invLT[a][2] * rij[2];
+                    s[a] -= std::floor(s[a] + 0.5);
+                }
+                double rij_mic[3] = {LT[0][0] * s[0] + LT[0][1] * s[1] + LT[0][2] * s[2],
+                                     LT[1][0] * s[0] + LT[1][1] * s[1] + LT[1][2] * s[2],
+                                     LT[2][0] * s[0] + LT[2][1] * s[1] + LT[2][2] * s[2]};
+                double r = std::sqrt(rij_mic[0] * rij_mic[0] + rij_mic[1] * rij_mic[1] + rij_mic[2] * rij_mic[2]);
+                if (r <= 6.5)
+                {
+                    electron_density[i] += psi(r);
+                }
+            }
+        }
+
+        // 2) 配对循环累加维里
+        for (int i = 0; i < num_atoms; ++i)
+        {
+            for (int j = i + 1; j < num_atoms; ++j)
+            {
+                double rij[3] = {positions[3 * j + 0] - positions[3 * i + 0],
+                                 positions[3 * j + 1] - positions[3 * i + 1],
+                                 positions[3 * j + 2] - positions[3 * i + 2]};
+                double s[3];
+                for (int a = 0; a < 3; ++a)
+                {
+                    s[a] = invLT[a][0] * rij[0] + invLT[a][1] * rij[1] + invLT[a][2] * rij[2];
+                    s[a] -= std::floor(s[a] + 0.5);
+                }
+                double rij_mic[3] = {LT[0][0] * s[0] + LT[0][1] * s[1] + LT[0][2] * s[2],
+                                     LT[1][0] * s[0] + LT[1][1] * s[1] + LT[1][2] * s[2],
+                                     LT[2][0] * s[0] + LT[2][1] * s[1] + LT[2][2] * s[2]};
+                double r = std::sqrt(rij_mic[0] * rij_mic[0] + rij_mic[1] * rij_mic[1] + rij_mic[2] * rij_mic[2]);
+                if (r > 1e-6 && r <= 6.5)
+                {
+                    double d_phi = phi_grad(r);
+                    double d_psi = psi_grad(r);
+                    double d_F_i = Phi_grad(electron_density[i]);
+                    double d_F_j = Phi_grad(electron_density[j]);
+                    double fmag = -(d_phi + (d_F_i + d_F_j) * d_psi);
+                    double fij[3] = {fmag * (rij_mic[0] / r), fmag * (rij_mic[1] / r), fmag * (rij_mic[2] / r)};
+                    // virial -= rij ⊗ F_ij
+                    for (int a = 0; a < 3; ++a)
+                    {
+                        for (int b = 0; b < 3; ++b)
+                        {
+                            virial_tensor[3 * a + b] -= rij_mic[a] * fij[b];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 } // extern "C"
