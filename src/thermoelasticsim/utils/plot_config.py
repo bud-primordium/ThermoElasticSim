@@ -11,7 +11,6 @@ Usage:
     # 或者直接导入已配置的pyplot
     from thermoelasticsim.utils.plot_config import plt
 
-Author: Claude Code
 Created: 2025-08-17
 """
 
