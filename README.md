@@ -1,27 +1,55 @@
 # ThermoElasticSim
 
+**语言版本**: 中文 | [English](README_en.md)
+
 ## 项目简介
 
-**ThermoElasticSim** 是一个用于计算金属铝（Al）和绝缘体金刚石（Diamond）在零温和有限温度下弹性常数的模拟工具。该项目结合了 Python 的易用性和 C++ 的高性能计算能力，通过结构优化和分子动力学（MD）模拟，采用显式变形法和应力涨落法，全面研究材料的弹性性质。此外，支持弹性波在不同晶向上的传播特性分析。
+**ThermoElasticSim** 是一个专门用于计算金属铝（Al）在零温和有限温度下弹性常数的分子动力学模拟工具。该项目基于 EAM (Embedded Atom Method) 势函数，结合了 Python 的易用性和 C++ 的高性能计算能力，通过结构优化和分子动力学（MD）模拟，采用显式变形法和应力涨落法，精确计算材料的弹性性质。
+
+项目采用算符分离架构实现了多种MD系综，包括NVE、NVT（Berendsen、Andersen、Nosé-Hoover链）、NPT（MTK）等，为有限温弹性常数计算提供了可靠的统计力学基础。
 
 ## 主要功能
 
-1. **零温下弹性常数计算**
+### 已实现功能
+
+1. **零温弹性常数计算（FCC铝）**
    - 确定平衡晶格构型
-   - 施加独立应变，计算应力
-   - 建立应力-应变关系，求解弹性常数
+   - 施加独立应变，计算应力响应
+   - 求解弹性常数（C11、C12、C44）
+   - 多种系统尺寸和收敛性分析
 
-2. **有限温度下弹性常数计算**
-   - 通过分子动力学（MD）模拟确定有限温度下的平衡晶格构型
-   - 施加应变，计算应力并进行统计平均
-   - 建立应力-应变关系，求解温度依赖的弹性常数
+2. **有限温弹性常数计算（FCC铝）**
+   - MTK-NPT预平衡确定有限温平衡态
+   - Nosé-Hoover链NVT采样应力涨落
+   - 统计平均计算温度依赖弹性常数
 
-3. **弹性波传播模拟**
-   - 模拟不同晶向（[100]、[110]、[111]）上的横波和纵波传播
-   - 分析弹性波的传播特性
+3. **分子动力学系综**
+   - NVE：算符分离Velocity-Verlet积分
+   - NVT：Berendsen弱耦合、Andersen随机碰撞、Nosé-Hoover链恒温器
+   - NPT：Martyna-Tobias-Klein可逆积分器
 
-4. **应力-应变关系分析**
-   - 模拟不同应变大小对应的应力，分析胡克定律的适用范围
+4. **计算架构**
+   - C++/Python混合编程，核心计算C++实现
+   - EAM势函数及维里应力张量计算
+   - 周期性边界条件和最小镜像原理
+   - 多种数值优化器
+
+### 开发中功能
+
+- 配置文件系统（YAML格式）
+- 弹性波传播模拟
+- 金刚石材料支持
+
+## 势函数模型
+
+项目采用经过验证的EAM (Embedded Atom Method) 势函数进行铝材料的分子动力学模拟：
+
+**EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006**
+
+- **OpenKIM数据库收录**：[MO_106969701023_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006)
+- **理论基础**：Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. doi:10.1080/14786430802206482
+- **适用范围**：晶体和液体铝的结构和动力学性质
+- **验证精度**：零温弹性常数与文献值误差小于1%，有限温与实验值吻合较好。
 
 ## 目录结构
 
@@ -92,8 +120,14 @@ uv run pytest
 
 ### 运行示例
 
+**零温弹性常数计算**：
 ```bash
-uv run python examples/calculate_elastic_constants.py
+uv run python examples/zero_temp_al_benchmark.py
+```
+
+**有限温弹性常数计算**：
+```bash
+uv run python examples/finite_temp_al_benchmark.py
 ```
 
 ### 运行测试
