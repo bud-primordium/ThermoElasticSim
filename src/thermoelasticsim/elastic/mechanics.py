@@ -16,7 +16,7 @@ import matplotlib as mpl
 mpl.set_loglevel("WARNING")
 
 # 配置我们自己的日志
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +31,7 @@ class StressCalculator:
 
     def __init__(self):
         self.cpp_interface = CppInterface("stress_calculator")
-        logger.debug("Initialized StressCalculator with C++ interface")
+        logger.debug("StressCalculator initialized")
 
     def calculate_kinetic_stress(self, cell) -> np.ndarray:
         """
@@ -51,7 +51,6 @@ class StressCalculator:
             动能应力张量 (3x3)
         """
         try:
-            logger.debug("Starting kinetic stress calculation.")
 
             num_atoms = len(cell.atoms)
             velocities = cell.get_velocities()  # shape: (num_atoms, 3)
@@ -71,9 +70,6 @@ class StressCalculator:
 
             kinetic_stress /= volume
 
-            logger.debug(
-                f"Kinetic stress magnitude: {np.linalg.norm(kinetic_stress):.2e}"
-            )
             return kinetic_stress
 
         except Exception as e:
@@ -102,20 +98,28 @@ class StressCalculator:
             维里应力张量 (3x3)
         """
         try:
-            logger.debug("Starting virial stress calculation.")
-
             volume = cell.volume
-            # 计算EAM维里贡献
-            virial_contribution = self._calculate_eam_virial_contribution(
-                cell, potential
-            )
-            virial_stress = virial_contribution / volume
+            # 优先使用C++的EAM维里实现（若可用）
+            virial_tensor = None
+            try:
+                if hasattr(potential, "cpp_interface") and getattr(potential.cpp_interface, "_lib_name", None) == "eam_al1":
+                    num_atoms = len(cell.atoms)
+                    positions = np.ascontiguousarray(cell.get_positions(), dtype=np.float64)
+                    lattice = np.ascontiguousarray(cell.lattice_vectors, dtype=np.float64)
+                    virial_tensor = potential.cpp_interface.calculate_eam_al1_virial(
+                        num_atoms,
+                        positions,
+                        lattice.flatten(),
+                    )
+            except Exception as e_cpp:
+                logger.debug(f"C++ EAM virial not available, fallback to Python: {e_cpp}")
 
-            logger.debug(
-                f"Virial stress magnitude: {np.linalg.norm(virial_stress):.2e}"
-            )
+            if virial_tensor is None:
+                # 回退到Python实现（较慢）
+                virial_tensor = self._calculate_eam_virial_contribution(cell, potential)
+
+            virial_stress = virial_tensor / volume
             return virial_stress
-
         except Exception as e:
             logger.error(f"Error in virial stress calculation: {e}")
             raise
@@ -139,7 +143,6 @@ class StressCalculator:
             总应力张量 (3x3)
         """
         try:
-            logger.debug("Starting total stress calculation.")
 
             kinetic_stress = self.calculate_kinetic_stress(cell)
             virial_stress = self.calculate_virial_stress(cell, potential)
@@ -174,9 +177,6 @@ class StressCalculator:
             维里贡献张量 (3x3)
         """
         try:
-            logger.debug(
-                "Calculating EAM virial contribution from pairwise interactions."
-            )
 
             num_atoms = len(cell.atoms)
             positions = cell.get_positions()
@@ -238,9 +238,6 @@ class StressCalculator:
                             for β in range(3):
                                 virial_tensor[α, β] -= rij[α] * force_ij[β]
 
-            logger.debug(
-                f"Calculated EAM virial tensor magnitude: {np.linalg.norm(virial_tensor):.2e}"
-            )
             return virial_tensor
 
         except Exception as e:
@@ -468,7 +465,6 @@ class StressCalculator:
             有限差分应力张量 (3x3)
         """
         try:
-            logger.debug("Starting finite difference stress calculation.")
 
             # 初始化能量导数矩阵
             dUdh = np.zeros((3, 3), dtype=np.float64)
@@ -476,11 +472,8 @@ class StressCalculator:
             # 保存原始状态的深拷贝
             original_cell = cell.copy()
 
-            logger.debug("Created deep copy of cell for deformation.")
-
             for i in range(3):
                 for j in range(3):
-                    logger.debug(f"Calculating derivative for component ({i}, {j}).")
 
                     # 正向形变矩阵
                     deformation = np.eye(3)
@@ -494,21 +487,17 @@ class StressCalculator:
                     deformed_cell_plus = original_cell.copy()
                     deformed_cell_plus.apply_deformation(deformation)
                     energy_plus = potential.calculate_energy(deformed_cell_plus)
-                    logger.debug(f"Energy after positive deformation: {energy_plus}")
 
                     # 应用负向形变到原始_cell的副本
                     deformed_cell_minus = original_cell.copy()
                     deformed_cell_minus.apply_deformation(deformation_negative)
                     energy_minus = potential.calculate_energy(deformed_cell_minus)
-                    logger.debug(f"Energy after negative deformation: {energy_minus}")
 
                     # 计算能量导数
                     dUdh[i, j] = (energy_plus - energy_minus) / (2 * dr)
-                    logger.debug(f"dUdh[{i}, {j}] = {dUdh[i, j]}")
 
             # 转换为应力张量
             finite_diff_stress = dUdh / original_cell.volume
-            logger.debug(f"Finite difference stress tensor:\n{finite_diff_stress}")
 
             return finite_diff_stress
 
@@ -543,7 +532,6 @@ class StressCalculator:
             - "finite_diff": 有限差分应力张量（用于验证）
         """
         try:
-            logger.debug("Starting stress calculation with all components.")
             components = {}
 
             # 计算各个分量
@@ -559,16 +547,6 @@ class StressCalculator:
             components["virial"] = virial_stress
             components["total"] = total_stress
             components["finite_diff"] = finite_diff_stress
-
-            logger.debug(
-                f"Kinetic stress magnitude: {np.linalg.norm(kinetic_stress * EV_TO_GPA):.6f} GPa"
-            )
-            logger.debug(
-                f"Virial stress magnitude: {np.linalg.norm(virial_stress * EV_TO_GPA):.6f} GPa"
-            )
-            logger.debug(
-                f"Total stress magnitude: {np.linalg.norm(total_stress * EV_TO_GPA):.6f} GPa"
-            )
 
             return components
 
@@ -629,8 +607,6 @@ class StressCalculator:
         is_symmetric = np.allclose(tensor, tensor.T, atol=tolerance)
         if not is_symmetric:
             logger.warning("Stress tensor is not symmetric.")
-        else:
-            logger.debug("Stress tensor is symmetric.")
 
         return is_symmetric
 

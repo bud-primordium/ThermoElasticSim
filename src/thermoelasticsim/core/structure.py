@@ -7,7 +7,7 @@ ThermoElasticSim - 结构模块
 
 .. moduleauthor:: Gilbert Young
 .. created:: 2024-10-14
-.. modified:: 2025-07-07
+.. modified:: 2025-08-18
 .. version:: 4.0.0
 
 Classes:
@@ -36,7 +36,7 @@ __copyright__ = "Copyright 2025, Gilbert Young"
 
 import numpy as np
 from typing import Optional  # 用于类型注解
-from thermoelasticsim.utils.utils import AMU_TO_EVFSA2
+from thermoelasticsim.utils.utils import AMU_TO_EVFSA2, KB_IN_EV
 import logging
 from numba import jit
 
@@ -502,48 +502,75 @@ class Cell:
 
     def calculate_temperature(self) -> float:
         """计算当前系统的温度，扣除质心运动
-
+        
         Returns:
             系统温度，单位为K
-
+            
         Notes:
-            对于多个原子：dof = 3*N - 3
-            对于单个原子：dof = 3*N
-
+            对于多个原子：dof = 3*N - 3 (扣除质心运动)
+            对于单个原子：dof = 3*N (不扣除质心运动)
+            
         Examples:
             >>> cell = Cell(lattice_vectors, atoms)
             >>> temp = cell.calculate_temperature()
             >>> print(f"系统温度: {temp:.2f} K")
         """
-
-        kb = 8.617333262e-5  # eV/K
+        
+        kb = KB_IN_EV  # 使用utils.py中的标准常数
         num_atoms = len(self.atoms)
         if num_atoms == 0:
-            return 0.0  # 或 raise Exception("No atoms in system.")
-
-        total_mass = sum(atom.mass for atom in self.atoms)
-        total_momentum = sum(atom.mass * atom.velocity for atom in self.atoms)
-        com_velocity = total_momentum / total_mass
-
-        kinetic = sum(
-            0.5
-            * atom.mass
-            * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
-            for atom in self.atoms
-        )
-
-        # 根据原子数决定自由度计算方式
-        if num_atoms > 1:
-            dof = 3 * num_atoms - 3
-        else:
-            dof = 3 * num_atoms  # 对于单个原子不扣除3个自由度
-
-        if dof <= 0:
-            # 若无自由度可分配，温度定义无意义，按需处理
             return 0.0
-
+        
+        if num_atoms == 1:
+            # 单原子系统：直接使用原子动能，不扣除质心运动
+            atom = self.atoms[0]
+            kinetic = 0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
+            dof = 3  # 3个平动自由度
+        else:
+            # 多原子系统：扣除质心运动
+            total_mass = sum(atom.mass for atom in self.atoms)
+            total_momentum = sum(atom.mass * atom.velocity for atom in self.atoms)
+            com_velocity = total_momentum / total_mass
+            
+            kinetic = sum(
+                0.5
+                * atom.mass
+                * np.dot(atom.velocity - com_velocity, atom.velocity - com_velocity)
+                for atom in self.atoms
+            )
+            dof = 3 * num_atoms - 3  # 扣除3个质心平动自由度
+        
+        if dof <= 0:
+            return 0.0
+            
         temperature = 2.0 * kinetic / (dof * kb)
         return temperature
+
+    def calculate_kinetic_energy(self) -> float:
+        """计算当前系统的总动能
+        
+        Returns:
+            系统总动能，单位为eV
+            
+        Notes:
+            计算所有原子的动能总和，包含质心运动
+            
+        Examples:
+            >>> cell = Cell(lattice_vectors, atoms)
+            >>> kinetic = cell.calculate_kinetic_energy()
+            >>> print(f"系统动能: {kinetic:.6f} eV")
+        """
+        num_atoms = len(self.atoms)
+        if num_atoms == 0:
+            return 0.0
+        
+        # 计算所有原子动能总和（不扣除质心运动）
+        total_kinetic = 0.0
+        for atom in self.atoms:
+            kinetic = 0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
+            total_kinetic += kinetic
+        
+        return total_kinetic
 
     def get_positions(self) -> np.ndarray:
         """获取所有原子的位置信息
@@ -819,3 +846,58 @@ class Cell:
 
         for i, atom in enumerate(self.atoms):
             atom.position = positions[i].copy()
+
+    def get_volume(self) -> float:
+        """计算晶胞体积
+        
+        Returns
+        -------
+        float
+            晶胞体积 (Å³)
+            
+        Notes
+        -----
+        体积通过晶格矢量的标量三重积计算：
+        V = |a · (b × c)|
+        """
+        # 计算混合积：a · (b × c)
+        a, b, c = self.lattice_vectors
+        volume = np.abs(np.dot(a, np.cross(b, c)))
+        return volume
+    
+    def scale_lattice(self, scale_factor: float) -> None:
+        """按给定因子等比例缩放晶格
+        
+        Parameters
+        ----------
+        scale_factor : float
+            缩放因子，>1放大，<1缩小
+            
+        Notes
+        -----
+        这个方法只缩放晶格矢量，不改变原子坐标。
+        通常与原子坐标的相应缩放一起使用。
+        
+        Examples
+        --------
+        >>> cell.scale_lattice(1.1)  # 放大10%
+        >>> # 同时需要缩放原子坐标以保持相对位置
+        >>> for atom in cell.atoms:
+        ...     atom.position *= 1.1
+        """
+        if scale_factor <= 0:
+            raise ValueError(f"缩放因子必须为正数，得到 {scale_factor}")
+            
+        # 缩放所有晶格矢量
+        self.lattice_vectors *= scale_factor
+        
+        # 重新计算逆矩阵和体积
+        self._update_cached_properties()
+    
+    def _update_cached_properties(self) -> None:
+        """更新缓存的晶格属性（逆矩阵等）"""
+        # 重新计算晶格逆矩阵
+        try:
+            self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
+        except np.linalg.LinAlgError:
+            raise ValueError("晶格矢量矩阵不可逆，可能存在线性相关的矢量")
