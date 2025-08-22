@@ -15,21 +15,21 @@
 Created: 2025-08-18
 """
 
-import numpy as np
-from typing import Optional
 
+import numpy as np
+
+from ..core.structure import Cell
 from .interfaces import IntegrationScheme
 from .propagators import (
+    AndersenThermostatPropagator,
+    BerendsenThermostatPropagator,
+    ForcePropagator,
+    LangevinThermostatPropagator,
+    MTKBarostatPropagator,
+    NoseHooverChainPropagator,
     PositionPropagator,
     VelocityPropagator,
-    ForcePropagator,
-    BerendsenThermostatPropagator,
-    AndersenThermostatPropagator,
-    NoseHooverChainPropagator,
-    MTKBarostatPropagator,
-    LangevinThermostatPropagator,
 )
-from ..core.structure import Cell
 
 
 class NVEScheme(IntegrationScheme):
@@ -67,7 +67,7 @@ class NVEScheme(IntegrationScheme):
         """
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
-        self.f_prop: Optional[ForcePropagator] = (
+        self.f_prop: ForcePropagator | None = (
             None  # 延迟初始化，第一次调用step时创建
         )
 
@@ -211,7 +211,7 @@ class BerendsenNVTScheme(IntegrationScheme):
         # 创建传播子组件
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
-        self.f_prop: Optional[ForcePropagator] = None  # 延迟初始化
+        self.f_prop: ForcePropagator | None = None  # 延迟初始化
         self.thermostat = BerendsenThermostatPropagator(
             target_temperature, tau=tau, mode="equilibration"
         )
@@ -387,7 +387,7 @@ class AndersenNVTScheme(IntegrationScheme):
         # 创建传播子组件
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
-        self.f_prop: Optional[ForcePropagator] = None  # 延迟初始化
+        self.f_prop: ForcePropagator | None = None  # 延迟初始化
         self.thermostat = AndersenThermostatPropagator(
             target_temperature, collision_frequency=collision_frequency
         )
@@ -594,7 +594,7 @@ class NoseHooverNVTScheme(IntegrationScheme):
         # 创建传播子组件
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
-        self.f_prop: Optional[ForcePropagator] = None  # 延迟初始化
+        self.f_prop: ForcePropagator | None = None  # 延迟初始化
         self.thermostat = NoseHooverChainPropagator(
             target_temperature, tdamp, tchain, tloop
         )
@@ -823,7 +823,7 @@ class LangevinNVTScheme(IntegrationScheme):
         # 创建传播子组件
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
-        self.f_prop: Optional[ForcePropagator] = None  # 延迟初始化
+        self.f_prop: ForcePropagator | None = None  # 延迟初始化
         self.thermostat = LangevinThermostatPropagator(target_temperature, friction)
 
         # 统计信息
@@ -1307,7 +1307,7 @@ class MTKNPTScheme(IntegrationScheme):
         self._volume_history = []
         self._conserved_energy_history = []
 
-        print(f"MTK-NPT积分方案初始化:")
+        print("MTK-NPT积分方案初始化:")
         print(f"  目标温度: {target_temperature:.1f} K")
         print(f"  目标压力: {target_pressure:.3f} GPa")
         print(f"  温度阻尼: {tdamp:.1f} fs")
@@ -1342,6 +1342,7 @@ class MTKNPTScheme(IntegrationScheme):
             current_temp = cell.calculate_temperature()
             if current_temp < 0.5 * self.target_temperature:
                 import numpy as np
+
                 from thermoelasticsim.utils.utils import KB_IN_EV
 
                 for atom in cell.atoms:
@@ -1469,6 +1470,7 @@ class MTKNPTScheme(IntegrationScheme):
         if self._thermostat is not None:
             # NoseHoover链恒温器能量计算
             import numpy as np
+
             from thermoelasticsim.utils.utils import KB_IN_EV
 
             # 恒温器动能: Σ(p_ζ²/2Q)

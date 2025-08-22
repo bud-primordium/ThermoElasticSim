@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - 结构模块
 
@@ -14,7 +13,8 @@ Classes:
     Atom: 表示单个原子，包含位置、速度和质量等属性
     Cell: 表示晶胞结构，包含晶格矢量和原子列表
 
-Examples:
+Examples
+--------
     创建原子和晶胞的基本用法::
 
         >>> from thermoelasticsim.core.structure import Atom, Cell
@@ -22,7 +22,8 @@ Examples:
         >>> print(atom.symbol)
         'Al'
 
-Notes:
+Notes
+-----
     本模块是 ThermoElasticSim 包的核心组件，提供了分子动力学模拟的基础数据结构。
 
 .. versionadded:: 4.0.0
@@ -34,11 +35,12 @@ __author__ = "Gilbert Young"
 __license__ = "GPL-3.0"
 __copyright__ = "Copyright 2025, Gilbert Young"
 
-import numpy as np
-from typing import Optional  # 用于类型注解
-from thermoelasticsim.utils.utils import AMU_TO_EVFSA2, KB_IN_EV
 import logging
+
+import numpy as np
 from numba import jit
+
+from thermoelasticsim.utils.utils import AMU_TO_EVFSA2, KB_IN_EV
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
@@ -85,7 +87,7 @@ class Atom:
         symbol: str,
         mass_amu: float,
         position: np.ndarray,
-        velocity: Optional[np.ndarray] = None,
+        velocity: np.ndarray | None = None,
     ) -> None:
         self.id = id
         self.symbol = symbol
@@ -105,10 +107,12 @@ class Atom:
         Args:
             displacement: 位置增量向量，形状为(3,)
 
-        Raises:
+        Raises
+        ------
             ValueError: 如果位置增量不是3D向量
 
-        Examples:
+        Examples
+        --------
             >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
             >>> atom.move_by([0.1, 0.2, 0.3])
             >>> print(atom.position)
@@ -128,10 +132,12 @@ class Atom:
         Args:
             velocity_change: 速度增量向量，形状为(3,)
 
-        Raises:
+        Raises
+        ------
             ValueError: 如果velocity_change不是3D向量
 
-        Examples:
+        Examples
+        --------
             >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
             >>> atom.accelerate_by([0.1, 0.2, 0.3])
             >>> print(atom.velocity)
@@ -148,10 +154,12 @@ class Atom:
     def copy(self) -> "Atom":
         """创建 Atom 的深拷贝
 
-        Returns:
+        Returns
+        -------
             新的Atom对象，包含当前原子的所有属性的副本
 
-        Examples:
+        Examples
+        --------
             >>> atom1 = Atom(1, 'H', 1.0, [0, 0, 0])
             >>> atom2 = atom1.copy()
             >>> atom2.id == atom1.id
@@ -388,7 +396,8 @@ class Cell:
         Args:
             deformation_matrix: 3x3变形矩阵F
 
-        Notes:
+        Notes
+        -----
             当晶格未锁定时：
             1. 更新晶格矢量： L_new = F * L_old
             2. 更新原子坐标： r_new = r_old * F^T
@@ -396,7 +405,8 @@ class Cell:
             当晶格已锁定时：
             仅对原子坐标施加F变形： r_new = r_old * F^T
 
-        Examples:
+        Examples
+        --------
             >>> import numpy as np
             >>> # 小幅变形矩阵
             >>> F = np.array([[1.01, 0, 0], [0, 1, 0], [0, 0, 1]])
@@ -503,24 +513,26 @@ class Cell:
     def calculate_temperature(self) -> float:
         """计算当前系统的温度，扣除质心运动
         
-        Returns:
+        Returns
+        -------
             系统温度，单位为K
             
-        Notes:
+        Notes
+        -----
             对于多个原子：dof = 3*N - 3 (扣除质心运动)
             对于单个原子：dof = 3*N (不扣除质心运动)
             
-        Examples:
+        Examples
+        --------
             >>> cell = Cell(lattice_vectors, atoms)
             >>> temp = cell.calculate_temperature()
             >>> print(f"系统温度: {temp:.2f} K")
         """
-        
         kb = KB_IN_EV  # 使用utils.py中的标准常数
         num_atoms = len(self.atoms)
         if num_atoms == 0:
             return 0.0
-        
+
         if num_atoms == 1:
             # 单原子系统：直接使用原子动能，不扣除质心运动
             atom = self.atoms[0]
@@ -531,7 +543,7 @@ class Cell:
             total_mass = sum(atom.mass for atom in self.atoms)
             total_momentum = sum(atom.mass * atom.velocity for atom in self.atoms)
             com_velocity = total_momentum / total_mass
-            
+
             kinetic = sum(
                 0.5
                 * atom.mass
@@ -539,23 +551,26 @@ class Cell:
                 for atom in self.atoms
             )
             dof = 3 * num_atoms - 3  # 扣除3个质心平动自由度
-        
+
         if dof <= 0:
             return 0.0
-            
+
         temperature = 2.0 * kinetic / (dof * kb)
         return temperature
 
     def calculate_kinetic_energy(self) -> float:
         """计算当前系统的总动能
         
-        Returns:
+        Returns
+        -------
             系统总动能，单位为eV
             
-        Notes:
+        Notes
+        -----
             计算所有原子的动能总和，包含质心运动
             
-        Examples:
+        Examples
+        --------
             >>> cell = Cell(lattice_vectors, atoms)
             >>> kinetic = cell.calculate_kinetic_energy()
             >>> print(f"系统动能: {kinetic:.6f} eV")
@@ -563,22 +578,24 @@ class Cell:
         num_atoms = len(self.atoms)
         if num_atoms == 0:
             return 0.0
-        
+
         # 计算所有原子动能总和（不扣除质心运动）
         total_kinetic = 0.0
         for atom in self.atoms:
             kinetic = 0.5 * atom.mass * np.dot(atom.velocity, atom.velocity)
             total_kinetic += kinetic
-        
+
         return total_kinetic
 
     def get_positions(self) -> np.ndarray:
         """获取所有原子的位置信息
 
-        Returns:
+        Returns
+        -------
             原子位置数组，形状为(num_atoms, 3)
 
-        Examples:
+        Examples
+        --------
             >>> positions = cell.get_positions()
             >>> print(f"原子数量: {positions.shape[0]}")
         """
@@ -864,7 +881,7 @@ class Cell:
         a, b, c = self.lattice_vectors
         volume = np.abs(np.dot(a, np.cross(b, c)))
         return volume
-    
+
     def scale_lattice(self, scale_factor: float) -> None:
         """按给定因子等比例缩放晶格
         
@@ -887,13 +904,13 @@ class Cell:
         """
         if scale_factor <= 0:
             raise ValueError(f"缩放因子必须为正数，得到 {scale_factor}")
-            
+
         # 缩放所有晶格矢量
         self.lattice_vectors *= scale_factor
-        
+
         # 重新计算逆矩阵和体积
         self._update_cached_properties()
-    
+
     def _update_cached_properties(self) -> None:
         """更新缓存的晶格属性（逆矩阵等）"""
         # 重新计算晶格逆矩阵

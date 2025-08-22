@@ -12,8 +12,9 @@ Classes:
     ConfigManager: 加载和访问配置文件的配置管理器
 """
 
+from typing import Any
+
 import yaml
-from typing import Any, Optional, Dict
 
 
 class ConfigManager:
@@ -43,7 +44,7 @@ class ConfigManager:
         self.config = self.load_config(config_file)
 
     @staticmethod
-    def load_config(config_file: str) -> Dict[str, Any]:
+    def load_config(config_file: str) -> dict[str, Any]:
         """从 YAML 文件加载配置数据
 
         Parameters
@@ -67,11 +68,11 @@ class ConfigManager:
         -----
         使用yaml.safe_load()来避免潜在的安全问题
         """
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             config = yaml.safe_load(f)
         return config
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         """获取配置参数的值
 
         Parameters

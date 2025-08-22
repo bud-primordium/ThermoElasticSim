@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 集成轨迹记录的弹性常数计算示例
 
@@ -13,27 +12,28 @@ Author: Gilbert Young
 Created: 2025-08-15
 """
 
-import numpy as np
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-import time
-from datetime import datetime
+from typing import Any
 
-from ..elastic.trajectory_recorder import ElasticTrajectoryRecorder, ElasticTrajectoryManager
+import numpy as np
+
 from ..elastic.elastic_visualizer import ElasticVisualizer
+from ..elastic.trajectory_recorder import (
+    ElasticTrajectoryRecorder,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def calculate_c44_with_trajectory_recording(
-    supercell_size: Tuple[int, int, int],
+    supercell_size: tuple[int, int, int],
     strain_magnitude: float,
     potential,  # Potential对象
     relaxer,    # StructureRelaxer对象
     output_dir: str,
     record_optimization: bool = True
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     带轨迹记录的C44计算
     
@@ -60,16 +60,15 @@ def calculate_c44_with_trajectory_recording(
     Dict[str, Any]
         计算结果，包含轨迹文件路径
     """
-    from ...core.structure import Cell, Atom
     from ...elastic.mechanics import StressCalculator
     from ...utils.utils import EV_TO_GPA
-    
+
     logger.info(f"开始C44计算（带轨迹记录）: {supercell_size}")
-    
+
     # 创建输出目录
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     # 创建轨迹记录器
     trajectory_recorder = ElasticTrajectoryRecorder(
         output_path / "c44_trajectory.h5",
@@ -77,16 +76,16 @@ def calculate_c44_with_trajectory_recording(
         calculation_method="lammps_shear",
         supercell_size=supercell_size
     )
-    
+
     # 创建系统
     cell = create_aluminum_fcc(supercell_size)
-    
+
     # 应变点设置（与v7相同）
     strain_points_c44 = np.array([
         -0.004, -0.003, -0.002, -0.0015, -0.001, -0.0005, 0.0,
         0.0005, 0.001, 0.0015, 0.002, 0.003, 0.004
     ])
-    
+
     # 初始化轨迹记录器
     trajectory_recorder.initialize(
         cell=cell,
@@ -98,56 +97,56 @@ def calculate_c44_with_trajectory_recording(
             'relaxer_params': relaxer.optimizer_params
         }
     )
-    
+
     try:
         # 基态弛豫（记录整个过程）
         logger.info("开始基态弛豫")
         base_cell = cell.copy()
-        
+
         # 记录初始状态
         trajectory_recorder.record_deformation_step(
             base_cell, 0.0, 'initial_state',
             energy=potential.calculate_energy(base_cell)
         )
-        
+
         # 基态弛豫（如果需要记录优化过程）
         if record_optimization:
             relaxer_with_recording = OptimizationRecorder(relaxer, trajectory_recorder)
             relaxer_with_recording.uniform_lattice_relax(base_cell, potential)
         else:
             relaxer.uniform_lattice_relax(base_cell, potential)
-        
+
         # 记录基态
         base_stress_components = StressCalculator().get_all_stress_components(base_cell, potential)
         base_stress = base_stress_components["total"] * EV_TO_GPA
         base_energy = potential.calculate_energy(base_cell)
-        
+
         trajectory_recorder.record_deformation_step(
             base_cell, 0.0, 'base_state',
             stress_tensor=base_stress,
             energy=base_energy,
             converged=True
         )
-        
+
         # 剪切形变计算
         directions = [4, 5, 6]  # yz, xz, xy
         direction_names = ["yz(C44)", "xz(C55)", "xy(C66)"]
         stress_indices = [(1, 2), (0, 2), (0, 1)]
-        
+
         detailed_results = []
-        
-        for direction, name, (i, j) in zip(directions, direction_names, stress_indices):
+
+        for direction, name, (i, j) in zip(directions, direction_names, stress_indices, strict=False):
             logger.info(f"计算{name}方向")
             trajectory_recorder.set_current_strain(0.0)  # 重置应变跟踪
-            
+
             strains = []
             stresses = []
             converged_states = []
-            
+
             for strain in strain_points_c44:
                 logger.debug(f"处理应变点: {strain:.4f}")
                 trajectory_recorder.set_current_strain(strain)
-                
+
                 if strain == 0.0:
                     # 基态点（已记录）
                     stress_value = base_stress[i, j]
@@ -156,30 +155,30 @@ def calculate_c44_with_trajectory_recording(
                 else:
                     # 形变点
                     deformed_cell = apply_lammps_box_shear(base_cell, direction, strain)
-                    
+
                     # 记录形变前状态
                     trajectory_recorder.record_deformation_step(
                         deformed_cell, strain, 'before_relax',
                         energy=potential.calculate_energy(deformed_cell),
                         converged=False
                     )
-                    
+
                     # 内部弛豫
                     energy_before = potential.calculate_energy(deformed_cell)
-                    
+
                     if record_optimization:
                         # 记录详细优化过程
                         relaxer_with_recording.set_current_strain(strain)
                         converged = relaxer_with_recording.internal_relax(deformed_cell, potential)
                     else:
                         converged = relaxer.internal_relax(deformed_cell, potential)
-                    
+
                     # 计算最终状态
                     energy_after = potential.calculate_energy(deformed_cell)
                     stress_components = StressCalculator().get_all_stress_components(deformed_cell, potential)
                     total_stress = stress_components["total"] * EV_TO_GPA
                     stress_value = total_stress[i, j]
-                    
+
                     # 记录形变后状态
                     trajectory_recorder.record_deformation_step(
                         deformed_cell, strain, 'after_relax',
@@ -192,23 +191,23 @@ def calculate_c44_with_trajectory_recording(
                             'stress_component': f'sigma_{i+1}{j+1}'
                         }
                     )
-                
+
                 strains.append(strain)
                 stresses.append(stress_value)
                 converged_states.append(converged)
-                
+
                 logger.debug(f"  应变={strain:+.4f}: 应力={stress_value:.4f} GPa, 收敛={converged}")
-            
+
             # 计算弹性常数
-            converged_strains = np.array([s for s, c in zip(strains, converged_states) if c])
-            converged_stresses = np.array([st for st, c in zip(stresses, converged_states) if c])
-            
+            converged_strains = np.array([s for s, c in zip(strains, converged_states, strict=False) if c])
+            converged_stresses = np.array([st for st, c in zip(stresses, converged_states, strict=False) if c])
+
             if len(converged_strains) >= 2:
                 coeffs = np.polyfit(converged_strains, converged_stresses, 1)
                 elastic_constant = coeffs[0]
             else:
                 elastic_constant = 0.0
-            
+
             detailed_results.append({
                 "direction": name,
                 "strains": strains,
@@ -218,36 +217,36 @@ def calculate_c44_with_trajectory_recording(
                 "converged_count": sum(converged_states),
                 "total_count": len(converged_states)
             })
-            
+
             logger.info(f"{name}: {elastic_constant:.1f} GPa")
-        
+
         # 完成轨迹记录
         trajectory_file = trajectory_recorder.finalize()
-        
+
         # 计算最终结果
         elastic_constants = [result["elastic_constant"] for result in detailed_results]
         valid_constants = [c for c in elastic_constants if c > 0]
-        
+
         if valid_constants:
             C44_cubic = np.mean(valid_constants)
             std_deviation = np.std(valid_constants) if len(valid_constants) > 1 else 0.0
         else:
             C44_cubic = 0.0
             std_deviation = 0.0
-        
+
         # 生成可视化
         logger.info("生成可视化")
         visualizer = ElasticVisualizer(str(output_path))
-        
+
         # 从轨迹中创建CSV数据进行可视化
         csv_data = _trajectory_to_csv_data(trajectory_file, detailed_results)
         csv_file = output_path / "elastic_data.csv"
         csv_data.to_csv(csv_file, index=False)
-        
+
         # 生成可视化
         visualizer.load_csv_data(str(csv_file))
         dashboard_file = visualizer.generate_dashboard(str(output_path / "dashboard.html"))
-        
+
         results = {
             "atoms": base_cell.num_atoms,
             "C44": C44_cubic,
@@ -260,10 +259,10 @@ def calculate_c44_with_trajectory_recording(
             "dashboard_file": dashboard_file,
             "csv_file": str(csv_file)
         }
-        
+
         logger.info(f"C44计算完成: {C44_cubic:.1f} GPa, 轨迹文件: {trajectory_file}")
         return results
-        
+
     except Exception as e:
         # 确保轨迹文件被正确关闭
         try:
@@ -280,7 +279,7 @@ class OptimizationRecorder:
     
     包装现有的StructureRelaxer，添加轨迹记录功能
     """
-    
+
     def __init__(self, relaxer, trajectory_recorder: ElasticTrajectoryRecorder):
         """
         初始化
@@ -295,11 +294,11 @@ class OptimizationRecorder:
         self.relaxer = relaxer
         self.trajectory_recorder = trajectory_recorder
         self.current_strain = 0.0
-        
+
     def set_current_strain(self, strain: float):
         """设置当前应变"""
         self.current_strain = strain
-        
+
     def internal_relax(self, cell, potential) -> bool:
         """带记录的内部弛豫"""
         # 创建记录回调
@@ -309,22 +308,22 @@ class OptimizationRecorder:
             self.trajectory_recorder.record_optimization_step(
                 cell_state, iteration, energy, forces, gradient_norm, converged
             )
-        
+
         # 执行优化（需要修改relaxer支持回调）
         # 这里简化实现，实际需要修改StructureRelaxer
         return self.relaxer.internal_relax(cell, potential)
-    
+
     def uniform_lattice_relax(self, cell, potential) -> bool:
         """带记录的等比例晶格弛豫"""
         # 实际实现时需要修改StructureRelaxer支持回调
         return self.relaxer.uniform_lattice_relax(cell, potential)
-    
+
     def __getattr__(self, name):
         """代理其他方法到原始relaxer"""
         return getattr(self.relaxer, name)
 
 
-def _trajectory_to_csv_data(trajectory_file: str, detailed_results: List[Dict]) -> 'pd.DataFrame':
+def _trajectory_to_csv_data(trajectory_file: str, detailed_results: list[dict]) -> 'pd.DataFrame':
     """
     将轨迹数据转换为CSV格式，用于可视化
     
@@ -341,17 +340,16 @@ def _trajectory_to_csv_data(trajectory_file: str, detailed_results: List[Dict]) 
         CSV数据
     """
     import pandas as pd
-    import h5py
-    
+
     csv_rows = []
-    
+
     # 从详细结果提取数据
     for result in detailed_results:
         direction = result["direction"]
         strains = result["strains"]
         stresses = result["stresses"]
         converged_states = result["converged_states"]
-        
+
         # 确定计算方法和方向
         if "C44" in direction:
             method = "C44_shear"
@@ -369,8 +367,8 @@ def _trajectory_to_csv_data(trajectory_file: str, detailed_results: List[Dict]) 
             method = "shear"
             strain_dir = "unknown"
             stress_dir = "unknown"
-        
-        for strain, stress, converged in zip(strains, stresses, converged_states):
+
+        for strain, stress, converged in zip(strains, stresses, converged_states, strict=False):
             csv_row = {
                 "calculation_method": method,
                 "applied_strain_direction": strain_dir,
@@ -382,14 +380,14 @@ def _trajectory_to_csv_data(trajectory_file: str, detailed_results: List[Dict]) 
                 "optimization_status": "SUCCESS" if converged else "FAILED"
             }
             csv_rows.append(csv_row)
-    
+
     return pd.DataFrame(csv_rows)
 
 
 def create_aluminum_fcc(supercell_size=(3, 3, 3)):
     """创建FCC铝系统（从v7复制）"""
-    from ...core.structure import Cell, Atom
-    
+    from ...core.structure import Atom, Cell
+
     a = 4.045  # EAM Al1文献值
     nx, ny, nz = supercell_size
     lattice = np.array(
@@ -423,8 +421,8 @@ def create_aluminum_fcc(supercell_size=(3, 3, 3)):
 
 def apply_lammps_box_shear(cell, direction, strain_magnitude):
     """LAMMPS风格盒子剪切（从v7复制）"""
-    from ...core.structure import Cell, Atom
-    
+    from ...core.structure import Atom, Cell
+
     lattice = cell.lattice_vectors.copy()
     positions = cell.get_positions().copy()
 
@@ -464,9 +462,9 @@ def demonstrate_enhanced_elastic_calculation():
     2. 自动生成可视化
     3. 导出分析结果
     """
-    from ...potentials.eam import EAMAl1Potential
     from ...elastic.deformation_method.zero_temp import StructureRelaxer
-    
+    from ...potentials.eam import EAMAl1Potential
+
     # 初始化
     potential = EAMAl1Potential(cutoff=6.5)
     relaxer = StructureRelaxer(
@@ -477,7 +475,7 @@ def demonstrate_enhanced_elastic_calculation():
             "maxiter": 2000
         }
     )
-    
+
     # 运行增强计算
     results = calculate_c44_with_trajectory_recording(
         supercell_size=(3, 3, 3),
@@ -487,12 +485,12 @@ def demonstrate_enhanced_elastic_calculation():
         output_dir="enhanced_c44_calculation",
         record_optimization=True
     )
-    
+
     print("增强C44计算完成!")
     print(f"C44 = {results['C44']:.1f} GPa")
     print(f"轨迹文件: {results['trajectory_file']}")
     print(f"可视化仪表板: {results['dashboard_file']}")
-    
+
     return results
 
 

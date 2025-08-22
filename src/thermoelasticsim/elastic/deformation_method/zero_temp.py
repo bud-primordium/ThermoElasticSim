@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 零温显式形变法弹性常数计算模块
 
@@ -29,19 +28,20 @@
 .. version:: 4.0.0
 """
 
-import numpy as np
 import logging
-from typing import Tuple, List, Optional, Dict, Any
 from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
 
 from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.potentials import Potential
 from thermoelasticsim.utils.optimizers import (
-    LBFGSOptimizer,
     BFGSOptimizer,
     CGOptimizer,
+    LBFGSOptimizer,
 )
-from thermoelasticsim.utils.utils import TensorConverter, EV_TO_GPA
+from thermoelasticsim.utils.utils import EV_TO_GPA, TensorConverter
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +108,8 @@ class StructureRelaxer:
     def __init__(
         self,
         optimizer_type: str = "L-BFGS",
-        optimizer_params: Optional[Dict[str, Any]] = None,
-        supercell_dims: Optional[Tuple[int, int, int]] = None,
+        optimizer_params: dict[str, Any] | None = None,
+        supercell_dims: tuple[int, int, int] | None = None,
         trajectory_recorder=None,
     ):
         """
@@ -158,7 +158,7 @@ class StructureRelaxer:
 
         logger.debug(f"初始化StructureRelaxer，优化器: {optimizer_type}")
         logger.debug(f"优化器参数: {self.optimizer_params}")
-        
+
         # 设置轨迹记录器
         self.trajectory_recorder = trajectory_recorder
 
@@ -299,8 +299,8 @@ class StructureRelaxer:
         if self.trajectory_recorder:
             initial_stress = cell.calculate_stress_tensor(potential)
             self.trajectory_recorder.record_deformation_step(
-                cell, 
-                getattr(self.trajectory_recorder, 'current_strain', 0.0), 
+                cell,
+                getattr(self.trajectory_recorder, 'current_strain', 0.0),
                 "before_internal_relax",
                 stress_tensor=initial_stress,
                 energy=initial_energy,
@@ -337,9 +337,7 @@ class StructureRelaxer:
 
         # 构建回退序列
         primary = self.optimizer_type
-        if primary == "BFGS":
-            sequence = ["L-BFGS", "BFGS", "CG", "BFGS"]
-        elif primary == "L-BFGS":
+        if primary == "BFGS" or primary == "L-BFGS":
             sequence = ["L-BFGS", "BFGS", "CG", "BFGS"]
         else:
             sequence = ["L-BFGS", "BFGS", "CG"]
@@ -374,8 +372,8 @@ class StructureRelaxer:
         if self.trajectory_recorder:
             final_stress = cell.calculate_stress_tensor(potential)
             self.trajectory_recorder.record_deformation_step(
-                cell, 
-                getattr(self.trajectory_recorder, 'current_strain', 0.0), 
+                cell,
+                getattr(self.trajectory_recorder, 'current_strain', 0.0),
                 "after_internal_relax",
                 stress_tensor=final_stress,
                 energy=final_energy,
@@ -438,38 +436,38 @@ class StructureRelaxer:
         ...     print("成功优化晶格常数，保持结构对称性")
         """
         logger.info("开始等比例晶格弛豫：只优化晶格常数")
-        
+
         # 记录初始状态
         initial_energy = potential.calculate_energy(cell)
         original_lattice = cell.lattice_vectors.copy()
         original_fractional_coords = cell.get_fractional_coordinates()
-        
+
         logger.debug(f"初始总能量: {initial_energy:.6f} eV")
         logger.debug(f"原始晶格体积: {cell.calculate_volume():.6f} Å³")
-        
+
         def objective_function(scale_factor):
             """目标函数：计算缩放因子对应的能量"""
             try:
                 # 等比例缩放晶格矢量
                 scaled_lattice = original_lattice * scale_factor[0]
                 cell.lattice_vectors = scaled_lattice
-                
+
                 # 原子保持相同的分数坐标，笛卡尔坐标随晶格缩放
                 cell.set_fractional_coordinates(original_fractional_coords)
-                
+
                 # 计算能量
                 energy = potential.calculate_energy(cell)
                 return energy
-                
+
             except Exception as e:
                 logger.warning(f"缩放因子 {scale_factor[0]:.6f} 计算失败: {e}")
                 return 1e10  # 返回一个很大的值表示失败
-        
+
         # 1D优化设置
-        from scipy.optimize import minimize_scalar, minimize
-        
+        from scipy.optimize import minimize, minimize_scalar
+
         initial_scale = 1.0
-        
+
         # 使用标量优化（1D专用，更稳定）
         try:
             result = minimize_scalar(
@@ -483,7 +481,7 @@ class StructureRelaxer:
             )
             converged = result.success
             optimal_scale = result.x
-            
+
         except Exception as e:
             logger.warning(f"标量优化失败，尝试通用优化器: {e}")
             # 回退到通用优化器
@@ -500,38 +498,38 @@ class StructureRelaxer:
                 )
                 converged = result.success
                 optimal_scale = result.x[0]
-                
+
             except Exception as e2:
                 logger.error(f"所有优化方法都失败: {e2}")
                 # 恢复原始状态
                 cell.lattice_vectors = original_lattice
                 cell.set_fractional_coordinates(original_fractional_coords)
                 return False
-        
+
         # 设置到最优状态
         if converged:
             optimal_lattice = original_lattice * optimal_scale
             cell.lattice_vectors = optimal_lattice
             cell.set_fractional_coordinates(original_fractional_coords)
-            
+
             # 记录优化结果
             final_energy = potential.calculate_energy(cell)
             energy_change = final_energy - initial_energy
             volume_change = cell.calculate_volume() / np.linalg.det(original_lattice)
-            
+
             logger.info("等比例晶格弛豫成功")
             logger.debug(f"最优缩放因子: {optimal_scale:.6f}")
             logger.debug(f"最终总能量: {final_energy:.6f} eV")
             logger.debug(f"能量变化: {energy_change:.6f} eV")
             logger.debug(f"体积变化: {volume_change:.6f} (比值)")
             logger.debug(f"最终体积: {cell.calculate_volume():.6f} Å³")
-            
+
         else:
             logger.warning("等比例晶格弛豫未收敛，恢复原始状态")
             # 恢复原始状态
             cell.lattice_vectors = original_lattice
             cell.set_fractional_coordinates(original_fractional_coords)
-        
+
         return converged
 
 
@@ -599,8 +597,8 @@ class ZeroTempDeformationCalculator:
         potential: Potential,
         delta: float = 0.005,
         num_steps: int = 5,
-        relaxer_params: Optional[Dict[str, Any]] = None,
-        supercell_dims: Optional[Tuple[int, int, int]] = None,
+        relaxer_params: dict[str, Any] | None = None,
+        supercell_dims: tuple[int, int, int] | None = None,
     ):
         """
         初始化零温形变计算器
@@ -655,7 +653,7 @@ class ZeroTempDeformationCalculator:
         self.reference_stress = None  # 基态参考应力
 
         # 记录初始化信息
-        logger.info(f"初始化ZeroTempDeformationCalculator")
+        logger.info("初始化ZeroTempDeformationCalculator")
         logger.info(f"应变幅度: {delta:.2e} ({delta*100:.4f}%)")
         logger.info(f"形变步数: {num_steps}")
 
@@ -676,7 +674,7 @@ class ZeroTempDeformationCalculator:
             # 返回等效单胞参数
             return np.linalg.norm(lattice_vectors[0]) / self.supercell_dims[0]
 
-    def calculate(self) -> Tuple[np.ndarray, float]:
+    def calculate(self) -> tuple[np.ndarray, float]:
         """
         执行完整的零温弹性常数计算
 
@@ -789,7 +787,7 @@ class ZeroTempDeformationCalculator:
         initial_energy = self.potential.calculate_energy(self.cell)
         initial_lattice = self.cell.lattice_vectors.copy()
         initial_a = self._get_equivalent_unit_cell_parameter(initial_lattice)
-        logger.info(f"弛豫前状态:")
+        logger.info("弛豫前状态:")
         logger.info(f"  初始总能量: {initial_energy:.8f} eV")
         logger.info(f"  每原子能量: {initial_energy/self.cell.num_atoms:.8f} eV/atom")
         logger.info(f"  初始等效单胞晶格常数: a = {initial_a:.6f} Å")
@@ -805,7 +803,7 @@ class ZeroTempDeformationCalculator:
         final_a = self._get_equivalent_unit_cell_parameter(final_lattice)
         energy_change = final_energy - initial_energy
 
-        logger.info(f"弛豫后状态:")
+        logger.info("弛豫后状态:")
         logger.info(f"  最终总能量: {final_energy:.8f} eV")
         logger.info(f"  每原子能量: {final_energy/self.cell.num_atoms:.8f} eV/atom")
         logger.info(f"  能量变化: {energy_change:.8f} eV")
@@ -849,7 +847,7 @@ class ZeroTempDeformationCalculator:
 
         logger.info("无应力基态制备完成")
 
-    def _generate_deformation_matrices(self) -> List[np.ndarray]:
+    def _generate_deformation_matrices(self) -> list[np.ndarray]:
         """
         生成形变矩阵序列
 
@@ -989,7 +987,7 @@ class ZeroTempDeformationCalculator:
         strain_voigt = TensorConverter.to_voigt(strain_tensor, tensor_type="strain")
         strain_magnitude = np.linalg.norm(strain_voigt)
 
-        logger.info(f"    形变详情:")
+        logger.info("    形变详情:")
         logger.info(
             f"      应变Voigt向量: [{strain_voigt[0]:8.6f}, {strain_voigt[1]:8.6f}, {strain_voigt[2]:8.6f}, {strain_voigt[3]:8.6f}, {strain_voigt[4]:8.6f}, {strain_voigt[5]:8.6f}]"
         )
@@ -1010,7 +1008,7 @@ class ZeroTempDeformationCalculator:
                 break
 
         # 内部弛豫（仅优化原子位置）
-        logger.info(f"    开始内部弛豫 (固定晶胞，优化原子位置)...")
+        logger.info("    开始内部弛豫 (固定晶胞，优化原子位置)...")
 
         # 对剪切分量，按更大的迭代数尝试一次
         if shear_pair_used is not None:
@@ -1067,7 +1065,7 @@ class ZeroTempDeformationCalculator:
 
         # 记录弛豫后状态
         after_relax_energy = self.potential.calculate_energy(deformed_cell)
-        logger.info(f"    内部弛豫完成:")
+        logger.info("    内部弛豫完成:")
         logger.info(f"      收敛状态: {'✓ 成功' if converged else '✗ 未收敛'}")
         logger.info(
             f"      弛豫能量变化: {after_relax_energy - after_deform_energy:.8f} eV"
@@ -1089,7 +1087,7 @@ class ZeroTempDeformationCalculator:
 
         # 详细输出应力信息
         stress_gpa = stress_voigt * 160.2176  # 转换为GPa
-        logger.info(f"    应力计算结果:")
+        logger.info("    应力计算结果:")
         logger.info(
             f"      相对应力Voigt向量 (GPa): [{stress_gpa[0]:8.3f}, {stress_gpa[1]:8.3f}, {stress_gpa[2]:8.3f}, {stress_gpa[3]:8.3f}, {stress_gpa[4]:8.3f}, {stress_gpa[5]:8.3f}]"
         )
@@ -1199,7 +1197,7 @@ class ElasticConstantsSolver:
         stresses: np.ndarray,
         method: str = "least_squares",
         alpha: float = 1e-5,
-    ) -> Tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float]:
         """
         求解弹性常数矩阵
 
@@ -1294,7 +1292,7 @@ class ElasticConstantsSolver:
 
     def _per_mode_columnwise_solve(
         self, strains: np.ndarray, stresses: np.ndarray
-    ) -> Tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float]:
         """
         逐列稳健求解 C：
         - 对第 k 个 Voigt 分量，仅用该分量非零且其余分量近零的样本行，拟合 C[:, k]
@@ -1339,7 +1337,7 @@ class ElasticConstantsSolver:
 
     def _cubic_constrained_fit(
         self, strains: np.ndarray, stresses: np.ndarray
-    ) -> Tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float]:
         """
         在立方晶系假设下拟合：仅 C11, C12, C44。
         使用“单分量形变”的行，分别以稳健统计（中位数斜率）估计：
@@ -1454,7 +1452,7 @@ class ElasticConstantsSolver:
 
     def _least_squares_solve(
         self, strains: np.ndarray, stresses: np.ndarray
-    ) -> Tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float]:
         """
         最小二乘法求解弹性常数
 
@@ -1516,7 +1514,7 @@ class ElasticConstantsSolver:
 
     def _ridge_regression_solve(
         self, strains: np.ndarray, stresses: np.ndarray, alpha: float
-    ) -> Tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float]:
         """
         岭回归求解弹性常数
 
@@ -1630,7 +1628,7 @@ class ElasticConstantsSolver:
 
 def calculate_zero_temp_elastic_constants(
     cell: Cell, potential: Potential, delta: float = 0.005, num_steps: int = 5, **kwargs
-) -> Tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float]:
     """
     零温弹性常数计算的便捷函数
 

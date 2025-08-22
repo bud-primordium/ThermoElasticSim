@@ -9,10 +9,11 @@
 包含 Visualizer 类，用于可视化晶胞结构和应力-应变关系
 """
 
-import os
 import logging
-import numpy as np
+import os
+
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 from sklearn.metrics import r2_score
 
@@ -123,7 +124,7 @@ class Visualizer:
         # 只有在多种元素情况下才显示图例
         if not single_element:
             handles, labels = ax.get_legend_handles_labels()
-            by_label = dict(zip(labels, handles))
+            by_label = dict(zip(labels, handles, strict=False))
             ax.legend(by_label.values(), by_label.keys())
 
         # 设置相同的轴比例

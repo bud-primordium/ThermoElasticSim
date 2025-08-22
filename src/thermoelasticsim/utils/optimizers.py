@@ -12,12 +12,13 @@
 - LBFGSOptimizer: 改进的L-BFGS(有限内存BFGS)
 """
 
+import logging
+
 import numpy as np
 from scipy.optimize import minimize
-import logging
-from thermoelasticsim.core.structure import Cell, Atom
+
+from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.potentials import Potential
-from thermoelasticsim.utils.utils import TensorConverter
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,6 @@ class GradientDescentOptimizer(Optimizer):
         - 最大原子力 < tol
         - 能量变化 < energy_tol
         """
-
         logger = logging.getLogger(__name__)
         atoms = cell.atoms
         potential.calculate_forces(cell)
@@ -562,17 +562,17 @@ class LBFGSOptimizer(Optimizer):
             logger.info("L-BFGS (仅原子) 优化收敛。")
         else:
             # 原始信息，不加工
-            logger.warning(f"L-BFGS (仅原子) 优化未收敛")
+            logger.warning("L-BFGS (仅原子) 优化未收敛")
             logger.warning(f"  原始message: '{result.message}'")
             logger.warning(f"  success: {result.success}")
             logger.warning(f"  status: {result.status}")
             logger.warning(f"  nfev: {result.nfev}")
-            logger.warning(f"  nit: {result.nit}")  
+            logger.warning(f"  nit: {result.nit}")
             logger.warning(f"  fun: {result.fun}")
             if hasattr(result, 'jac'):
                 logger.warning(f"  jac norm: {np.linalg.norm(result.jac):.6e}")
             logger.warning(f"  完整result对象: {result}")
-                
+
             # 记录maxls参数是否生效 - 检查实际传递的options字典
             logger.debug(f"  设置的maxls: {options.get('maxls', '未设置')}")
             logger.debug(f"  设置的maxfun: {options.get('maxfun', '未设置')}")
@@ -606,7 +606,7 @@ class LBFGSOptimizer(Optimizer):
         def create_cell_from_variables(positions, lattice):
             atoms = [
                 Atom(id=info[0], symbol=info[1], mass_amu=info[2], position=pos)
-                for info, pos in zip(atom_info, positions)
+                for info, pos in zip(atom_info, positions, strict=False)
             ]
             return Cell(lattice, atoms)
 

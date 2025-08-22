@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 弹性常数轨迹记录器
 
@@ -13,13 +12,12 @@ Author: Gilbert Young
 Created: 2025-08-15
 """
 
-import numpy as np
-import h5py
-from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Tuple
 import logging
 from datetime import datetime
-import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 from thermoelasticsim.utils.trajectory import TrajectoryWriter
 
@@ -57,13 +55,13 @@ class ElasticTrajectoryRecorder:
     >>> 
     >>> recorder.finalize()
     """
-    
+
     def __init__(
         self,
         output_path: str,
         elastic_type: str,
         calculation_method: str = 'default',
-        supercell_size: Tuple[int, int, int] = (3, 3, 3)
+        supercell_size: tuple[int, int, int] = (3, 3, 3)
     ):
         """
         初始化记录器
@@ -83,13 +81,13 @@ class ElasticTrajectoryRecorder:
         self.elastic_type = elastic_type
         self.calculation_method = calculation_method
         self.supercell_size = supercell_size
-        
+
         # 创建输出目录
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # 轨迹写入器
         self.trajectory_writer = None
-        
+
         # 数据存储
         self.deformation_steps = []
         self.optimization_history = []
@@ -101,21 +99,21 @@ class ElasticTrajectoryRecorder:
             'created': datetime.now().isoformat(),
             'version': '1.0'
         }
-        
+
         # 状态跟踪
         self.initialized = False
         self.current_strain = 0.0
         self.current_step = 0
         self.step_counter = 0
-        
+
         logger.info(f"创建弹性轨迹记录器: {elastic_type}, 输出: {output_path}")
-    
+
     def initialize(
         self,
         cell,  # Cell对象
         potential,  # Potential对象
-        strain_points: List[float],
-        additional_metadata: Optional[Dict] = None
+        strain_points: list[float],
+        additional_metadata: dict | None = None
     ):
         """
         初始化记录器和H5文件结构
@@ -131,20 +129,17 @@ class ElasticTrajectoryRecorder:
         additional_metadata : dict, optional
             额外的元数据
         """
-        from thermoelasticsim.core.structure import Cell
-        from thermoelasticsim.potentials.base import Potential
-        
         self.trajectory_writer = TrajectoryWriter(
             str(self.output_path),
             mode='w',
             compression='gzip',
             chunk_size=50  # 较小的块尺寸适合弹性常数计算
         )
-        
+
         # 准备元数据
         n_atoms = cell.num_atoms
         atom_types = [atom.symbol for atom in cell.atoms]
-        
+
         # 扩展元数据
         self.metadata.update({
             'n_atoms': n_atoms,
@@ -156,10 +151,10 @@ class ElasticTrajectoryRecorder:
             'initial_lattice': cell.lattice_vectors.tolist(),
             'initial_volume': float(cell.volume)
         })
-        
+
         if additional_metadata:
             self.metadata.update(additional_metadata)
-        
+
         # 初始化轨迹写入器
         self.trajectory_writer.initialize(
             n_atoms=n_atoms,
@@ -167,45 +162,45 @@ class ElasticTrajectoryRecorder:
             atom_types=atom_types,
             metadata=self.metadata
         )
-        
+
         # 创建弹性常数专用组
         self._setup_elastic_groups()
-        
+
         self.initialized = True
         logger.info(f"弹性轨迹记录器初始化完成: {n_atoms}原子, {len(strain_points)}应变点")
-    
+
     def _setup_elastic_groups(self):
         """设置弹性常数专用的HDF5组"""
         file = self.trajectory_writer.file
-        
+
         # 创建弹性常数专用组
         elastic_group = file.create_group('elastic_constants')
         elastic_group.attrs['type'] = self.elastic_type
         elastic_group.attrs['method'] = self.calculation_method
-        
+
         # 形变步骤组
         deformation_group = elastic_group.create_group('deformation_steps')
-        
+
         # 优化轨迹组
         optimization_group = elastic_group.create_group('optimization')
-        
+
         # 应力-应变数据组
         stress_strain_group = elastic_group.create_group('stress_strain')
-        
+
         self.elastic_group = elastic_group
         self.deformation_group = deformation_group
         self.optimization_group = optimization_group
         self.stress_strain_group = stress_strain_group
-    
+
     def record_deformation_step(
         self,
         cell,  # Cell对象
         strain: float,
         step_type: str,
-        stress_tensor: Optional[np.ndarray] = None,
-        energy: Optional[float] = None,
+        stress_tensor: np.ndarray | None = None,
+        energy: float | None = None,
         converged: bool = True,
-        additional_data: Optional[Dict] = None
+        additional_data: dict | None = None
     ):
         """
         记录单个形变步骤
@@ -229,25 +224,25 @@ class ElasticTrajectoryRecorder:
         """
         if not self.initialized:
             raise RuntimeError("记录器未初始化，请先调用initialize()")
-        
+
         positions = cell.get_positions()
         lattice = cell.lattice_vectors
         volume = cell.volume
-        
+
         # 计算晶格常数信息
         lattice_a = np.linalg.norm(lattice[0])
         lattice_b = np.linalg.norm(lattice[1])
         lattice_c = np.linalg.norm(lattice[2])
-        
+
         # 计算晶格角度
         cos_alpha = np.dot(lattice[1], lattice[2]) / (lattice_b * lattice_c)
         cos_beta = np.dot(lattice[0], lattice[2]) / (lattice_a * lattice_c)
         cos_gamma = np.dot(lattice[0], lattice[1]) / (lattice_a * lattice_b)
-        
+
         alpha = np.degrees(np.arccos(np.clip(cos_alpha, -1, 1)))
         beta = np.degrees(np.arccos(np.clip(cos_beta, -1, 1)))
         gamma = np.degrees(np.arccos(np.clip(cos_gamma, -1, 1)))
-        
+
         # 增强的描述信息 - 根据步骤类型调整详细程度
         if step_type == "base_state":
             # 基态：简洁显示
@@ -257,7 +252,7 @@ class ElasticTrajectoryRecorder:
             converged_symbol = "✓" if converged else "✗"
             # 判断是否为立方（所有角度接近90度）
             is_cubic = abs(alpha - 90) < 0.1 and abs(beta - 90) < 0.1 and abs(gamma - 90) < 0.1
-            
+
             if is_cubic:
                 # 接近立方，简化显示
                 description = (
@@ -271,7 +266,7 @@ class ElasticTrajectoryRecorder:
                     f"a={lattice_a:.3f}A b={lattice_b:.3f}A c={lattice_c:.3f}A | "
                     f"α={alpha:.1f}deg β={beta:.1f}deg γ={gamma:.1f}deg | V={volume:.1f}A³ | {converged_symbol}"
                 )
-        
+
         # 记录到轨迹文件
         self.trajectory_writer.write_frame(
             positions=positions,
@@ -292,7 +287,7 @@ class ElasticTrajectoryRecorder:
             lattice_gamma=gamma,
             description=description
         )
-        
+
         # 记录形变步骤数据
         step_data = {
             'step_id': self.step_counter,
@@ -305,22 +300,22 @@ class ElasticTrajectoryRecorder:
             'converged': converged,
             'timestamp': datetime.now().isoformat()
         }
-        
+
         if stress_tensor is not None:
             step_data['stress_tensor'] = stress_tensor.copy()
-            
+
         if additional_data:
             step_data.update(additional_data)
-        
+
         self.deformation_steps.append(step_data)
-        
+
         # 如果是应力-应变数据点，记录到专用数组
         if step_type in ['after_relax', 'final'] and stress_tensor is not None:
             self._record_stress_strain_point(strain, stress_tensor, energy, converged)
-        
+
         self.step_counter += 1
         logger.debug(f"记录形变步骤: 应变={strain:.4f}, 类型={step_type}, 收敛={converged}")
-    
+
     def record_optimization_step(
         self,
         cell,  # Cell对象
@@ -349,7 +344,7 @@ class ElasticTrajectoryRecorder:
             是否已收敛
         """
         positions = cell.get_positions()
-        
+
         # 记录到轨迹（以更高频率）
         self.trajectory_writer.write_frame(
             positions=positions,
@@ -364,7 +359,7 @@ class ElasticTrajectoryRecorder:
             gradient_norm=gradient_norm,
             converged=converged
         )
-        
+
         # 记录优化历史
         opt_data = {
             'iteration': iteration,
@@ -374,21 +369,21 @@ class ElasticTrajectoryRecorder:
             'strain': self.current_strain,
             'timestamp': datetime.now().isoformat()
         }
-        
+
         self.optimization_history.append(opt_data)
         self.step_counter += 1
-    
+
     def _record_stress_strain_point(
         self,
         strain: float,
         stress_tensor: np.ndarray,
-        energy: Optional[float],
+        energy: float | None,
         converged: bool
     ):
         """记录应力-应变数据点"""
         # 根据弹性常数类型提取相关应力分量
         relevant_stress = self._extract_relevant_stress(stress_tensor)
-        
+
         stress_strain_point = {
             'strain': strain,
             'stress_tensor': stress_tensor.copy(),
@@ -397,9 +392,9 @@ class ElasticTrajectoryRecorder:
             'converged': converged,
             'elastic_type': self.elastic_type
         }
-        
+
         self.stress_strain_data.append(stress_strain_point)
-    
+
     def _extract_relevant_stress(self, stress_tensor: np.ndarray) -> float:
         """根据弹性常数类型提取相关应力分量"""
         if self.elastic_type == 'C11':
@@ -415,50 +410,50 @@ class ElasticTrajectoryRecorder:
         else:
             # 默认返回最大应力分量
             return np.max(np.abs(stress_tensor))
-    
+
     def set_current_strain(self, strain: float):
         """设置当前应变值"""
         self.current_strain = strain
-    
+
     def save_analysis_data(self):
         """保存分析数据到HDF5文件"""
         if not self.stress_strain_data:
             logger.warning("无应力-应变数据可保存")
             return
-        
+
         # 准备数组数据
         strains = np.array([point['strain'] for point in self.stress_strain_data])
         relevant_stresses = np.array([point['relevant_stress'] for point in self.stress_strain_data])
         energies = np.array([point['energy'] or 0.0 for point in self.stress_strain_data])
         converged_flags = np.array([point['converged'] for point in self.stress_strain_data])
-        
+
         # 保存到HDF5
         self.stress_strain_group.create_dataset('strains', data=strains)
         self.stress_strain_group.create_dataset('stresses', data=relevant_stresses)
         self.stress_strain_group.create_dataset('energies', data=energies)
         self.stress_strain_group.create_dataset('converged', data=converged_flags)
-        
+
         # 完整的应力张量
         if self.stress_strain_data:
             stress_tensors = np.array([point['stress_tensor'] for point in self.stress_strain_data])
             self.stress_strain_group.create_dataset('stress_tensors', data=stress_tensors)
-        
+
         # 线性拟合
         converged_mask = converged_flags
         if np.sum(converged_mask) >= 2:
             conv_strains = strains[converged_mask]
             conv_stresses = relevant_stresses[converged_mask]
-            
+
             # 线性拟合
             coeffs = np.polyfit(conv_strains, conv_stresses, 1)
             elastic_constant = coeffs[0]
-            
+
             # 计算R²
             y_pred = np.polyval(coeffs, conv_strains)
             ss_res = np.sum((conv_stresses - y_pred) ** 2)
             ss_tot = np.sum((conv_stresses - np.mean(conv_stresses)) ** 2)
             r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 1.0
-            
+
             # 保存拟合结果
             fit_group = self.stress_strain_group.create_group('linear_fit')
             fit_group.attrs['elastic_constant'] = elastic_constant
@@ -467,9 +462,9 @@ class ElasticTrajectoryRecorder:
             fit_group.attrs['intercept'] = coeffs[1]
             fit_group.attrs['converged_points'] = np.sum(converged_mask)
             fit_group.attrs['total_points'] = len(strains)
-            
+
             logger.info(f"保存拟合结果: {self.elastic_type} = {elastic_constant:.2f} GPa, R² = {r_squared:.4f}")
-    
+
     def finalize(self) -> str:
         """
         完成记录并关闭文件
@@ -482,10 +477,10 @@ class ElasticTrajectoryRecorder:
         if not self.initialized:
             logger.warning("记录器未初始化，无法完成")
             return str(self.output_path)
-        
+
         # 保存分析数据
         self.save_analysis_data()
-        
+
         # 保存汇总元数据
         self.metadata.update({
             'finalized': datetime.now().isoformat(),
@@ -494,18 +489,18 @@ class ElasticTrajectoryRecorder:
             'optimization_steps': len(self.optimization_history),
             'stress_strain_points': len(self.stress_strain_data)
         })
-        
+
         self.trajectory_writer.write_metadata(self.metadata)
-        
+
         # 关闭文件
         self.trajectory_writer.close()
-        
+
         logger.info(f"弹性轨迹记录完成: {self.output_path}")
         logger.info(f"总帧数: {self.step_counter}, 形变步骤: {len(self.deformation_steps)}")
-        
+
         return str(self.output_path)
-    
-    def get_summary(self) -> Dict[str, Any]:
+
+    def get_summary(self) -> dict[str, Any]:
         """获取记录汇总信息"""
         return {
             'elastic_type': self.elastic_type,
@@ -517,11 +512,11 @@ class ElasticTrajectoryRecorder:
             'stress_strain_points': len(self.stress_strain_data),
             'initialized': self.initialized
         }
-    
+
     def __enter__(self):
         """上下文管理器入口"""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """上下文管理器出口"""
         if self.initialized:
@@ -545,7 +540,7 @@ class ElasticTrajectoryManager:
     >>> 
     >>> manager.finalize_all()
     """
-    
+
     def __init__(self, output_dir: str):
         """
         初始化管理器
@@ -557,16 +552,16 @@ class ElasticTrajectoryManager:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.recorders = {}  # {elastic_type: ElasticTrajectoryRecorder}
-        
+
         logger.info(f"创建弹性轨迹管理器: {output_dir}")
-    
+
     def add_recorder(
         self,
         elastic_type: str,
         calculation_method: str,
-        supercell_size: Tuple[int, int, int] = (3, 3, 3)
+        supercell_size: tuple[int, int, int] = (3, 3, 3)
     ) -> ElasticTrajectoryRecorder:
         """
         添加轨迹记录器
@@ -586,42 +581,42 @@ class ElasticTrajectoryManager:
             记录器对象
         """
         output_path = self.output_dir / f"{elastic_type.lower()}_trajectory.h5"
-        
+
         recorder = ElasticTrajectoryRecorder(
             str(output_path),
             elastic_type,
             calculation_method,
             supercell_size
         )
-        
+
         self.recorders[elastic_type] = recorder
-        
+
         logger.info(f"添加{elastic_type}轨迹记录器")
         return recorder
-    
+
     def initialize_recorder(
         self,
         elastic_type: str,
         cell,  # Cell对象
         potential,  # Potential对象
-        strain_points: List[float],
-        additional_metadata: Optional[Dict] = None
+        strain_points: list[float],
+        additional_metadata: dict | None = None
     ):
         """初始化指定的记录器"""
         if elastic_type not in self.recorders:
             raise ValueError(f"未找到{elastic_type}记录器")
-        
+
         self.recorders[elastic_type].initialize(
             cell, potential, strain_points, additional_metadata
         )
-    
+
     def record_all(
         self,
         elastic_type: str,
         cell,  # Cell对象
         strain: float,
         step_type: str,
-        stress_tensor: Optional[np.ndarray] = None,
+        stress_tensor: np.ndarray | None = None,
         **kwargs
     ):
         """记录到指定的记录器"""
@@ -629,11 +624,11 @@ class ElasticTrajectoryManager:
             self.recorders[elastic_type].record_deformation_step(
                 cell, strain, step_type, stress_tensor, **kwargs
             )
-    
-    def finalize_all(self) -> Dict[str, str]:
+
+    def finalize_all(self) -> dict[str, str]:
         """完成所有记录器"""
         results = {}
-        
+
         for elastic_type, recorder in self.recorders.items():
             try:
                 output_path = recorder.finalize()
@@ -642,10 +637,10 @@ class ElasticTrajectoryManager:
             except Exception as e:
                 logger.error(f"{elastic_type}轨迹记录失败: {e}")
                 results[elastic_type] = None
-        
+
         return results
-    
-    def get_all_summaries(self) -> Dict[str, Dict]:
+
+    def get_all_summaries(self) -> dict[str, dict]:
         """获取所有记录器的汇总信息"""
         return {
             elastic_type: recorder.get_summary()

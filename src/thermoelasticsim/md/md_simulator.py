@@ -3,18 +3,15 @@
 # 修改日期: 2025-03-27
 # 文件描述: 实现分子动力学模拟器 MDSimulator 类，用于执行分子动力学模拟。
 
-import matplotlib.pyplot as plt
-import os
-import numpy as np
 import logging
-from typing import Optional, Dict
+
+import matplotlib.pyplot as plt
 
 from .thermostats import (
-    Thermostat,
-    BerendsenThermostat,
     AndersenThermostat,
-    NoseHooverThermostat,
+    BerendsenThermostat,
     NoseHooverChainThermostat,
+    NoseHooverThermostat,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,7 +250,6 @@ class MDSimulator:
 
     def plot_pressure(self):
         """绘制压力演化图"""
-
         plt.figure(figsize=(10, 6))
         plt.plot(self.time, self.pressure, label="Pressure (GPa)")
 

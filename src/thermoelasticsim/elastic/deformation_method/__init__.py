@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 显式形变法子包
 
@@ -13,11 +12,11 @@
 
 # 零温显式形变法模块
 from .zero_temp import (
+    DeformationResult,
+    ElasticConstantsSolver,
     StructureRelaxer,
     ZeroTempDeformationCalculator,
-    ElasticConstantsSolver,
-    DeformationResult,
-    calculate_zero_temp_elastic_constants
+    calculate_zero_temp_elastic_constants,
 )
 
 # 有限温显式形变法模块（待实现）
@@ -27,6 +26,7 @@ except ImportError:
     # 如果finite_temp模块还未实现，创建占位符
     class FiniteTempElasticityWorkflow:
         """有限温弹性常数计算工作流（待实现）"""
+
         def __init__(self, *args, **kwargs):
             raise NotImplementedError("有限温显式形变法尚未实现")
 
@@ -36,7 +36,7 @@ ElasticConstantsWorkflow = ZeroTempDeformationCalculator
 __all__ = [
     # 新的三层架构
     "StructureRelaxer",
-    "ZeroTempDeformationCalculator", 
+    "ZeroTempDeformationCalculator",
     "ElasticConstantsSolver",
     "DeformationResult",
     "calculate_zero_temp_elastic_constants",

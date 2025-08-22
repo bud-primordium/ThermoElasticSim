@@ -12,9 +12,10 @@ Classes:
     Deformer: 生成变形矩阵并应用于晶胞的类
 """
 
-import numpy as np
-from typing import List, Optional
 import logging
+
+import numpy as np
+
 from thermoelasticsim.core.structure import Cell
 
 
@@ -64,7 +65,7 @@ class Deformer:
         np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]),  # εxy
     ]
 
-    def generate_deformation_matrices(self) -> List[np.ndarray]:
+    def generate_deformation_matrices(self) -> list[np.ndarray]:
         """生成变形矩阵列表
 
         生成6个应变分量(εxx,εyy,εzz,εyz,εxz,εxy)的变形矩阵，

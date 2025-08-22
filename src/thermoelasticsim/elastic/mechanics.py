@@ -3,14 +3,13 @@
 # 修改日期: 2025-08-12
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
-import numpy as np
-from thermoelasticsim.utils.utils import TensorConverter, EV_TO_GPA
-from typing import Dict
-from thermoelasticsim.interfaces.cpp_interface import CppInterface
 import logging
 
-import logging
 import matplotlib as mpl
+import numpy as np
+
+from thermoelasticsim.interfaces.cpp_interface import CppInterface
+from thermoelasticsim.utils.utils import TensorConverter
 
 # 设置matplotlib的日志级别为WARNING，屏蔽字体调试信息
 mpl.set_loglevel("WARNING")
@@ -511,7 +510,7 @@ class StressCalculator:
         """
         return self.calculate_finite_difference_stress(cell, potential, dr)
 
-    def get_all_stress_components(self, cell, potential) -> Dict[str, np.ndarray]:
+    def get_all_stress_components(self, cell, potential) -> dict[str, np.ndarray]:
         """
         计算应力张量的所有分量
 

@@ -10,11 +10,12 @@
 """
 
 import ctypes
-import numpy as np
-from numpy.ctypeslib import ndpointer
+import logging
 import os
 import sys
-import logging
+
+import numpy as np
+from numpy.ctypeslib import ndpointer
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - 有限温弹性常数计算模块
 
@@ -11,26 +10,24 @@ ThermoElasticSim - 有限温弹性常数计算模块
 该模块实现了有限温条件下，通过显式形变法计算弹性常数的工作流。
 """
 
-from typing import Tuple
-import numpy as np
-import matplotlib.pyplot as plt
-from thermoelasticsim.md.md_simulator import MDSimulator
-from thermoelasticsim.core.structure import Cell
-from thermoelasticsim.md.thermostats import (
-    NoseHooverChainThermostat,
-    AndersenThermostat,
-)
-from thermoelasticsim.md.barostats import (
-    ParrinelloRahmanHooverBarostat,
-    BerendsenBarostat,
-    AndersenBarostat,
-)
-from thermoelasticsim.elastic.deformation import Deformer
-from thermoelasticsim.elastic.mechanics import StressCalculator
-from thermoelasticsim.utils.utils import TensorConverter, EV_TO_GPA
 import logging
 import os
 from datetime import datetime
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from thermoelasticsim.core.structure import Cell
+from thermoelasticsim.elastic.deformation import Deformer
+from thermoelasticsim.elastic.mechanics import StressCalculator
+from thermoelasticsim.md.barostats import (
+    AndersenBarostat,
+)
+from thermoelasticsim.md.md_simulator import MDSimulator
+from thermoelasticsim.md.thermostats import (
+    AndersenThermostat,
+)
+from thermoelasticsim.utils.utils import EV_TO_GPA, TensorConverter
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +155,7 @@ class FiniteTempElasticityWorkflow:
 
         return cell
 
-    def run_nvt_sampling(self, cell) -> Tuple[np.ndarray, np.ndarray]:
+    def run_nvt_sampling(self, cell) -> tuple[np.ndarray, np.ndarray]:
         """在NVT系综下采样应力
 
         Parameters

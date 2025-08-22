@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - 应力涨落法模块
 
@@ -14,7 +13,7 @@ ThermoElasticSim - 应力涨落法模块
 并结合势能对应变的二阶导数（玻恩项），来计算材料的弹性常数。
 
 .. math::
-    C_{ijkl} = \langle C^B_{ijkl} \rangle - \frac{V}{k_B T} \left[ \langle \sigma_{ij} \sigma_{kl} \rangle - \langle \sigma_{ij} \rangle \langle \sigma_{kl} \rangle \right]
+    C_{ijkl} = \\langle C^B_{ijkl} \rangle - \frac{V}{k_B T} \\left[ \\langle \\sigma_{ij} \\sigma_{kl} \rangle - \\langle \\sigma_{ij} \rangle \\langle \\sigma_{kl} \rangle \right]
 
 参考文献:
     Clavier, G., et al. (2017). Computation of elastic constants of solids

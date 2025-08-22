@@ -3,9 +3,10 @@
 # 修改日期: 2025-08-18
 # 文件描述: 实现分子动力学模拟中的积分器，包括速度 Verlet、RK4 和 MTK 积分器。
 
-import numpy as np
-from typing import Optional, List
 import logging
+
+import numpy as np
+
 from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.potentials import Potential
 
@@ -41,7 +42,7 @@ class Integrator:
         """
         raise NotImplementedError
 
-    def calculate_kinetic_energy(self, atoms: List) -> float:
+    def calculate_kinetic_energy(self, atoms: list) -> float:
         """计算系统总动能"""
         return sum(
             0.5 * atom.mass * np.dot(atom.velocity, atom.velocity) for atom in atoms
@@ -290,7 +291,7 @@ class VelocityVerletIntegrator(Integrator):
 
     def _restore_state(self, atoms, state):
         """恢复到保存的状态"""
-        for atom, (pos, vel, force) in zip(atoms, state):
+        for atom, (pos, vel, force) in zip(atoms, state, strict=False):
             atom.position = pos
             atom.velocity = vel
             atom.force = force
@@ -462,7 +463,7 @@ class SymplecticIntegrator(Integrator):
 
     def _restore_state(self, atoms, state):
         """恢复状态"""
-        for atom, (pos, vel, force) in zip(atoms, state):
+        for atom, (pos, vel, force) in zip(atoms, state, strict=False):
             atom.position = pos
             atom.velocity = vel
             atom.force = force
@@ -529,7 +530,7 @@ class RK4Integrator(Integrator):
 
     def _restore_state(self, atoms, state):
         """恢复到保存的状态"""
-        for atom, (pos, vel) in zip(atoms, state):
+        for atom, (pos, vel) in zip(atoms, state, strict=False):
             atom.position = pos
             atom.velocity = vel
 
@@ -559,7 +560,7 @@ class RK4Integrator(Integrator):
         dt : float
             时间步长
         """
-        for atom, (dr_dt, dv_dt) in zip(cell.atoms, derivatives):
+        for atom, (dr_dt, dv_dt) in zip(cell.atoms, derivatives, strict=False):
             atom.position += dr_dt * dt
             atom.position = cell.apply_periodic_boundary(atom.position)
             atom.velocity += dv_dt * dt
@@ -587,7 +588,7 @@ class RK4Integrator(Integrator):
             (dr_dt2, dv_dt2),
             (dr_dt3, dv_dt3),
             (dr_dt4, dv_dt4),
-        ) in zip(cell.atoms, k1, k2, k3, k4):
+        ) in zip(cell.atoms, k1, k2, k3, k4, strict=False):
 
             # 更新位置
             dr = dt6 * (dr_dt1 + 2 * dr_dt2 + 2 * dr_dt3 + dr_dt4)

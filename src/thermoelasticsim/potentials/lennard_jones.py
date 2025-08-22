@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - Lennard-Jones 势模块
 
@@ -9,12 +8,15 @@ ThermoElasticSim - Lennard-Jones 势模块
 .. version:: 4.0.0
 """
 
-import numpy as np
 import logging
-from .base import Potential
+
+import numpy as np
+
 from thermoelasticsim.core.structure import Cell
-from thermoelasticsim.utils.utils import NeighborList
 from thermoelasticsim.interfaces.cpp_interface import CppInterface
+from thermoelasticsim.utils.utils import NeighborList
+
+from .base import Potential
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class LennardJonesPotential(Potential):
         sigma (float): 零势能点对应的原子间距，单位为 Å。
         cutoff (float): 截断距离，单位为 Å。
     """
+
     def __init__(self, epsilon: float, sigma: float, cutoff: float):
         parameters = {"epsilon": epsilon, "sigma": sigma}
         super().__init__(parameters, cutoff)
@@ -85,7 +88,8 @@ class LennardJonesPotential(Potential):
             cell (Cell): 包含原子信息的晶胞对象。
             neighbor_list (NeighborList): 预先构建的邻居列表。
 
-        Returns:
+        Returns
+        -------
             float: 系统的总势能，单位为 eV。
         """
         num_atoms = cell.num_atoms

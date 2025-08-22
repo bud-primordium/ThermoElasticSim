@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - 势能基类模块
 
@@ -10,8 +9,10 @@ ThermoElasticSim - 势能基类模块
 """
 
 from abc import ABC, abstractmethod
+
 from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.utils.utils import NeighborList
+
 
 class Potential(ABC):
     """
@@ -21,6 +22,7 @@ class Potential(ABC):
         parameters (dict): 势能相关的参数字典。
         cutoff (float): 势能的截断距离，单位为 Å。
     """
+
     def __init__(self, parameters, cutoff):
         self.parameters = parameters
         self.cutoff = cutoff
@@ -49,7 +51,8 @@ class Potential(ABC):
             cell (Cell): 包含原子位置和速度等信息的晶胞对象。
             neighbor_list (NeighborList): 用于加速计算的邻居列表对象。
 
-        Returns:
+        Returns
+        -------
             float: 系统的总势能，单位为 eV。
         """
         raise NotImplementedError

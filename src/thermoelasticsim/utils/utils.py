@@ -10,11 +10,11 @@
 及一些常用的单位转换常量
 """
 
-import numpy as np
 import logging
-from typing import List, Dict, Optional, Union
-import h5py
 from concurrent.futures import ThreadPoolExecutor
+
+import h5py
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class DataCollector:
 
     def __init__(
         self,
-        capacity: Optional[int] = None,
+        capacity: int | None = None,
         save_interval: int = 1000,
         use_threading: bool = False,
         output_file: str = "trajectory.h5",
@@ -196,7 +196,7 @@ class DataCollector:
         except Exception as e:
             logger.error(f"Error in async data collection: {e}")
 
-    def _create_state_dict(self, cell, potential=None) -> Dict:
+    def _create_state_dict(self, cell, potential=None) -> dict:
         """创建系统状态字典"""
         state = {
             "step": len(self.data),
@@ -217,7 +217,7 @@ class DataCollector:
 
         return state
 
-    def _process_state(self, state: Dict):
+    def _process_state(self, state: dict):
         """处理并存储状态数据"""
         if self._capacity and len(self.data) >= self._capacity:
             self.data.pop(0)
@@ -229,7 +229,7 @@ class DataCollector:
         if len(self.data) % self.save_interval == 0:
             self.save_trajectory()
 
-    def _update_stats(self, state: Dict):
+    def _update_stats(self, state: dict):
         """更新统计数据"""
         for key in self.stats:
             if key in state:
@@ -297,7 +297,7 @@ class NeighborList:
 
         logger.debug(f"Initialized NeighborList with cutoff={cutoff}, skin={skin}")
 
-    def get_neighbor_stats(self) -> Dict:
+    def get_neighbor_stats(self) -> dict:
         """
         返回邻居列表的统计信息
 
@@ -509,7 +509,7 @@ class NeighborList:
             return
 
         neighbor_counts = [len(neighbors) for neighbors in self.neighbor_list]
-        logger.info(f"Neighbor distribution:")
+        logger.info("Neighbor distribution:")
         logger.info(f"Min neighbors: {min(neighbor_counts)}")
         logger.info(f"Max neighbors: {max(neighbor_counts)}")
         logger.info(f"Average neighbors: {np.mean(neighbor_counts):.2f}")
@@ -518,7 +518,7 @@ class NeighborList:
         positions = self.cell.get_positions()
         box_lengths = self.cell.get_box_lengths()
         for i, pos in enumerate(positions):
-            is_boundary = any(abs(p / l - 0.5) > 0.35 for p, l in zip(pos, box_lengths))
+            is_boundary = any(abs(p / l - 0.5) > 0.35 for p, l in zip(pos, box_lengths, strict=False))
             if is_boundary:
                 logger.info(f"Boundary atom {i}:")
                 logger.info(f"  Position: {pos}")

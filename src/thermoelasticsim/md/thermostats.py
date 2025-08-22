@@ -3,9 +3,10 @@
 # 修改日期: 2025-08-12
 # 文件描述: 实现分子动力学模拟中的各种恒温器。
 
-import numpy as np
 import logging
-from typing import List, Dict, Optional
+
+import numpy as np
+
 from thermoelasticsim.interfaces.cpp_interface import CppInterface
 from thermoelasticsim.utils.utils import KB_IN_EV
 
@@ -32,7 +33,7 @@ class Thermostat:
         self.kinetic_energy_history = []
         self.xi_history = []  # 初始化xi_history
 
-    def apply(self, atoms: List, dt: float) -> None:
+    def apply(self, atoms: list, dt: float) -> None:
         """
         应用恒温器，更新原子速度
 
@@ -45,7 +46,7 @@ class Thermostat:
         """
         raise NotImplementedError
 
-    def get_kinetic_energy(self, atoms: List) -> float:
+    def get_kinetic_energy(self, atoms: list) -> float:
         """
         计算系统动能
 
@@ -64,7 +65,7 @@ class Thermostat:
         kinetic_energy = 0.5 * masses * np.sum(velocities**2, axis=1)
         return np.sum(kinetic_energy)
 
-    def get_temperature(self, atoms: List) -> float:
+    def get_temperature(self, atoms: list) -> float:
         """
         计算当前系统温度，扣除质心运动
 
@@ -88,7 +89,7 @@ class Thermostat:
         temperature = 2.0 * np.sum(kinetic_energy) / (dof * self.kb)
         return temperature
 
-    def remove_com_motion(self, atoms: List) -> None:
+    def remove_com_motion(self, atoms: list) -> None:
         """
         移除系统质心运动
 
@@ -105,7 +106,7 @@ class Thermostat:
         for atom in atoms:
             atom.velocity -= com_velocity
 
-    def record_state(self, atoms: List, time: float) -> None:
+    def record_state(self, atoms: list, time: float) -> None:
         """记录系统状态用于后续分析"""
         temp = self.get_temperature(atoms)
         kinetic = self.get_kinetic_energy(atoms)
@@ -274,7 +275,7 @@ class NoseHooverThermostat(Thermostat):
     """
 
     def __init__(
-        self, target_temperature: float, time_constant: float, Q: Optional[float] = None
+        self, target_temperature: float, time_constant: float, Q: float | None = None
     ):
         super().__init__(target_temperature)
         self.time_constant = time_constant
@@ -304,7 +305,6 @@ class NoseHooverThermostat(Thermostat):
         potential : Potential
             用于计算力场的对象，必须实现 potential.calculate_forces(cell)
         """
-
         atoms = cell.atoms
         num_atoms = len(atoms)
         dof = 3 * num_atoms - 3  # 去除刚体平移自由度(如果需要，不需要则可用3*num_atoms)
@@ -431,7 +431,7 @@ class NoseHooverChainThermostat(Thermostat):
         target_temperature: float,
         time_constant: float,
         chain_length: int = 3,
-        Q: Optional[np.ndarray] = None,
+        Q: np.ndarray | None = None,
     ):
         super().__init__(target_temperature)
         self.time_constant = time_constant
@@ -462,7 +462,7 @@ class NoseHooverChainThermostat(Thermostat):
             Q[i] = self.kb * self.target_temperature * self.time_constant**2
         return Q
 
-    def apply(self, atoms: List, dt: float) -> None:
+    def apply(self, atoms: list, dt: float) -> None:
         """
         应用 Nose-Hoover 链恒温器
 
@@ -522,7 +522,7 @@ class NoseHooverChainThermostat(Thermostat):
         # 记录当前 xi_chain 状态到历史中
         self.xi_history.append(self.xi_chain.copy())
 
-    def get_chain_state(self) -> Dict:
+    def get_chain_state(self) -> dict:
         """获取热浴链的当前状态"""
         return {
             "xi_chain": self.xi_chain.copy(),

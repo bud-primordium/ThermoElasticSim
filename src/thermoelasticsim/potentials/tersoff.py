@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - Tersoff 势模块
 
@@ -10,9 +9,11 @@ ThermoElasticSim - Tersoff 势模块
 """
 
 import logging
-from .base import Potential
+
 from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.utils.utils import NeighborList
+
+from .base import Potential
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class TersoffPotential(Potential):
         parameters (dict): Tersoff 势的参数。
         cutoff (float): 截断距离。
     """
+
     def __init__(self, parameters: dict, cutoff: float):
         super().__init__(parameters, cutoff)
         logger.warning("Tersoff a势尚未完全实现，这是一个占位符。")

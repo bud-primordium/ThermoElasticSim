@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ThermoElasticSim - 机器学习势接口模块
 
@@ -10,9 +9,11 @@ ThermoElasticSim - 机器学习势接口模块
 """
 
 import logging
-from .base import Potential
+
 from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.utils.utils import NeighborList
+
+from .base import Potential
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class MLPotential(Potential):
         model_path (str): 预训练模型的路径。
         cutoff (float): 截断距离。
     """
+
     def __init__(self, model_path: str, cutoff: float):
         parameters = {"model_path": model_path}
         super().__init__(parameters, cutoff)

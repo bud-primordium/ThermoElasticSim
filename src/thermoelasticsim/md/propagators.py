@@ -17,13 +17,14 @@
 Created: 2025-08-18
 """
 
-import numpy as np
 from typing import Any
-from scipy.linalg import expm
-from .interfaces import Propagator
+
+import numpy as np
+
 from ..core.structure import Cell
-from ..utils.utils import KB_IN_EV, EV_TO_GPA
 from ..elastic.mechanics import StressCalculator
+from ..utils.utils import EV_TO_GPA, KB_IN_EV
+from .interfaces import Propagator
 
 # ====================================================================
 # 四阶Suzuki-Yoshida分解系数 (High-Precision Integration)
@@ -294,7 +295,7 @@ class BerendsenThermostatPropagator(Propagator):
 
         # 特殊情况处理：如果温度接近0（无运动），初始化Maxwell分布
         if current_temp < 1e-6:  # 接近0K
-            print(f"⚠️  检测到零温度，初始化Maxwell分布速度")
+            print("⚠️  检测到零温度，初始化Maxwell分布速度")
             self._initialize_maxwell_velocities(cell)
             current_temp = cell.calculate_temperature()
 
@@ -1671,7 +1672,7 @@ class MTKBarostatPropagator(Propagator):
         self._volume_history = []
         self._barostat_energy_history = []
 
-        print(f"MTK恒压器初始化:")
+        print("MTK恒压器初始化:")
         print(f"  目标温度: {target_temperature:.1f} K")
         print(f"  目标压力: {target_pressure:.6f} eV/Å³")
         print(f"  压力阻尼: {pdamp:.1f} fs")
@@ -1706,7 +1707,7 @@ class MTKBarostatPropagator(Propagator):
 
         self._initialized = True
 
-        print(f"MTK参数初始化完成:")
+        print("MTK参数初始化完成:")
         print(f"  晶格质量 W: {self.W:.2e}")
         print(f"  链质量 R[0]: {self._R[0]:.2e}")
         print(f"  链质量 R[1:]: {self._R[1]:.2e}")
