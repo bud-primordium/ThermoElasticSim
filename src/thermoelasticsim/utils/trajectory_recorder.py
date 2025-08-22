@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 class TrajectoryRecorder:
     """
     轨迹记录器
-    
+
     可以作为回调函数集成到优化器中，自动记录优化轨迹。
-    
+
     Parameters
     ----------
     output_file : str
@@ -44,7 +44,7 @@ class TrajectoryRecorder:
         是否记录能量
     compression : str
         压缩算法
-    
+
     Examples
     --------
     >>> recorder = TrajectoryRecorder('optimization.h5')
@@ -59,8 +59,8 @@ class TrajectoryRecorder:
         record_forces: bool = True,
         record_stress: bool = True,
         record_energy: bool = True,
-        compression: str = 'gzip',
-        compression_opts: int = 4
+        compression: str = "gzip",
+        compression_opts: int = 4,
     ):
         self.output_file = Path(output_file)
         self.record_interval = record_interval
@@ -71,7 +71,7 @@ class TrajectoryRecorder:
         self.writer = TrajectoryWriter(
             str(self.output_file),
             compression=compression,
-            compression_opts=compression_opts
+            compression_opts=compression_opts,
         )
 
         self.step_count = 0
@@ -83,7 +83,7 @@ class TrajectoryRecorder:
     def initialize(self, cell: Cell, metadata: dict[str, Any] | None = None):
         """
         初始化记录器
-        
+
         Parameters
         ----------
         cell : Cell
@@ -98,12 +98,12 @@ class TrajectoryRecorder:
 
         # 准备元数据
         full_metadata = {
-            'optimization_start': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'n_atoms': n_atoms,
-            'record_interval': self.record_interval,
-            'record_forces': self.record_forces,
-            'record_stress': self.record_stress,
-            'record_energy': self.record_energy,
+            "optimization_start": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "n_atoms": n_atoms,
+            "record_interval": self.record_interval,
+            "record_forces": self.record_forces,
+            "record_stress": self.record_stress,
+            "record_energy": self.record_energy,
         }
 
         if metadata:
@@ -114,7 +114,7 @@ class TrajectoryRecorder:
             n_atoms=n_atoms,
             n_frames_estimate=1000,
             atom_types=atom_types,
-            metadata=full_metadata
+            metadata=full_metadata,
         )
 
         self.initialized = True
@@ -125,7 +125,7 @@ class TrajectoryRecorder:
     def record(self, cell: Cell, potential: Potential, step: int | None = None):
         """
         记录当前状态
-        
+
         Parameters
         ----------
         cell : Cell
@@ -155,19 +155,19 @@ class TrajectoryRecorder:
 
         if self.record_forces:
             forces = cell.get_forces()
-            kwargs['forces'] = forces
+            kwargs["forces"] = forces
 
         if self.record_stress:
             stress = cell.calculate_stress_tensor(potential)
-            kwargs['stress'] = stress
+            kwargs["stress"] = stress
 
         if self.record_energy:
             energy = potential.calculate_energy(cell)
-            kwargs['energy'] = energy
-            kwargs['energy_per_atom'] = energy / len(cell.atoms)
+            kwargs["energy"] = energy
+            kwargs["energy_per_atom"] = energy / len(cell.atoms)
 
         # 计算体积
-        kwargs['volume'] = cell.calculate_volume()
+        kwargs["volume"] = cell.calculate_volume()
 
         # 写入帧
         self.writer.write_frame(
@@ -175,7 +175,7 @@ class TrajectoryRecorder:
             box=box,
             time=current_time,
             step=step if step is not None else self.step_count,
-            **kwargs
+            **kwargs,
         )
 
         self.step_count += 1
@@ -188,9 +188,9 @@ class TrajectoryRecorder:
         if self.writer:
             # 写入最终元数据
             end_metadata = {
-                'optimization_end': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'total_frames': self.writer.n_frames,
-                'total_time': time.time() - self.start_time if self.start_time else 0,
+                "optimization_end": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "total_frames": self.writer.n_frames,
+                "total_time": time.time() - self.start_time if self.start_time else 0,
             }
 
             self.writer.write_metadata(end_metadata)
@@ -202,9 +202,9 @@ class TrajectoryRecorder:
 class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
     """
     带轨迹记录功能的L-BFGS优化器
-    
+
     在原有L-BFGS优化器基础上添加轨迹记录功能。
-    
+
     Parameters
     ----------
     recorder : TrajectoryRecorder, optional
@@ -222,7 +222,7 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
         recorder: TrajectoryRecorder | None = None,
         trajectory_file: str | None = None,
         record_interval: int = 1,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -231,8 +231,7 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
             self.recorder = recorder
         elif trajectory_file is not None:
             self.recorder = TrajectoryRecorder(
-                trajectory_file,
-                record_interval=record_interval
+                trajectory_file, record_interval=record_interval
             )
         else:
             self.recorder = None
@@ -240,7 +239,7 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
     def optimize(self, cell: Cell, potential: Potential, relax_cell: bool = False):
         """
         执行优化并记录轨迹
-        
+
         Parameters
         ----------
         cell : Cell
@@ -249,7 +248,7 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
             势能函数
         relax_cell : bool
             是否优化晶格
-            
+
         Returns
         -------
         tuple
@@ -258,11 +257,11 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
         # 初始化记录器
         if self.recorder:
             metadata = {
-                'optimizer': 'L-BFGS',
-                'relax_cell': relax_cell,
-                'ftol': self.ftol,
-                'gtol': self.gtol,
-                'maxiter': self.maxiter,
+                "optimizer": "L-BFGS",
+                "relax_cell": relax_cell,
+                "ftol": self.ftol,
+                "gtol": self.gtol,
+                "maxiter": self.maxiter,
             }
             self.recorder.initialize(cell, metadata)
 
@@ -270,7 +269,7 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
             self.recorder.record(cell, potential, step=0)
 
         # 创建回调函数
-        original_callback = getattr(self, '_callback', None)
+        original_callback = getattr(self, "_callback", None)
 
         def trajectory_callback(xk):
             """优化过程中的回调函数"""
@@ -302,14 +301,14 @@ class LBFGSOptimizerWithTrajectory(LBFGSOptimizer):
 
 
 def create_optimizer_with_trajectory(
-    optimizer_type: str = 'L-BFGS',
+    optimizer_type: str = "L-BFGS",
     trajectory_file: str | None = None,
     record_interval: int = 1,
-    **optimizer_params
+    **optimizer_params,
 ):
     """
     创建带轨迹记录的优化器
-    
+
     Parameters
     ----------
     optimizer_type : str
@@ -320,25 +319,19 @@ def create_optimizer_with_trajectory(
         记录间隔
     **optimizer_params
         优化器参数
-        
+
     Returns
     -------
     optimizer
         带轨迹记录的优化器实例
     """
     if trajectory_file:
-        recorder = TrajectoryRecorder(
-            trajectory_file,
-            record_interval=record_interval
-        )
+        recorder = TrajectoryRecorder(trajectory_file, record_interval=record_interval)
     else:
         recorder = None
 
-    if optimizer_type == 'L-BFGS':
-        return LBFGSOptimizerWithTrajectory(
-            recorder=recorder,
-            **optimizer_params
-        )
+    if optimizer_type == "L-BFGS":
+        return LBFGSOptimizerWithTrajectory(recorder=recorder, **optimizer_params)
     else:
         raise ValueError(f"不支持的优化器类型: {optimizer_type}")
 
@@ -347,7 +340,7 @@ def create_optimizer_with_trajectory(
 class DeformationTrajectoryRecorder:
     """
     专门用于形变计算的轨迹记录器
-    
+
     记录形变过程中的完整信息，包括应变、应力、能量等。
     """
 
@@ -363,8 +356,8 @@ class DeformationTrajectoryRecorder:
         atom_types = [atom.symbol for atom in base_cell.atoms]
 
         full_metadata = {
-            'calculation_type': 'deformation',
-            'n_atoms': n_atoms,
+            "calculation_type": "deformation",
+            "n_atoms": n_atoms,
         }
 
         if metadata:
@@ -374,7 +367,7 @@ class DeformationTrajectoryRecorder:
             n_atoms=n_atoms,
             n_frames_estimate=100,
             atom_types=atom_types,
-            metadata=full_metadata
+            metadata=full_metadata,
         )
 
         self.initialized = True
@@ -387,11 +380,11 @@ class DeformationTrajectoryRecorder:
         stress: np.ndarray,
         deformation_matrix: np.ndarray,
         mode: str,
-        converged: bool
+        converged: bool,
     ):
         """
         记录形变状态
-        
+
         Parameters
         ----------
         cell : Cell
@@ -430,25 +423,29 @@ class DeformationTrajectoryRecorder:
             deformation_matrix=deformation_matrix,
             deformation_mode=mode,
             converged=converged,
-            volume=cell.calculate_volume()
+            volume=cell.calculate_volume(),
         )
 
         # 保存到内部列表
-        self.deformation_data.append({
-            'strain': strain.copy(),
-            'stress': stress.copy(),
-            'energy': energy,
-            'converged': converged,
-            'mode': mode,
-        })
+        self.deformation_data.append(
+            {
+                "strain": strain.copy(),
+                "stress": stress.copy(),
+                "energy": energy,
+                "converged": converged,
+                "mode": mode,
+            }
+        )
 
     def finalize(self):
         """完成记录"""
         if self.writer:
             # 写入汇总信息
             metadata = {
-                'total_deformations': len(self.deformation_data),
-                'converged_count': sum(1 for d in self.deformation_data if d['converged']),
+                "total_deformations": len(self.deformation_data),
+                "converged_count": sum(
+                    1 for d in self.deformation_data if d["converged"]
+                ),
             }
 
             self.writer.write_metadata(metadata)

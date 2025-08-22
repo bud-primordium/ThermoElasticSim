@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 class ModernVisualizer:
     """
     现代化可视化工具
-    
+
     提供交互式3D可视化、动画生成、数据分析图表等功能。
-    
+
     Examples
     --------
     >>> vis = ModernVisualizer()
@@ -42,10 +42,10 @@ class ModernVisualizer:
     >>> vis.create_trajectory_animation('trajectory.h5', 'animation.mp4')
     """
 
-    def __init__(self, theme: str = 'plotly_white'):
+    def __init__(self, theme: str = "plotly_white"):
         """
         初始化可视化器
-        
+
         Parameters
         ----------
         theme : str
@@ -61,11 +61,11 @@ class ModernVisualizer:
         show_bonds: bool = False,
         bond_cutoff: float = 3.0,
         title: str = "Crystal Structure",
-        save_html: str | None = None
+        save_html: str | None = None,
     ) -> go.Figure:
         """
         创建交互式3D结构图
-        
+
         Parameters
         ----------
         cell : Cell
@@ -80,7 +80,7 @@ class ModernVisualizer:
             图标题
         save_html : str, optional
             保存为HTML文件
-            
+
         Returns
         -------
         fig : plotly.graph_objects.Figure
@@ -93,16 +93,13 @@ class ModernVisualizer:
             x=positions[:, 0],
             y=positions[:, 1],
             z=positions[:, 2],
-            mode='markers',
+            mode="markers",
             marker=dict(
-                size=8,
-                color='blue',
-                opacity=0.8,
-                line=dict(width=0.5, color='black')
+                size=8, color="blue", opacity=0.8, line=dict(width=0.5, color="black")
             ),
             text=[f"Atom {i}: {atom.symbol}" for i, atom in enumerate(cell.atoms)],
-            hovertemplate='%{text}<br>x: %{x:.2f}<br>y: %{y:.2f}<br>z: %{z:.2f}',
-            name='Atoms'
+            hovertemplate="%{text}<br>x: %{x:.2f}<br>y: %{y:.2f}<br>z: %{z:.2f}",
+            name="Atoms",
         )
 
         traces = [atom_trace]
@@ -125,17 +122,15 @@ class ModernVisualizer:
             title=title,
             template=self.theme,
             scene=dict(
-                xaxis_title='X (Å)',
-                yaxis_title='Y (Å)',
-                zaxis_title='Z (Å)',
-                aspectmode='cube',
-                camera=dict(
-                    eye=dict(x=1.5, y=1.5, z=1.5)
-                )
+                xaxis_title="X (Å)",
+                yaxis_title="Y (Å)",
+                zaxis_title="Z (Å)",
+                aspectmode="cube",
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.5)),
             ),
             showlegend=True,
             width=800,
-            height=600
+            height=600,
         )
 
         if save_html:
@@ -149,24 +144,33 @@ class ModernVisualizer:
         traces = []
 
         # 8个顶点
-        vertices = np.array([
-            [0, 0, 0],
-            lattice_vectors[0],
-            lattice_vectors[1],
-            lattice_vectors[2],
-            lattice_vectors[0] + lattice_vectors[1],
-            lattice_vectors[0] + lattice_vectors[2],
-            lattice_vectors[1] + lattice_vectors[2],
-            lattice_vectors[0] + lattice_vectors[1] + lattice_vectors[2]
-        ])
+        vertices = np.array(
+            [
+                [0, 0, 0],
+                lattice_vectors[0],
+                lattice_vectors[1],
+                lattice_vectors[2],
+                lattice_vectors[0] + lattice_vectors[1],
+                lattice_vectors[0] + lattice_vectors[2],
+                lattice_vectors[1] + lattice_vectors[2],
+                lattice_vectors[0] + lattice_vectors[1] + lattice_vectors[2],
+            ]
+        )
 
         # 12条边
         edges = [
-            (0, 1), (0, 2), (0, 3),  # 从原点出发
-            (1, 4), (1, 5),           # 从v1出发
-            (2, 4), (2, 6),           # 从v2出发
-            (3, 5), (3, 6),           # 从v3出发
-            (4, 7), (5, 7), (6, 7)   # 到最远顶点
+            (0, 1),
+            (0, 2),
+            (0, 3),  # 从原点出发
+            (1, 4),
+            (1, 5),  # 从v1出发
+            (2, 4),
+            (2, 6),  # 从v2出发
+            (3, 5),
+            (3, 6),  # 从v3出发
+            (4, 7),
+            (5, 7),
+            (6, 7),  # 到最远顶点
         ]
 
         for i, (start, end) in enumerate(edges):
@@ -174,11 +178,11 @@ class ModernVisualizer:
                 x=[vertices[start, 0], vertices[end, 0]],
                 y=[vertices[start, 1], vertices[end, 1]],
                 z=[vertices[start, 2], vertices[end, 2]],
-                mode='lines',
-                line=dict(color='red', width=2),
+                mode="lines",
+                line=dict(color="red", width=2),
                 showlegend=True if i == 0 else False,
-                name='Box',
-                legendgroup='box'
+                name="Box",
+                legendgroup="box",
             )
             traces.append(trace)
 
@@ -203,24 +207,21 @@ class ModernVisualizer:
                         x=[positions[i, 0], positions[j, 0]],
                         y=[positions[i, 1], positions[j, 1]],
                         z=[positions[i, 2], positions[j, 2]],
-                        mode='lines',
-                        line=dict(color='gray', width=1),
+                        mode="lines",
+                        line=dict(color="gray", width=1),
                         showlegend=False,
-                        hoverinfo='skip'
+                        hoverinfo="skip",
                     )
                     traces.append(trace)
 
         return traces
 
     def plot_trajectory_frame(
-        self,
-        trajectory_file: str,
-        frame_idx: int = 0,
-        **kwargs
+        self, trajectory_file: str, frame_idx: int = 0, **kwargs
     ) -> go.Figure:
         """
         可视化轨迹中的单帧
-        
+
         Parameters
         ----------
         trajectory_file : str
@@ -229,7 +230,7 @@ class ModernVisualizer:
             帧索引
         **kwargs
             传递给plot_structure_3d的参数
-            
+
         Returns
         -------
         fig : plotly.graph_objects.Figure
@@ -244,23 +245,25 @@ class ModernVisualizer:
         # 这里需要从轨迹中重建Cell
         # 简化处理，只显示位置
 
-        positions = frame['positions']
-        box = frame.get('box', np.eye(3) * 10)
+        positions = frame["positions"]
+        box = frame.get("box", np.eye(3) * 10)
 
         # 创建散点图
         fig = go.Figure()
 
-        fig.add_trace(go.Scatter3d(
-            x=positions[:, 0],
-            y=positions[:, 1],
-            z=positions[:, 2],
-            mode='markers',
-            marker=dict(size=6, color='blue'),
-            name=f'Frame {frame_idx}'
-        ))
+        fig.add_trace(
+            go.Scatter3d(
+                x=positions[:, 0],
+                y=positions[:, 1],
+                z=positions[:, 2],
+                mode="markers",
+                marker=dict(size=6, color="blue"),
+                name=f"Frame {frame_idx}",
+            )
+        )
 
         # 添加盒子
-        if 'box' in frame:
+        if "box" in frame:
             box_traces = self._create_box_traces(box)
             for trace in box_traces:
                 fig.add_trace(trace)
@@ -269,11 +272,11 @@ class ModernVisualizer:
             title=f"Trajectory Frame {frame_idx}",
             template=self.theme,
             scene=dict(
-                xaxis_title='X (Å)',
-                yaxis_title='Y (Å)',
-                zaxis_title='Z (Å)',
-                aspectmode='cube'
-            )
+                xaxis_title="X (Å)",
+                yaxis_title="Y (Å)",
+                zaxis_title="Z (Å)",
+                aspectmode="cube",
+            ),
         )
 
         reader.close()
@@ -281,15 +284,11 @@ class ModernVisualizer:
         return fig
 
     def create_trajectory_animation_plotly(
-        self,
-        trajectory_file: str,
-        output_html: str,
-        skip: int = 1,
-        duration: int = 100
+        self, trajectory_file: str, output_html: str, skip: int = 1, duration: int = 100
     ):
         """
         创建交互式轨迹动画（HTML）
-        
+
         Parameters
         ----------
         trajectory_file : str
@@ -305,7 +304,7 @@ class ModernVisualizer:
         reader.open()
 
         info = reader.get_trajectory_info()
-        n_frames = info['n_frames']
+        n_frames = info["n_frames"]
 
         # 读取所有帧（可能需要采样）
         frames_data = []
@@ -321,48 +320,48 @@ class ModernVisualizer:
         animation_frames = []
 
         for i, frame in enumerate(frames_data):
-            positions = frame['positions']
+            positions = frame["positions"]
 
             # 获取增强的物理信息
-            step_type = frame.get('step_type', 'unknown')
-            strain_value = frame.get('strain_value', 0.0)
-            energy = frame.get('energy', 0.0)
-            lattice_a = frame.get('lattice_a', 0.0)
-            lattice_b = frame.get('lattice_b', 0.0)
-            lattice_c = frame.get('lattice_c', 0.0)
-            lattice_alpha = frame.get('lattice_alpha', 90.0)
-            lattice_beta = frame.get('lattice_beta', 90.0)
-            lattice_gamma = frame.get('lattice_gamma', 90.0)
-            volume = frame.get('volume', 0.0)
-            converged = frame.get('converged', True)
-            description = frame.get('description', f'{step_type} | 帧{i}')
+            step_type = frame.get("step_type", "unknown")
+            strain_value = frame.get("strain_value", 0.0)
+            energy = frame.get("energy", 0.0)
+            lattice_a = frame.get("lattice_a", 0.0)
+            lattice_b = frame.get("lattice_b", 0.0)
+            lattice_c = frame.get("lattice_c", 0.0)
+            lattice_alpha = frame.get("lattice_alpha", 90.0)
+            lattice_beta = frame.get("lattice_beta", 90.0)
+            lattice_gamma = frame.get("lattice_gamma", 90.0)
+            volume = frame.get("volume", 0.0)
+            converged = frame.get("converged", True)
+            description = frame.get("description", f"{step_type} | 帧{i}")
 
             # 根据步骤类型确定颜色
-            if step_type == 'base_state':
-                color = 'green'
-                symbol = 'circle'
-            elif step_type == 'before_internal_relax':
-                color = 'red'
-                symbol = 'square'
-            elif step_type == 'after_internal_relax':
-                color = 'blue'
-                symbol = 'diamond'
+            if step_type == "base_state":
+                color = "green"
+                symbol = "circle"
+            elif step_type == "before_internal_relax":
+                color = "red"
+                symbol = "square"
+            elif step_type == "after_internal_relax":
+                color = "blue"
+                symbol = "diamond"
             else:
-                color = 'gray'
-                symbol = 'circle'
+                color = "gray"
+                symbol = "circle"
 
             # 创建详细的悬停信息 - 修复所有编码和对应问题
             converged_text = "converged" if converged else "failed"
 
             # 确保step_type是字符串而不是字节对象
             if isinstance(step_type, bytes):
-                step_type = step_type.decode('utf-8')
+                step_type = step_type.decode("utf-8")
             step_type = str(step_type)
 
             # 判断是否为三斜晶胞
             is_triclinic = abs(lattice_gamma - 90.0) > 0.1
 
-            if step_type == 'base_state':
+            if step_type == "base_state":
                 hover_text = (
                     f"Base State<br>"
                     f"Energy: {energy:.3f} eV<br>"
@@ -397,38 +396,36 @@ class ModernVisualizer:
                         x=positions[:, 0],
                         y=positions[:, 1],
                         z=positions[:, 2],
-                        mode='markers',
+                        mode="markers",
                         marker=dict(
                             size=8,
                             color=color,
                             symbol=symbol,
                             opacity=0.8,
-                            line=dict(width=1, color='black')
+                            line=dict(width=1, color="black"),
                         ),
                         text=hover_text,
-                        hovertemplate='%{text}<extra></extra>',
-                        name=f'Frame {frame_indices[i]}'
+                        hovertemplate="%{text}<extra></extra>",
+                        name=f"Frame {frame_indices[i]}",
                     )
                 ],
                 name=str(i),
-                layout=go.Layout(
-                    title=f"帧 {frame_indices[i]}: {description}"
-                )
+                layout=go.Layout(title=f"帧 {frame_indices[i]}: {description}"),
             )
             animation_frames.append(frame_data)
 
         # 创建初始图 - 使用第一帧的信息
         first_frame = frames_data[0]
-        first_positions = first_frame['positions']
-        first_step_type = first_frame.get('step_type', 'base_state')
+        first_positions = first_frame["positions"]
+        first_step_type = first_frame.get("step_type", "base_state")
 
         # 初始颜色
-        if first_step_type == 'base_state':
-            initial_color = 'green'
-            initial_symbol = 'circle'
+        if first_step_type == "base_state":
+            initial_color = "green"
+            initial_symbol = "circle"
         else:
-            initial_color = 'blue'
-            initial_symbol = 'diamond'
+            initial_color = "blue"
+            initial_symbol = "diamond"
 
         fig = go.Figure(
             data=[
@@ -436,18 +433,18 @@ class ModernVisualizer:
                     x=first_positions[:, 0],
                     y=first_positions[:, 1],
                     z=first_positions[:, 2],
-                    mode='markers',
+                    mode="markers",
                     marker=dict(
                         size=8,
                         color=initial_color,
                         symbol=initial_symbol,
                         opacity=0.8,
-                        line=dict(width=1, color='black')
+                        line=dict(width=1, color="black"),
                     ),
-                    name='原子'
+                    name="原子",
                 )
             ],
-            frames=animation_frames
+            frames=animation_frames,
         )
 
         # 添加播放按钮和增强的滑块
@@ -457,39 +454,39 @@ class ModernVisualizer:
                 xaxis_title="X (Å)",
                 yaxis_title="Y (Å)",
                 zaxis_title="Z (Å)",
-                aspectmode='cube'
+                aspectmode="cube",
             ),
             updatemenus=[
                 dict(
-                    type='buttons',
+                    type="buttons",
                     showactive=False,
                     x=0.1,
                     y=1.02,
                     buttons=[
                         dict(
-                            label='▶ 播放',
-                            method='animate',
+                            label="▶ 播放",
+                            method="animate",
                             args=[
                                 None,
                                 dict(
                                     frame=dict(duration=duration, redraw=True),
                                     fromcurrent=True,
-                                    mode='immediate'
-                                )
-                            ]
+                                    mode="immediate",
+                                ),
+                            ],
                         ),
                         dict(
-                            label='⏸ 暂停',
-                            method='animate',
+                            label="⏸ 暂停",
+                            method="animate",
                             args=[
                                 [None],
                                 dict(
                                     frame=dict(duration=0, redraw=False),
-                                    mode='immediate'
-                                )
-                            ]
-                        )
-                    ]
+                                    mode="immediate",
+                                ),
+                            ],
+                        ),
+                    ],
                 )
             ],
             sliders=[
@@ -505,16 +502,16 @@ class ModernVisualizer:
                                 [str(i)],
                                 dict(
                                     frame=dict(duration=0, redraw=True),
-                                    mode='immediate'
-                                )
+                                    mode="immediate",
+                                ),
                             ],
                             label=self._create_slider_label(frames_data[i]),
-                            method='animate'
+                            method="animate",
                         )
                         for i in range(len(animation_frames))
-                    ]
+                    ],
                 )
-            ]
+            ],
         )
 
         # 保存文件
@@ -526,49 +523,47 @@ class ModernVisualizer:
     def _create_slider_label(self, frame_data):
         """
         为滑块创建有意义的标签 - 修复索引对应问题
-        
+
         Parameters
         ----------
         frame_data : dict
             帧数据
-            
+
         Returns
         -------
         str
             滑块标签
         """
-        step_type = frame_data.get('step_type', 'unknown')
-        strain_value = frame_data.get('strain_value', 0.0)
+        step_type = frame_data.get("step_type", "unknown")
+        strain_value = frame_data.get("strain_value", 0.0)
 
         # 确保step_type是字符串而不是字节对象
         if isinstance(step_type, bytes):
-            step_type = step_type.decode('utf-8')
+            step_type = step_type.decode("utf-8")
         step_type = str(step_type)
 
-        if step_type == 'base_state':
+        if step_type == "base_state":
             return "Base"
-        elif step_type == 'before_internal_relax':
+        elif step_type == "before_internal_relax":
             return f"Deform{strain_value:.3f}"
-        elif step_type == 'after_internal_relax':
+        elif step_type == "after_internal_relax":
             return f"Relax{strain_value:.3f}"
         else:
             return f"{step_type}"
 
     def plot_energy_evolution(
-        self,
-        trajectory_file: str,
-        save_file: str | None = None
+        self, trajectory_file: str, save_file: str | None = None
     ) -> go.Figure:
         """
         绘制能量演化图
-        
+
         Parameters
         ----------
         trajectory_file : str
             轨迹文件
         save_file : str, optional
             保存文件名
-            
+
         Returns
         -------
         fig : plotly.graph_objects.Figure
@@ -583,34 +578,36 @@ class ModernVisualizer:
 
         for i in range(reader.n_frames):
             frame = reader.read_frame(i)
-            if 'energy' in frame:
-                energies.append(frame['energy'])
-                times.append(frame.get('time', i))
+            if "energy" in frame:
+                energies.append(frame["energy"])
+                times.append(frame.get("time", i))
 
         reader.close()
 
         # 创建图
         fig = go.Figure()
 
-        fig.add_trace(go.Scatter(
-            x=times,
-            y=energies,
-            mode='lines+markers',
-            name='Total Energy',
-            line=dict(color='blue', width=2),
-            marker=dict(size=4)
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=times,
+                y=energies,
+                mode="lines+markers",
+                name="Total Energy",
+                line=dict(color="blue", width=2),
+                marker=dict(size=4),
+            )
+        )
 
         fig.update_layout(
-            title='Energy Evolution',
-            xaxis_title='Time (ps)' if times[0] != 0 else 'Frame',
-            yaxis_title='Energy (eV)',
+            title="Energy Evolution",
+            xaxis_title="Time (ps)" if times[0] != 0 else "Frame",
+            yaxis_title="Energy (eV)",
             template=self.theme,
-            hovermode='x unified'
+            hovermode="x unified",
         )
 
         if save_file:
-            if save_file.endswith('.html'):
+            if save_file.endswith(".html"):
                 fig.write_html(save_file)
             else:
                 fig.write_image(save_file)
@@ -624,11 +621,11 @@ class ModernVisualizer:
         stresses: np.ndarray,
         components: list[str] | None = None,
         title: str = "Stress-Strain Relationship",
-        save_html: str | None = None
+        save_html: str | None = None,
     ) -> go.Figure:
         """
         创建交互式应力-应变关系图
-        
+
         Parameters
         ----------
         strains : np.ndarray
@@ -641,18 +638,17 @@ class ModernVisualizer:
             图标题
         save_html : str, optional
             保存HTML文件
-            
+
         Returns
         -------
         fig : plotly.graph_objects.Figure
             交互式图
         """
         if components is None:
-            components = ['11', '22', '33', '23', '13', '12']
+            components = ["11", "22", "33", "23", "13", "12"]
 
         fig = make_subplots(
-            rows=2, cols=3,
-            subplot_titles=[f'Component {c}' for c in components]
+            rows=2, cols=3, subplot_titles=[f"Component {c}" for c in components]
         )
 
         for i, comp in enumerate(components):
@@ -664,17 +660,14 @@ class ModernVisualizer:
                 go.Scatter(
                     x=strains[:, i],
                     y=stresses[:, i],
-                    mode='markers',
-                    marker=dict(
-                        size=8,
-                        color=self.default_colors[i],
-                        opacity=0.7
-                    ),
-                    name=f'σ{comp}',
+                    mode="markers",
+                    marker=dict(size=8, color=self.default_colors[i], opacity=0.7),
+                    name=f"σ{comp}",
                     legendgroup=comp,
-                    showlegend=True
+                    showlegend=True,
                 ),
-                row=row, col=col
+                row=row,
+                col=col,
             )
 
             # 拟合线
@@ -688,28 +681,20 @@ class ModernVisualizer:
                     go.Scatter(
                         x=x_fit,
                         y=y_fit,
-                        mode='lines',
-                        line=dict(
-                            color=self.default_colors[i],
-                            width=2,
-                            dash='dash'
-                        ),
-                        name=f'Fit (slope={coeffs[0]:.1f})',
+                        mode="lines",
+                        line=dict(color=self.default_colors[i], width=2, dash="dash"),
+                        name=f"Fit (slope={coeffs[0]:.1f})",
                         legendgroup=comp,
-                        showlegend=False
+                        showlegend=False,
                     ),
-                    row=row, col=col
+                    row=row,
+                    col=col,
                 )
 
-        fig.update_xaxes(title_text='Strain')
-        fig.update_yaxes(title_text='Stress (GPa)')
+        fig.update_xaxes(title_text="Strain")
+        fig.update_yaxes(title_text="Stress (GPa)")
 
-        fig.update_layout(
-            title=title,
-            template=self.theme,
-            height=600,
-            showlegend=True
-        )
+        fig.update_layout(title=title, template=self.theme, height=600, showlegend=True)
 
         if save_html:
             fig.write_html(save_html)
@@ -724,11 +709,11 @@ class ModernVisualizer:
         fps: int = 30,
         skip: int = 1,
         dpi: int = 100,
-        figsize: tuple[int, int] = (10, 8)
+        figsize: tuple[int, int] = (10, 8),
     ):
         """
         创建轨迹视频文件（MP4/GIF）
-        
+
         Parameters
         ----------
         trajectory_file : str
@@ -748,34 +733,34 @@ class ModernVisualizer:
         reader.open()
 
         info = reader.get_trajectory_info()
-        n_frames = info['n_frames']
+        n_frames = info["n_frames"]
 
         # 创建图形
         fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
 
         # 读取第一帧确定范围
         first_frame = reader.read_frame(0)
-        positions = first_frame['positions']
+        positions = first_frame["positions"]
 
         # 设置坐标范围
         max_range = np.ptp(positions, axis=0).max()
         mid_points = np.mean(positions, axis=0)
 
-        ax.set_xlim(mid_points[0] - max_range/2, mid_points[0] + max_range/2)
-        ax.set_ylim(mid_points[1] - max_range/2, mid_points[1] + max_range/2)
-        ax.set_zlim(mid_points[2] - max_range/2, mid_points[2] + max_range/2)
+        ax.set_xlim(mid_points[0] - max_range / 2, mid_points[0] + max_range / 2)
+        ax.set_ylim(mid_points[1] - max_range / 2, mid_points[1] + max_range / 2)
+        ax.set_zlim(mid_points[2] - max_range / 2, mid_points[2] + max_range / 2)
 
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Y (Å)')
-        ax.set_zlabel('Z (Å)')
+        ax.set_xlabel("X (Å)")
+        ax.set_ylabel("Y (Å)")
+        ax.set_zlabel("Z (Å)")
 
         # 初始散点
-        scatter = ax.scatter([], [], [], c='b', s=50)
+        scatter = ax.scatter([], [], [], c="b", s=50)
 
         def init():
             scatter._offsets3d = ([], [], [])
-            return scatter,
+            return (scatter,)
 
         def update(frame_idx):
             actual_idx = frame_idx * skip
@@ -783,17 +768,13 @@ class ModernVisualizer:
                 actual_idx = n_frames - 1
 
             frame = reader.read_frame(actual_idx)
-            positions = frame['positions']
+            positions = frame["positions"]
 
-            scatter._offsets3d = (
-                positions[:, 0],
-                positions[:, 1],
-                positions[:, 2]
-            )
+            scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
 
-            ax.set_title(f'Frame {actual_idx}')
+            ax.set_title(f"Frame {actual_idx}")
 
-            return scatter,
+            return (scatter,)
 
         # 创建动画
         n_animation_frames = n_frames // skip
@@ -803,14 +784,14 @@ class ModernVisualizer:
             frames=n_animation_frames,
             init_func=init,
             blit=False,
-            interval=1000/fps
+            interval=1000 / fps,
         )
 
         # 保存视频
-        if output_video.endswith('.mp4'):
-            writer = FFMpegWriter(fps=fps, metadata=dict(artist='ThermoElasticSim'))
+        if output_video.endswith(".mp4"):
+            writer = FFMpegWriter(fps=fps, metadata=dict(artist="ThermoElasticSim"))
             anim.save(output_video, writer=writer, dpi=dpi)
-        elif output_video.endswith('.gif'):
+        elif output_video.endswith(".gif"):
             writer = PillowWriter(fps=fps)
             anim.save(output_video, writer=writer, dpi=dpi)
         else:
@@ -822,20 +803,18 @@ class ModernVisualizer:
         logger.info(f"保存轨迹视频到: {output_video}")
 
     def plot_volume_evolution(
-        self,
-        trajectory_file: str,
-        save_file: str | None = None
+        self, trajectory_file: str, save_file: str | None = None
     ) -> go.Figure:
         """
         绘制体积演化图
-        
+
         Parameters
         ----------
         trajectory_file : str
             轨迹文件
         save_file : str, optional
             保存文件名
-            
+
         Returns
         -------
         fig : plotly.graph_objects.Figure
@@ -849,41 +828,43 @@ class ModernVisualizer:
 
         for i in range(reader.n_frames):
             frame = reader.read_frame(i)
-            if 'volume' in frame:
-                volumes.append(frame['volume'])
-            elif 'box' in frame:
-                box = frame['box']
+            if "volume" in frame:
+                volumes.append(frame["volume"])
+            elif "box" in frame:
+                box = frame["box"]
                 volume = np.linalg.det(box)
                 volumes.append(volume)
             else:
                 continue
 
-            times.append(frame.get('time', i))
+            times.append(frame.get("time", i))
 
         reader.close()
 
         # 创建图
         fig = go.Figure()
 
-        fig.add_trace(go.Scatter(
-            x=times,
-            y=volumes,
-            mode='lines+markers',
-            name='Volume',
-            line=dict(color='green', width=2),
-            marker=dict(size=4)
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=times,
+                y=volumes,
+                mode="lines+markers",
+                name="Volume",
+                line=dict(color="green", width=2),
+                marker=dict(size=4),
+            )
+        )
 
         fig.update_layout(
-            title='Volume Evolution',
-            xaxis_title='Time (ps)' if times[0] != 0 else 'Frame',
-            yaxis_title='Volume (Å³)',
+            title="Volume Evolution",
+            xaxis_title="Time (ps)" if times[0] != 0 else "Frame",
+            yaxis_title="Volume (Å³)",
             template=self.theme,
-            hovermode='x unified'
+            hovermode="x unified",
         )
 
         if save_file:
-            if save_file.endswith('.html'):
+            if save_file.endswith(".html"):
                 fig.write_html(save_file)
             else:
                 fig.write_image(save_file)
@@ -893,12 +874,14 @@ class ModernVisualizer:
 
 
 # 便捷函数
-def quick_visualize_trajectory(trajectory_file: str, output_dir: str = './visualization'):
+def quick_visualize_trajectory(
+    trajectory_file: str, output_dir: str = "./visualization"
+):
     """
     快速可视化轨迹文件
-    
+
     生成一系列标准可视化图表。
-    
+
     Parameters
     ----------
     trajectory_file : str
@@ -913,27 +896,22 @@ def quick_visualize_trajectory(trajectory_file: str, output_dir: str = './visual
 
     # 生成能量演化图
     vis.plot_energy_evolution(
-        trajectory_file,
-        save_file=str(output_path / 'energy_evolution.html')
+        trajectory_file, save_file=str(output_path / "energy_evolution.html")
     )
 
     # 生成体积演化图
     vis.plot_volume_evolution(
-        trajectory_file,
-        save_file=str(output_path / 'volume_evolution.html')
+        trajectory_file, save_file=str(output_path / "volume_evolution.html")
     )
 
     # 生成交互式动画
     vis.create_trajectory_animation_plotly(
-        trajectory_file,
-        str(output_path / 'trajectory_animation.html')
+        trajectory_file, str(output_path / "trajectory_animation.html")
     )
 
     # 生成视频
     vis.create_trajectory_video(
-        trajectory_file,
-        str(output_path / 'trajectory.gif'),
-        fps=10
+        trajectory_file, str(output_path / "trajectory.gif"), fps=10
     )
 
     logger.info(f"可视化文件已保存到: {output_dir}")

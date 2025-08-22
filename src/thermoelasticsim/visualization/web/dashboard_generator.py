@@ -4,7 +4,7 @@ Web仪表板生成器
 
 使用Jinja2模板引擎生成交互式HTML仪表板，提供：
 - 现代化的UI设计
-- 真正的JavaScript交互功能  
+- 真正的JavaScript交互功能
 - 模块化的模板系统
 - 响应式布局
 
@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 class DashboardGenerator:
     """
     仪表板生成器
-    
+
     使用Jinja2模板引擎生成高质量的HTML仪表板。
-    
+
     Parameters
     ----------
     template_dir : str, optional
         模板目录路径，默认使用内置模板
-    
+
     Examples
     --------
     >>> generator = DashboardGenerator()
@@ -47,7 +47,7 @@ class DashboardGenerator:
     def __init__(self, template_dir: str | None = None):
         """
         初始化生成器
-        
+
         Parameters
         ----------
         template_dir : str, optional
@@ -55,14 +55,14 @@ class DashboardGenerator:
         """
         if template_dir is None:
             # 使用内置模板目录
-            template_dir = Path(__file__).parent / 'templates'
+            template_dir = Path(__file__).parent / "templates"
 
         self.template_dir = Path(template_dir)
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
             autoescape=True,  # 自动转义HTML，提高安全性
             trim_blocks=True,
-            lstrip_blocks=True
+            lstrip_blocks=True,
         )
 
         # 添加自定义过滤器
@@ -83,7 +83,7 @@ class DashboardGenerator:
         def format_percent(value, decimals=1, show_sign=True):
             """格式化百分比"""
             try:
-                sign = '+' if show_sign and float(value) >= 0 else ''
+                sign = "+" if show_sign and float(value) >= 0 else ""
                 return f"{sign}{float(value):.{decimals}f}%"
             except (ValueError, TypeError):
                 return str(value)
@@ -105,8 +105,8 @@ class DashboardGenerator:
                 image_file = Path(image_path)
                 if image_file.exists():
                     mime_type, _ = mimetypes.guess_type(str(image_file))
-                    if mime_type and mime_type.startswith('image/'):
-                        with open(image_file, 'rb') as f:
+                    if mime_type and mime_type.startswith("image/"):
+                        with open(image_file, "rb") as f:
                             encoded = base64.b64encode(f.read()).decode()
                         return f"data:{mime_type};base64,{encoded}"
             except Exception as e:
@@ -122,22 +122,22 @@ class DashboardGenerator:
                 return '""'
 
         # 正确注册过滤器
-        self.env.filters['format_number'] = format_number
-        self.env.filters['format_percent'] = format_percent
-        self.env.filters['abs'] = abs_filter
-        self.env.filters['basename'] = basename_filter
-        self.env.filters['embed_image'] = embed_image
-        self.env.filters['json_safe'] = json_safe
+        self.env.filters["format_number"] = format_number
+        self.env.filters["format_percent"] = format_percent
+        self.env.filters["abs"] = abs_filter
+        self.env.filters["basename"] = basename_filter
+        self.env.filters["embed_image"] = embed_image
+        self.env.filters["json_safe"] = json_safe
 
     def generate_elastic_dashboard(
         self,
         dashboard_data: dict[str, Any],
-        template_name: str = 'elastic_dashboard.html',
-        embed_images: bool = True
+        template_name: str = "elastic_dashboard.html",
+        embed_images: bool = True,
     ) -> str:
         """
         生成弹性常数仪表板
-        
+
         Parameters
         ----------
         dashboard_data : Dict[str, Any]
@@ -146,7 +146,7 @@ class DashboardGenerator:
             模板文件名
         embed_images : bool
             是否将图片嵌入HTML（便于分享）
-            
+
         Returns
         -------
         str
@@ -173,52 +173,50 @@ class DashboardGenerator:
             return self._generate_fallback_dashboard(dashboard_data)
 
     def _preprocess_dashboard_data(
-        self,
-        data: dict[str, Any],
-        embed_images: bool = True
+        self, data: dict[str, Any], embed_images: bool = True
     ) -> dict[str, Any]:
         """预处理仪表板数据"""
         processed = data.copy()
 
         # 确保必需的字段存在
-        processed.setdefault('generation_time', datetime.now().isoformat())
-        processed.setdefault('metadata', {})
-        processed.setdefault('summary_statistics', {})
-        processed.setdefault('analysis_results', {})
-        processed.setdefault('plot_files', {})
+        processed.setdefault("generation_time", datetime.now().isoformat())
+        processed.setdefault("metadata", {})
+        processed.setdefault("summary_statistics", {})
+        processed.setdefault("analysis_results", {})
+        processed.setdefault("plot_files", {})
 
         # 处理图片路径
-        if embed_images and 'plot_files' in processed:
+        if embed_images and "plot_files" in processed:
             embedded_plots = {}
-            for plot_type, plot_path in processed['plot_files'].items():
+            for plot_type, plot_path in processed["plot_files"].items():
                 # 尝试嵌入图片
-                embedded_path = self.env.filters['embed_image'](plot_path)
+                embedded_path = self.env.filters["embed_image"](plot_path)
                 embedded_plots[plot_type] = embedded_path
-            processed['plot_files'] = embedded_plots
+            processed["plot_files"] = embedded_plots
 
         # 添加辅助数据
-        processed['current_year'] = datetime.now().year
-        processed['total_plots'] = len(processed.get('plot_files', {}))
+        processed["current_year"] = datetime.now().year
+        processed["total_plots"] = len(processed.get("plot_files", {}))
 
         # 计算额外的统计信息
-        if 'analysis_results' in processed:
-            results = processed['analysis_results']
+        if "analysis_results" in processed:
+            results = processed["analysis_results"]
             if results:
                 # 计算平均误差
-                errors = [abs(r.get('relative_error', 0)) for r in results.values()]
-                processed['average_error'] = sum(errors) / len(errors) if errors else 0
+                errors = [abs(r.get("relative_error", 0)) for r in results.values()]
+                processed["average_error"] = sum(errors) / len(errors) if errors else 0
 
                 # 计算最佳和最差结果
                 sorted_results = sorted(
                     results.items(),
-                    key=lambda x: abs(x[1].get('relative_error', float('inf')))
+                    key=lambda x: abs(x[1].get("relative_error", float("inf"))),
                 )
                 if sorted_results:
-                    processed['best_result'] = sorted_results[0]
-                    processed['worst_result'] = sorted_results[-1]
+                    processed["best_result"] = sorted_results[0]
+                    processed["worst_result"] = sorted_results[-1]
 
         # 添加标签页结构（解决模板继承中set变量不可见的问题）
-        processed['tabs'] = self._create_tabs_structure(processed)
+        processed["tabs"] = self._create_tabs_structure(processed)
 
         return processed
 
@@ -228,23 +226,23 @@ class DashboardGenerator:
             {
                 "id": "overview",
                 "title": "概览",
-                "content": self._generate_overview_content(data)
+                "content": self._generate_overview_content(data),
             },
             {
                 "id": "plots",
                 "title": "可视化图表",
-                "content": self._generate_plots_content(data)
+                "content": self._generate_plots_content(data),
             },
             {
                 "id": "details",
                 "title": "详细数据",
-                "content": self._generate_details_content(data)
+                "content": self._generate_details_content(data),
             },
             {
                 "id": "trajectory",
                 "title": "轨迹动画",
-                "content": self._generate_trajectory_content(data)
-            }
+                "content": self._generate_trajectory_content(data),
+            },
         ]
         return tabs
 
@@ -495,21 +493,17 @@ class DashboardGenerator:
         template = Template(html_template)
         return template.render(**data)
 
-    def save_dashboard(
-        self,
-        html_content: str,
-        output_path: str
-    ) -> str:
+    def save_dashboard(self, html_content: str, output_path: str) -> str:
         """
         保存仪表板到文件
-        
+
         Parameters
         ----------
         html_content : str
             HTML内容
         output_path : str
             输出文件路径
-            
+
         Returns
         -------
         str
@@ -518,7 +512,7 @@ class DashboardGenerator:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         logger.info(f"仪表板已保存: {output_file}")
@@ -528,12 +522,12 @@ class DashboardGenerator:
         self,
         dashboard_data: dict[str, Any],
         output_path: str,
-        template_name: str = 'elastic_dashboard.html',
-        embed_images: bool = True
+        template_name: str = "elastic_dashboard.html",
+        embed_images: bool = True,
     ) -> str:
         """
         生成并保存仪表板（一步完成）
-        
+
         Parameters
         ----------
         dashboard_data : Dict[str, Any]
@@ -544,7 +538,7 @@ class DashboardGenerator:
             模板文件名
         embed_images : bool
             是否嵌入图片
-            
+
         Returns
         -------
         str
@@ -559,11 +553,11 @@ class DashboardGenerator:
         self,
         datasets: list[dict[str, Any]],
         output_dir: str,
-        index_title: str = "弹性常数分析汇总"
+        index_title: str = "弹性常数分析汇总",
     ) -> dict[str, str]:
         """
         创建多页面仪表板（适用于多个数据集的比较）
-        
+
         Parameters
         ----------
         datasets : List[Dict[str, Any]]
@@ -572,7 +566,7 @@ class DashboardGenerator:
             输出目录
         index_title : str
             索引页标题
-            
+
         Returns
         -------
         Dict[str, str]
@@ -585,32 +579,32 @@ class DashboardGenerator:
 
         # 为每个数据集生成单独页面
         for i, dataset in enumerate(datasets):
-            dataset_name = dataset.get('metadata', {}).get('source_file', f'dataset_{i+1}')
-            filename = f"dashboard_{i+1}.html"
+            dataset_name = dataset.get("metadata", {}).get(
+                "source_file", f"dataset_{i + 1}"
+            )
+            filename = f"dashboard_{i + 1}.html"
             file_path = self.generate_and_save(
-                dataset,
-                str(output_path / filename),
-                embed_images=True
+                dataset, str(output_path / filename), embed_images=True
             )
             files[dataset_name] = file_path
 
         # 生成索引页
         index_data = {
-            'generation_time': datetime.now().isoformat(),
-            'title': index_title,
-            'datasets': [
+            "generation_time": datetime.now().isoformat(),
+            "title": index_title,
+            "datasets": [
                 {
-                    'name': name,
-                    'file': Path(path).name,
-                    'summary': self._extract_dataset_summary(datasets[i])
+                    "name": name,
+                    "file": Path(path).name,
+                    "summary": self._extract_dataset_summary(datasets[i]),
                 }
                 for i, (name, path) in enumerate(files.items())
-            ]
+            ],
         }
 
         index_html = self._generate_index_page(index_data)
         index_path = self.save_dashboard(index_html, str(output_path / "index.html"))
-        files['index'] = index_path
+        files["index"] = index_path
 
         logger.info(f"多页面仪表板生成完成: {len(files)}个文件")
         return files
@@ -619,21 +613,21 @@ class DashboardGenerator:
         """提取数据集摘要信息"""
         summary = {}
 
-        if 'analysis_results' in dataset:
-            results = dataset['analysis_results']
-            summary['constants'] = list(results.keys())
-            summary['total_constants'] = len(results)
+        if "analysis_results" in dataset:
+            results = dataset["analysis_results"]
+            summary["constants"] = list(results.keys())
+            summary["total_constants"] = len(results)
 
             if results:
-                errors = [abs(r.get('relative_error', 0)) for r in results.values()]
-                summary['average_error'] = sum(errors) / len(errors)
-                summary['best_error'] = min(errors)
-                summary['worst_error'] = max(errors)
+                errors = [abs(r.get("relative_error", 0)) for r in results.values()]
+                summary["average_error"] = sum(errors) / len(errors)
+                summary["best_error"] = min(errors)
+                summary["worst_error"] = max(errors)
 
-        if 'metadata' in dataset:
-            metadata = dataset['metadata']
-            summary['data_points'] = metadata.get('data_points', 0)
-            summary['load_time'] = metadata.get('load_time', '')
+        if "metadata" in dataset:
+            metadata = dataset["metadata"]
+            summary["data_points"] = metadata.get("data_points", 0)
+            summary["load_time"] = metadata.get("load_time", "")
 
         return summary
 
@@ -702,12 +696,12 @@ class DashboardGenerator:
 def create_dashboard_generator(template_dir: str | None = None) -> DashboardGenerator:
     """
     创建仪表板生成器的工厂函数
-    
+
     Parameters
     ----------
     template_dir : str, optional
         自定义模板目录
-        
+
     Returns
     -------
     DashboardGenerator
@@ -717,13 +711,11 @@ def create_dashboard_generator(template_dir: str | None = None) -> DashboardGene
 
 
 def quick_dashboard(
-    dashboard_data: dict[str, Any],
-    output_path: str,
-    embed_images: bool = True
+    dashboard_data: dict[str, Any], output_path: str, embed_images: bool = True
 ) -> str:
     """
     快速生成仪表板的便捷函数
-    
+
     Parameters
     ----------
     dashboard_data : Dict[str, Any]
@@ -732,11 +724,13 @@ def quick_dashboard(
         输出文件路径
     embed_images : bool
         是否嵌入图片
-        
+
     Returns
     -------
     str
         生成的文件路径
     """
     generator = DashboardGenerator()
-    return generator.generate_and_save(dashboard_data, output_path, embed_images=embed_images)
+    return generator.generate_and_save(
+        dashboard_data, output_path, embed_images=embed_images
+    )

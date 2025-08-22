@@ -512,16 +512,16 @@ class Cell:
 
     def calculate_temperature(self) -> float:
         """计算当前系统的温度，扣除质心运动
-        
+
         Returns
         -------
             系统温度，单位为K
-            
+
         Notes
         -----
             对于多个原子：dof = 3*N - 3 (扣除质心运动)
             对于单个原子：dof = 3*N (不扣除质心运动)
-            
+
         Examples
         --------
             >>> cell = Cell(lattice_vectors, atoms)
@@ -560,15 +560,15 @@ class Cell:
 
     def calculate_kinetic_energy(self) -> float:
         """计算当前系统的总动能
-        
+
         Returns
         -------
             系统总动能，单位为eV
-            
+
         Notes
         -----
             计算所有原子的动能总和，包含质心运动
-            
+
         Examples
         --------
             >>> cell = Cell(lattice_vectors, atoms)
@@ -866,12 +866,12 @@ class Cell:
 
     def get_volume(self) -> float:
         """计算晶胞体积
-        
+
         Returns
         -------
         float
             晶胞体积 (Å³)
-            
+
         Notes
         -----
         体积通过晶格矢量的标量三重积计算：
@@ -884,17 +884,17 @@ class Cell:
 
     def scale_lattice(self, scale_factor: float) -> None:
         """按给定因子等比例缩放晶格
-        
+
         Parameters
         ----------
         scale_factor : float
             缩放因子，>1放大，<1缩小
-            
+
         Notes
         -----
         这个方法只缩放晶格矢量，不改变原子坐标。
         通常与原子坐标的相应缩放一起使用。
-        
+
         Examples
         --------
         >>> cell.scale_lattice(1.1)  # 放大10%

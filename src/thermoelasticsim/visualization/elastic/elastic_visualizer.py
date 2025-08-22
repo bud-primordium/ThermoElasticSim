@@ -33,27 +33,27 @@ logger = logging.getLogger(__name__)
 class ElasticVisualizer:
     """
     弹性常数统一可视化器
-    
+
     提供简洁的API接口，自动处理数据加载、分析和可视化。
-    
+
     Parameters
     ----------
     output_dir : str, optional
         输出目录，默认为当前目录下的'visualization_output'
     dpi : int, optional
         图像分辨率，默认300
-    
+
     Examples
     --------
     # 从CSV数据创建可视化
     >>> visualizer = ElasticVisualizer()
     >>> visualizer.load_csv_data('elastic_data.csv')
     >>> visualizer.generate_dashboard('dashboard.html')
-    
+
     # 从H5轨迹文件创建可视化
     >>> visualizer.load_trajectory('trajectory.h5')
     >>> visualizer.generate_dashboard('dashboard.html')
-    
+
     # 批量处理多个文件
     >>> visualizer.load_multiple_csv(['c11_data.csv', 'c44_data.csv'])
     >>> visualizer.generate_dashboard('combined_dashboard.html')
@@ -63,11 +63,11 @@ class ElasticVisualizer:
         self,
         output_dir: str = "visualization_output",
         dpi: int = 300,
-        figsize_scale: float = 1.0
+        figsize_scale: float = 1.0,
     ):
         """
         初始化可视化器
-        
+
         Parameters
         ----------
         output_dir : str
@@ -93,20 +93,18 @@ class ElasticVisualizer:
         logger.info(f"ElasticVisualizer初始化完成，输出目录: {self.output_dir}")
 
     def load_csv_data(
-        self,
-        filepath: str,
-        auto_group: bool = True
+        self, filepath: str, auto_group: bool = True
     ) -> "ElasticVisualizer":
         """
         从CSV文件加载弹性常数数据
-        
+
         Parameters
         ----------
         filepath : str
             CSV文件路径
         auto_group : bool
             是否自动按弹性常数类型分组
-            
+
         Returns
         -------
         ElasticVisualizer
@@ -124,28 +122,27 @@ class ElasticVisualizer:
             raise NotImplementedError("需要实现手动分组功能")
 
         # 更新元数据
-        self.metadata.update({
-            'source_file': filepath,
-            'data_points': len(data),
-            'elastic_constants': list(self.raw_data.keys()),
-            'load_time': datetime.now().isoformat()
-        })
+        self.metadata.update(
+            {
+                "source_file": filepath,
+                "data_points": len(data),
+                "elastic_constants": list(self.raw_data.keys()),
+                "load_time": datetime.now().isoformat(),
+            }
+        )
 
         logger.info(f"数据加载完成，识别到弹性常数: {list(self.raw_data.keys())}")
         return self
 
-    def load_multiple_csv(
-        self,
-        filepaths: list[str]
-    ) -> "ElasticVisualizer":
+    def load_multiple_csv(self, filepaths: list[str]) -> "ElasticVisualizer":
         """
         加载多个CSV文件
-        
+
         Parameters
         ----------
         filepaths : List[str]
             CSV文件路径列表
-            
+
         Returns
         -------
         ElasticVisualizer
@@ -156,18 +153,15 @@ class ElasticVisualizer:
 
         return self
 
-    def load_trajectory(
-        self,
-        filepath: str
-    ) -> "ElasticVisualizer":
+    def load_trajectory(self, filepath: str) -> "ElasticVisualizer":
         """
         从H5轨迹文件加载数据
-        
+
         Parameters
         ----------
         filepath : str
             H5轨迹文件路径
-            
+
         Returns
         -------
         ElasticVisualizer
@@ -182,11 +176,13 @@ class ElasticVisualizer:
             # 从轨迹中提取弹性常数数据
             self._extract_elastic_data_from_trajectory()
 
-            self.metadata.update({
-                'trajectory_file': filepath,
-                'has_trajectory': True,
-                'load_time': datetime.now().isoformat()
-            })
+            self.metadata.update(
+                {
+                    "trajectory_file": filepath,
+                    "has_trajectory": True,
+                    "load_time": datetime.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"加载轨迹文件失败: {e}")
@@ -197,7 +193,7 @@ class ElasticVisualizer:
     def analyze_data(self) -> "ElasticVisualizer":
         """
         分析加载的数据
-        
+
         Returns
         -------
         ElasticVisualizer
@@ -222,7 +218,7 @@ class ElasticVisualizer:
     def generate_plots(self) -> dict[str, str]:
         """
         生成所有可视化图表
-        
+
         Returns
         -------
         Dict[str, str]
@@ -236,8 +232,8 @@ class ElasticVisualizer:
         plot_files = {}
 
         # 检查数据类型并生成相应图表
-        c11_data = self.raw_data.get('C11', [])
-        c12_data = self.raw_data.get('C12', [])
+        c11_data = self.raw_data.get("C11", [])
+        c12_data = self.raw_data.get("C12", [])
 
         # C11/C12联合图
         if c11_data and c12_data:
@@ -247,22 +243,31 @@ class ElasticVisualizer:
             plot_file = self.plotter.plot_c11_c12_combined_response(
                 c11_data, c12_data, supercell_size, str(output_path)
             )
-            plot_files['c11_c12_combined'] = str(output_path)
+            plot_files["c11_c12_combined"] = str(output_path)
 
         # 剪切响应图 (C44/C55/C66)
-        shear_constants = ['C44', 'C55', 'C66']
+        shear_constants = ["C44", "C55", "C66"]
         shear_data = []
 
         for const in shear_constants:
             if const in self.raw_data:
                 result = self.analysis_results[const]
-                shear_data.append({
-                    'direction': f"{const.lower()[:2]}({const})",
-                    'strains': [row['applied_strain'] for row in self.raw_data[const]],
-                    'stresses': [row['measured_stress_GPa'] for row in self.raw_data[const]],
-                    'converged_states': [row['optimization_converged'] for row in self.raw_data[const]],
-                    'elastic_constant': result.fit_result.elastic_constant
-                })
+                shear_data.append(
+                    {
+                        "direction": f"{const.lower()[:2]}({const})",
+                        "strains": [
+                            row["applied_strain"] for row in self.raw_data[const]
+                        ],
+                        "stresses": [
+                            row["measured_stress_GPa"] for row in self.raw_data[const]
+                        ],
+                        "converged_states": [
+                            row["optimization_converged"]
+                            for row in self.raw_data[const]
+                        ],
+                        "elastic_constant": result.fit_result.elastic_constant,
+                    }
+                )
 
         if shear_data:
             supercell_size = self._infer_supercell_size()
@@ -271,26 +276,24 @@ class ElasticVisualizer:
             plot_file = self.plotter.plot_shear_response(
                 shear_data, supercell_size, str(output_path)
             )
-            plot_files['shear_response'] = str(output_path)
+            plot_files["shear_response"] = str(output_path)
 
         logger.info(f"图表生成完成，共{len(plot_files)}个文件")
         return plot_files
 
     def generate_dashboard(
-        self,
-        output_path: str,
-        include_trajectory: bool = True
+        self, output_path: str, include_trajectory: bool = True
     ) -> str:
         """
         生成交互式HTML仪表板
-        
+
         Parameters
         ----------
         output_path : str
             输出HTML文件路径
         include_trajectory : bool
             是否包含轨迹动画（如果有轨迹数据）
-            
+
         Returns
         -------
         str
@@ -313,7 +316,7 @@ class ElasticVisualizer:
 
         # 保存文件
         output_file = Path(output_path)
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         logger.info(f"HTML仪表板生成完成: {output_file}")
@@ -322,7 +325,7 @@ class ElasticVisualizer:
     def get_summary_statistics(self) -> dict[str, Any]:
         """
         获取汇总统计信息
-        
+
         Returns
         -------
         Dict[str, Any]
@@ -332,13 +335,13 @@ class ElasticVisualizer:
             self.analyze_data()
 
         stats = {
-            'elastic_constants': {},
-            'overall': {
-                'total_constants': len(self.analysis_results),
-                'total_data_points': sum(len(data) for data in self.raw_data.values()),
-                'average_convergence_rate': 0.0,
-                'average_r_squared': 0.0
-            }
+            "elastic_constants": {},
+            "overall": {
+                "total_constants": len(self.analysis_results),
+                "total_data_points": sum(len(data) for data in self.raw_data.values()),
+                "average_convergence_rate": 0.0,
+                "average_r_squared": 0.0,
+            },
         }
 
         convergence_rates = []
@@ -347,21 +350,21 @@ class ElasticVisualizer:
         for const_type, result in self.analysis_results.items():
             fit = result.fit_result
 
-            stats['elastic_constants'][const_type] = {
-                'value_GPa': fit.elastic_constant,
-                'literature_GPa': result.literature_value,
-                'error_percent': result.relative_error,
-                'r_squared': fit.r_squared,
-                'convergence_rate': fit.convergence_rate,
-                'data_quality': result.data_quality
+            stats["elastic_constants"][const_type] = {
+                "value_GPa": fit.elastic_constant,
+                "literature_GPa": result.literature_value,
+                "error_percent": result.relative_error,
+                "r_squared": fit.r_squared,
+                "convergence_rate": fit.convergence_rate,
+                "data_quality": result.data_quality,
             }
 
             convergence_rates.append(fit.convergence_rate)
             r_squared_values.append(fit.r_squared)
 
         if convergence_rates:
-            stats['overall']['average_convergence_rate'] = np.mean(convergence_rates)
-            stats['overall']['average_r_squared'] = np.mean(r_squared_values)
+            stats["overall"]["average_convergence_rate"] = np.mean(convergence_rates)
+            stats["overall"]["average_r_squared"] = np.mean(r_squared_values)
 
         return stats
 
@@ -384,11 +387,11 @@ class ElasticVisualizer:
 
         # 准备可序列化的数据
         serializable_data = {
-            'metadata': self.metadata,
-            'summary_statistics': summary_stats,
-            'plot_files': plot_files,
-            'analysis_results': self._serialize_analysis_results(),
-            'generation_time': datetime.now().isoformat()
+            "metadata": self.metadata,
+            "summary_statistics": summary_stats,
+            "plot_files": plot_files,
+            "analysis_results": self._serialize_analysis_results(),
+            "generation_time": datetime.now().isoformat(),
         }
 
         return serializable_data
@@ -400,22 +403,20 @@ class ElasticVisualizer:
         for const_type, result in self.analysis_results.items():
             fit = result.fit_result
             serialized[const_type] = {
-                'elastic_constant': fit.elastic_constant,
-                'literature_value': result.literature_value,
-                'relative_error': result.relative_error,
-                'r_squared': fit.r_squared,
-                'convergence_rate': fit.convergence_rate,
-                'data_quality': result.data_quality,
-                'converged_count': fit.converged_count,
-                'total_count': fit.total_count
+                "elastic_constant": fit.elastic_constant,
+                "literature_value": result.literature_value,
+                "relative_error": result.relative_error,
+                "r_squared": fit.r_squared,
+                "convergence_rate": fit.convergence_rate,
+                "data_quality": result.data_quality,
+                "converged_count": fit.converged_count,
+                "total_count": fit.total_count,
             }
 
         return serialized
 
     def _generate_html_dashboard(
-        self,
-        dashboard_data: dict[str, Any],
-        include_trajectory: bool = True
+        self, dashboard_data: dict[str, Any], include_trajectory: bool = True
     ) -> str:
         """生成HTML仪表板内容（使用Jinja2模板系统）"""
         from ..web.dashboard_generator import DashboardGenerator
@@ -423,9 +424,7 @@ class ElasticVisualizer:
         # 使用新的模板系统
         generator = DashboardGenerator()
         return generator.generate_elastic_dashboard(
-            dashboard_data,
-            template_name='elastic_dashboard.html',
-            embed_images=True
+            dashboard_data, template_name="elastic_dashboard.html", embed_images=True
         )
 
     # 旧的HTML生成方法已移除，现在使用Jinja2模板系统
@@ -433,12 +432,12 @@ class ElasticVisualizer:
     def export_data(self, format: str = "csv") -> str:
         """
         导出分析数据
-        
+
         Parameters
         ----------
         format : str
             导出格式 ('csv', 'json')
-            
+
         Returns
         -------
         str
@@ -446,13 +445,14 @@ class ElasticVisualizer:
         """
         if format == "csv":
             return self.analyzer.export_detailed_analysis(
-                self.analysis_results,
-                str(self.output_dir / "detailed_analysis.csv")
+                self.analysis_results, str(self.output_dir / "detailed_analysis.csv")
             )
         elif format == "json":
             output_path = self.output_dir / "analysis_results.json"
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(self._serialize_analysis_results(), f, indent=2, ensure_ascii=False)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    self._serialize_analysis_results(), f, indent=2, ensure_ascii=False
+                )
             return str(output_path)
         else:
             raise ValueError(f"不支持的导出格式: {format}")

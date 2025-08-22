@@ -17,6 +17,7 @@ from .base import Potential
 
 logger = logging.getLogger(__name__)
 
+
 class TersoffPotential(Potential):
     """
     Tersoff 多体势的框架。

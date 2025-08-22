@@ -19,13 +19,13 @@ from thermoelasticsim.utils.plot_config import plt
 class ResponsePlotter:
     """
     弹性常数响应曲线绘制器
-    
+
     提供统一的绘图接口，支持：
     - C11/C12联合响应图
-    - C44/C55/C66剪切响应图  
+    - C44/C55/C66剪切响应图
     - 弹性常数对比图
     - 收敛性分析图
-    
+
     Examples
     --------
     >>> plotter = ResponsePlotter()
@@ -36,7 +36,7 @@ class ResponsePlotter:
     def __init__(self, dpi: int = 300, figsize_scale: float = 1.0):
         """
         初始化绘图器
-        
+
         Parameters
         ----------
         dpi : int
@@ -49,28 +49,22 @@ class ResponsePlotter:
 
         # 预定义颜色和标记
         self.colors = {
-            'C11': '#2E86C1',
-            'C12': '#E74C3C',
-            'C44': '#2E86C1',
-            'C55': '#E74C3C',
-            'C66': '#58D68D'
+            "C11": "#2E86C1",
+            "C12": "#E74C3C",
+            "C44": "#2E86C1",
+            "C55": "#E74C3C",
+            "C66": "#58D68D",
         }
 
-        self.markers = {
-            'C11': 'o',
-            'C12': 's',
-            'C44': 'o',
-            'C55': 's',
-            'C66': '^'
-        }
+        self.markers = {"C11": "o", "C12": "s", "C44": "o", "C55": "s", "C66": "^"}
 
         # 文献值 (GPa)
         self.literature_values = {
-            'C11': 110.0,
-            'C12': 61.0,
-            'C44': 33.0,
-            'C55': 33.0,
-            'C66': 33.0
+            "C11": 110.0,
+            "C12": 61.0,
+            "C44": 33.0,
+            "C55": 33.0,
+            "C66": 33.0,
         }
 
     def plot_c11_c12_combined_response(
@@ -78,13 +72,13 @@ class ResponsePlotter:
         c11_data: list[dict],
         c12_data: list[dict],
         supercell_size: tuple[int, int, int],
-        output_path: str
+        output_path: str,
     ) -> str:
         """
         生成C11/C12联合应力-应变响应关系图
-        
+
         从v7的plot_c11_c12_combined_response提取和重构
-        
+
         Parameters
         ----------
         c11_data : List[Dict]
@@ -95,13 +89,15 @@ class ResponsePlotter:
             系统尺寸
         output_path : str
             输出文件路径
-            
+
         Returns
         -------
         str
             生成的图像文件名
         """
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16*self.figsize_scale, 12*self.figsize_scale))
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(
+            2, 2, figsize=(16 * self.figsize_scale, 12 * self.figsize_scale)
+        )
 
         # 准备C11数据
         c11_strains = [row["applied_strain"] for row in c11_data]
@@ -115,31 +111,54 @@ class ResponsePlotter:
 
         # C11图
         self._plot_stress_strain_scatter(
-            ax1, c11_strains, c11_stresses, c11_converged_states,
-            'C11', self.literature_values['C11'],
-            'εxx', 'σxx', "C11: xx应变→xx应力"
+            ax1,
+            c11_strains,
+            c11_stresses,
+            c11_converged_states,
+            "C11",
+            self.literature_values["C11"],
+            "εxx",
+            "σxx",
+            "C11: xx应变→xx应力",
         )
 
         # C12图
         self._plot_stress_strain_scatter(
-            ax2, c12_strains, c12_stresses, c12_converged_states,
-            'C12', self.literature_values['C12'],
-            'εxx', 'σyy', "C12: xx应变→yy应力"
+            ax2,
+            c12_strains,
+            c12_stresses,
+            c12_converged_states,
+            "C12",
+            self.literature_values["C12"],
+            "εxx",
+            "σyy",
+            "C12: xx应变→yy应力",
         )
 
         # C11/C12对比图
         C11_fitted = self._plot_elastic_constant_bar(
-            ax3, c11_strains, c11_stresses, c11_converged_states,
-            'C11', self.literature_values['C11']
+            ax3,
+            c11_strains,
+            c11_stresses,
+            c11_converged_states,
+            "C11",
+            self.literature_values["C11"],
         )
 
         C12_fitted = self._plot_elastic_constant_bar(
-            ax4, c12_strains, c12_stresses, c12_converged_states,
-            'C12', self.literature_values['C12']
+            ax4,
+            c12_strains,
+            c12_stresses,
+            c12_converged_states,
+            "C12",
+            self.literature_values["C12"],
         )
 
-        plt.suptitle(f"C11/C12联合计算 - {supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}系统",
-                     fontsize=16*self.figsize_scale, weight="bold")
+        plt.suptitle(
+            f"C11/C12联合计算 - {supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}系统",
+            fontsize=16 * self.figsize_scale,
+            weight="bold",
+        )
         plt.tight_layout()
 
         # 保存图片
@@ -153,13 +172,13 @@ class ResponsePlotter:
         self,
         detailed_results: list[dict],
         supercell_size: tuple[int, int, int],
-        output_path: str
+        output_path: str,
     ) -> str:
         """
         生成C44/C55/C66剪切应力-应变响应关系图
-        
+
         从v7的plot_stress_strain_response提取和重构
-        
+
         Parameters
         ----------
         detailed_results : List[Dict]
@@ -168,13 +187,13 @@ class ResponsePlotter:
             系统尺寸
         output_path : str
             输出文件路径
-            
+
         Returns
         -------
         str
             生成的图像文件名
         """
-        fig = plt.figure(figsize=(18*self.figsize_scale, 12*self.figsize_scale))
+        fig = plt.figure(figsize=(18 * self.figsize_scale, 12 * self.figsize_scale))
 
         # 创建2行2列子图布局
         gs = fig.add_gridspec(2, 3, hspace=0.4, wspace=0.3, height_ratios=[3, 2])
@@ -183,11 +202,13 @@ class ResponsePlotter:
 
         # 准备数据
         directions = ["yz(C44)", "xz(C55)", "xy(C66)"]
-        colors = [self.colors['C44'], self.colors['C55'], self.colors['C66']]
-        markers = [self.markers['C44'], self.markers['C55'], self.markers['C66']]
-        literature_values = [self.literature_values['C44'],
-                           self.literature_values['C55'],
-                           self.literature_values['C66']]
+        colors = [self.colors["C44"], self.colors["C55"], self.colors["C66"]]
+        markers = [self.markers["C44"], self.markers["C55"], self.markers["C66"]]
+        literature_values = [
+            self.literature_values["C44"],
+            self.literature_values["C55"],
+            self.literature_values["C66"],
+        ]
 
         # 为每个剪切模式单独绘制子图
         elastic_constants = []
@@ -207,8 +228,14 @@ class ResponsePlotter:
 
             # 绘制散点图和拟合线
             elastic_constant = self._plot_shear_scatter(
-                ax, strains, stresses, converged_states,
-                direction, color, marker, lit_value
+                ax,
+                strains,
+                stresses,
+                converged_states,
+                direction,
+                color,
+                marker,
+                lit_value,
             )
 
             elastic_constants.append(elastic_constant)
@@ -216,8 +243,13 @@ class ResponsePlotter:
 
         # 下方汇总图：弹性常数对比
         self._plot_elastic_constants_summary(
-            ax_summary, directions, elastic_constants, convergence_quality,
-            colors, literature_values[0], supercell_size
+            ax_summary,
+            directions,
+            elastic_constants,
+            convergence_quality,
+            colors,
+            literature_values[0],
+            supercell_size,
         )
 
         plt.tight_layout()
@@ -239,14 +271,22 @@ class ResponsePlotter:
         literature_value: float,
         strain_label: str,
         stress_label: str,
-        title: str
+        title: str,
     ) -> float:
         """绘制应力-应变散点图和拟合线"""
         # 分别绘制收敛和不收敛的点
-        converged_strains = [s for s, c in zip(strains, converged_states, strict=False) if c]
-        converged_stresses = [st for st, c in zip(stresses, converged_states, strict=False) if c]
-        failed_strains = [s for s, c in zip(strains, converged_states, strict=False) if not c]
-        failed_stresses = [st for st, c in zip(stresses, converged_states, strict=False) if not c]
+        converged_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if c
+        ]
+        converged_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if c
+        ]
+        failed_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if not c
+        ]
+        failed_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if not c
+        ]
 
         color = self.colors[constant_name]
         marker = self.markers[constant_name]
@@ -294,11 +334,18 @@ class ResponsePlotter:
         fitted_constant = 0.0
         if len(converged_strains) >= 2:
             coeffs = np.polyfit(converged_strains, converged_stresses, 1)
-            fit_strains = np.linspace(min(converged_strains), max(converged_strains), 100)
+            fit_strains = np.linspace(
+                min(converged_strains), max(converged_strains), 100
+            )
             fit_stresses = np.polyval(coeffs, fit_strains)
             ax.plot(
-                fit_strains, fit_stresses, "--", color=color, alpha=0.7, linewidth=2,
-                label=f"拟合斜率 ({coeffs[0]:.1f} GPa)"
+                fit_strains,
+                fit_stresses,
+                "--",
+                color=color,
+                alpha=0.7,
+                linewidth=2,
+                label=f"拟合斜率 ({coeffs[0]:.1f} GPa)",
             )
             fitted_constant = coeffs[0]
 
@@ -335,14 +382,22 @@ class ResponsePlotter:
         direction: str,
         color: str,
         marker: str,
-        lit_value: float
+        lit_value: float,
     ) -> float:
         """绘制剪切模式的散点图"""
         # 分别绘制收敛和不收敛的点
-        converged_strains = [s for s, c in zip(strains, converged_states, strict=False) if c]
-        converged_stresses = [st for st, c in zip(stresses, converged_states, strict=False) if c]
-        failed_strains = [s for s, c in zip(strains, converged_states, strict=False) if not c]
-        failed_stresses = [st for st, c in zip(stresses, converged_states, strict=False) if not c]
+        converged_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if c
+        ]
+        converged_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if c
+        ]
+        failed_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if not c
+        ]
+        failed_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if not c
+        ]
 
         # 收敛点：实心符号
         if converged_strains:
@@ -389,7 +444,9 @@ class ResponsePlotter:
         elastic_constant = 0.0
         if len(converged_strains) >= 2:
             coeffs = np.polyfit(converged_strains, converged_stresses, 1)
-            fit_strains = np.linspace(min(converged_strains), max(converged_strains), 100)
+            fit_strains = np.linspace(
+                min(converged_strains), max(converged_strains), 100
+            )
             fit_stresses = np.polyval(coeffs, fit_strains)
             ax.plot(
                 fit_strains,
@@ -435,12 +492,16 @@ class ResponsePlotter:
         stresses: list[float],
         converged_states: list[bool],
         constant_name: str,
-        literature_value: float
+        literature_value: float,
     ) -> float:
         """绘制单个弹性常数对比柱状图"""
         # 计算拟合值
-        converged_strains = [s for s, c in zip(strains, converged_states, strict=False) if c]
-        converged_stresses = [st for st, c in zip(stresses, converged_states, strict=False) if c]
+        converged_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if c
+        ]
+        converged_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if c
+        ]
 
         fitted_value = 0.0
         convergence_rate = sum(converged_states) / len(converged_states)
@@ -512,7 +573,9 @@ class ResponsePlotter:
         ax.set_title(f"{constant_name}计算结果", fontsize=13)
         ax.grid(True, alpha=0.3, axis="y")
         ax.legend(fontsize=10)
-        ax.set_ylim(0, max(fitted_value if fitted_value > 0 else 0, literature_value) * 1.3)
+        ax.set_ylim(
+            0, max(fitted_value if fitted_value > 0 else 0, literature_value) * 1.3
+        )
 
         return fitted_value
 
@@ -524,7 +587,7 @@ class ResponsePlotter:
         convergence_quality: list[float],
         colors: list[str],
         literature_value: float,
-        supercell_size: tuple[int, int, int]
+        supercell_size: tuple[int, int, int],
     ):
         """绘制弹性常数汇总对比图"""
         x_pos = np.arange(len(directions))
@@ -551,7 +614,9 @@ class ResponsePlotter:
         )
 
         # 添加数值标签和收敛质量
-        for i, (bar, value, quality) in enumerate(zip(bars, elastic_constants, convergence_quality, strict=False)):
+        for i, (bar, value, quality) in enumerate(
+            zip(bars, elastic_constants, convergence_quality, strict=False)
+        ):
             height = bar.get_height()
             ax.text(
                 bar.get_x() + bar.get_width() / 2.0,

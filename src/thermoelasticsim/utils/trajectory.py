@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 class TrajectoryWriter:
     """
     H5MD格式轨迹文件写入器
-    
+
     遵循H5MD v1.1规范，提供高效的分子动力学轨迹存储。
-    
+
     Parameters
     ----------
     filename : str
@@ -46,7 +46,7 @@ class TrajectoryWriter:
         压缩级别（gzip: 1-9）
     chunk_size : int, optional
         块大小，影响I/O性能
-    
+
     Examples
     --------
     >>> writer = TrajectoryWriter('trajectory.h5', compression='gzip')
@@ -58,10 +58,10 @@ class TrajectoryWriter:
     def __init__(
         self,
         filename: str,
-        mode: str = 'w',
-        compression: str | None = 'gzip',
+        mode: str = "w",
+        compression: str | None = "gzip",
         compression_opts: int | None = 4,
-        chunk_size: int = 100
+        chunk_size: int = 100,
     ):
         self.filename = Path(filename)
         self.mode = mode
@@ -99,11 +99,11 @@ class TrajectoryWriter:
         n_atoms: int,
         n_frames_estimate: int = 1000,
         atom_types: list[str] | None = None,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ):
         """
         初始化H5MD文件结构
-        
+
         Parameters
         ----------
         n_atoms : int
@@ -121,96 +121,94 @@ class TrajectoryWriter:
         self.n_atoms = n_atoms
 
         # 创建H5MD根组
-        self.h5md_group = self.file.create_group('h5md')
-        self.h5md_group.attrs['version'] = np.array([1, 1])
+        self.h5md_group = self.file.create_group("h5md")
+        self.h5md_group.attrs["version"] = np.array([1, 1])
 
         # 创建作者信息
-        author_group = self.h5md_group.create_group('author')
-        author_group.attrs['name'] = 'ThermoElasticSim'
-        author_group.attrs['email'] = 'thermoelasticsim@example.com'
+        author_group = self.h5md_group.create_group("author")
+        author_group.attrs["name"] = "ThermoElasticSim"
+        author_group.attrs["email"] = "thermoelasticsim@example.com"
 
         # 创建创建者信息
-        creator_group = self.h5md_group.create_group('creator')
-        creator_group.attrs['name'] = 'ThermoElasticSim'
-        creator_group.attrs['version'] = '4.0.0'
+        creator_group = self.h5md_group.create_group("creator")
+        creator_group.attrs["name"] = "ThermoElasticSim"
+        creator_group.attrs["version"] = "4.0.0"
 
         # 创建主要数据组
-        self.particles_group = self.file.create_group('particles')
-        self.observables_group = self.file.create_group('observables')
-        self.parameters_group = self.file.create_group('parameters')
+        self.particles_group = self.file.create_group("particles")
+        self.observables_group = self.file.create_group("observables")
+        self.parameters_group = self.file.create_group("parameters")
 
         # 创建原子组
-        all_atoms = self.particles_group.create_group('all')
+        all_atoms = self.particles_group.create_group("all")
 
         # 存储原子类型（如果提供）
         if atom_types:
-            species_data = [t.encode('utf-8') for t in atom_types]
+            species_data = [t.encode("utf-8") for t in atom_types]
             all_atoms.create_dataset(
-                'species',
-                data=species_data,
-                dtype=h5py.string_dtype(encoding='utf-8')
+                "species", data=species_data, dtype=h5py.string_dtype(encoding="utf-8")
             )
 
         # 创建位置数据集（可扩展）
-        position_group = all_atoms.create_group('position')
+        position_group = all_atoms.create_group("position")
 
         # 优化的块形状：(chunk_size, n_atoms, 3)
         chunk_shape = (min(self.chunk_size, n_frames_estimate), n_atoms, 3)
 
         self.position_dataset = position_group.create_dataset(
-            'value',
+            "value",
             shape=(0, n_atoms, 3),
             maxshape=(None, n_atoms, 3),
             dtype=np.float32,
             chunks=chunk_shape,
             compression=self.compression,
-            compression_opts=self.compression_opts
+            compression_opts=self.compression_opts,
         )
-        self.position_dataset.attrs['unit'] = 'Angstrom'
+        self.position_dataset.attrs["unit"] = "Angstrom"
 
         # 时间数据集
         self.time_dataset = position_group.create_dataset(
-            'time',
+            "time",
             shape=(0,),
             maxshape=(None,),
             dtype=np.float64,
-            chunks=(chunk_shape[0],)
+            chunks=(chunk_shape[0],),
         )
-        self.time_dataset.attrs['unit'] = 'ps'
+        self.time_dataset.attrs["unit"] = "ps"
 
         # 步数数据集
         self.step_dataset = position_group.create_dataset(
-            'step',
+            "step",
             shape=(0,),
             maxshape=(None,),
             dtype=np.int64,
-            chunks=(chunk_shape[0],)
+            chunks=(chunk_shape[0],),
         )
 
         # 创建盒子数据集
-        box_group = all_atoms.create_group('box')
-        box_group.attrs['dimension'] = 3
-        box_group.attrs['boundary'] = ['periodic', 'periodic', 'periodic']
+        box_group = all_atoms.create_group("box")
+        box_group.attrs["dimension"] = 3
+        box_group.attrs["boundary"] = ["periodic", "periodic", "periodic"]
 
-        edges_group = box_group.create_group('edges')
+        edges_group = box_group.create_group("edges")
         self.box_dataset = edges_group.create_dataset(
-            'value',
+            "value",
             shape=(0, 3, 3),
             maxshape=(None, 3, 3),
             dtype=np.float32,
             chunks=(chunk_shape[0], 3, 3),
             compression=self.compression,
-            compression_opts=self.compression_opts
+            compression_opts=self.compression_opts,
         )
-        self.box_dataset.attrs['unit'] = 'Angstrom'
+        self.box_dataset.attrs["unit"] = "Angstrom"
 
         # 存储元数据
         if metadata:
             for key, value in metadata.items():
                 self.parameters_group.attrs[key] = value
 
-        self.parameters_group.attrs['created'] = datetime.now().isoformat()
-        self.parameters_group.attrs['n_atoms'] = n_atoms
+        self.parameters_group.attrs["created"] = datetime.now().isoformat()
+        self.parameters_group.attrs["n_atoms"] = n_atoms
 
         self.initialized = True
         logger.info(f"初始化H5MD文件结构完成: {n_atoms}原子")
@@ -226,11 +224,11 @@ class TrajectoryWriter:
         stress: np.ndarray | None = None,
         energy: float | None = None,
         temperature: float | None = None,
-        **kwargs
+        **kwargs,
     ):
         """
         写入单帧数据
-        
+
         Parameters
         ----------
         positions : np.ndarray
@@ -276,20 +274,22 @@ class TrajectoryWriter:
 
         # 写入可选数据
         if velocities is not None:
-            self._write_optional_data('velocities', velocities, frame_idx, unit='Angstrom/ps')
+            self._write_optional_data(
+                "velocities", velocities, frame_idx, unit="Angstrom/ps"
+            )
 
         if forces is not None:
-            self._write_optional_data('forces', forces, frame_idx, unit='eV/Angstrom')
+            self._write_optional_data("forces", forces, frame_idx, unit="eV/Angstrom")
 
         # 写入观测量
         if stress is not None:
-            self._write_observable('stress', stress, frame_idx, unit='GPa')
+            self._write_observable("stress", stress, frame_idx, unit="GPa")
 
         if energy is not None:
-            self._write_observable('energy', energy, frame_idx, unit='eV')
+            self._write_observable("energy", energy, frame_idx, unit="eV")
 
         if temperature is not None:
-            self._write_observable('temperature', temperature, frame_idx, unit='K')
+            self._write_observable("temperature", temperature, frame_idx, unit="K")
 
         # 写入额外观测量
         for key, value in kwargs.items():
@@ -302,31 +302,35 @@ class TrajectoryWriter:
             self.file.flush()
             logger.debug(f"刷新缓冲区，已写入{self.n_frames}帧")
 
-    def _write_optional_data(self, name: str, data: np.ndarray, frame_idx: int, unit: str = ''):
+    def _write_optional_data(
+        self, name: str, data: np.ndarray, frame_idx: int, unit: str = ""
+    ):
         """写入可选的粒子数据"""
-        all_atoms = self.particles_group['all']
+        all_atoms = self.particles_group["all"]
 
         if name not in all_atoms:
             group = all_atoms.create_group(name)
             chunk_shape = (min(self.chunk_size, 1000), self.n_atoms, 3)
             dataset = group.create_dataset(
-                'value',
+                "value",
                 shape=(0, self.n_atoms, 3),
                 maxshape=(None, self.n_atoms, 3),
                 dtype=np.float32,
                 chunks=chunk_shape,
                 compression=self.compression,
-                compression_opts=self.compression_opts
+                compression_opts=self.compression_opts,
             )
             if unit:
-                dataset.attrs['unit'] = unit
+                dataset.attrs["unit"] = unit
         else:
-            dataset = all_atoms[name]['value']
+            dataset = all_atoms[name]["value"]
 
         dataset.resize((frame_idx + 1, self.n_atoms, 3))
         dataset[frame_idx] = data.astype(np.float32)
 
-    def _write_observable(self, name: str, data: float | np.ndarray | str, frame_idx: int, unit: str = ''):
+    def _write_observable(
+        self, name: str, data: float | np.ndarray | str, frame_idx: int, unit: str = ""
+    ):
         """写入观测量数据"""
         if name not in self.observables_group:
             if isinstance(data, str):
@@ -334,7 +338,7 @@ class TrajectoryWriter:
                 shape = (0,)
                 maxshape = (None,)
                 chunk_shape = (self.chunk_size,)
-                dtype = h5py.string_dtype(encoding='utf-8')
+                dtype = h5py.string_dtype(encoding="utf-8")
             elif isinstance(data, (int, float)):
                 shape = (0,)
                 maxshape = (None,)
@@ -353,10 +357,10 @@ class TrajectoryWriter:
                 maxshape=maxshape,
                 dtype=dtype,
                 chunks=chunk_shape,
-                compression=self.compression if len(shape) > 1 else None
+                compression=self.compression if len(shape) > 1 else None,
             )
             if unit:
-                dataset.attrs['unit'] = unit
+                dataset.attrs["unit"] = unit
         else:
             dataset = self.observables_group[name]
 
@@ -371,7 +375,7 @@ class TrajectoryWriter:
     def write_metadata(self, metadata: dict[str, Any]):
         """
         写入额外的元数据
-        
+
         Parameters
         ----------
         metadata : dict
@@ -383,7 +387,7 @@ class TrajectoryWriter:
     def close(self):
         """关闭文件"""
         if self.file:
-            self.file.attrs['n_frames'] = self.n_frames
+            self.file.attrs["n_frames"] = self.n_frames
             self.file.flush()
             self.file.close()
             logger.info(f"关闭轨迹文件，共写入{self.n_frames}帧")
@@ -392,9 +396,9 @@ class TrajectoryWriter:
 class TrajectoryReader:
     """
     H5MD格式轨迹文件读取器
-    
+
     提供高效的轨迹数据读取和分析功能。
-    
+
     Parameters
     ----------
     filename : str
@@ -403,7 +407,7 @@ class TrajectoryReader:
         读取模式：'r'(只读), 'r+'(读写)
     cache_size : int
         内存缓存帧数
-    
+
     Examples
     --------
     >>> reader = TrajectoryReader('trajectory.h5')
@@ -414,7 +418,7 @@ class TrajectoryReader:
     >>> reader.close()
     """
 
-    def __init__(self, filename: str, mode: str = 'r', cache_size: int = 100):
+    def __init__(self, filename: str, mode: str = "r", cache_size: int = 100):
         self.filename = Path(filename)
         self.mode = mode
         self.cache_size = cache_size
@@ -437,11 +441,11 @@ class TrajectoryReader:
         self.file = h5py.File(self.filename, self.mode)
 
         # 读取基本信息
-        if 'parameters' in self.file:
-            self.n_atoms = self.file['parameters'].attrs.get('n_atoms')
+        if "parameters" in self.file:
+            self.n_atoms = self.file["parameters"].attrs.get("n_atoms")
 
-        if 'particles/all/position/value' in self.file:
-            pos_data = self.file['particles/all/position/value']
+        if "particles/all/position/value" in self.file:
+            pos_data = self.file["particles/all/position/value"]
             self.n_frames = pos_data.shape[0]
             if self.n_atoms is None:
                 self.n_atoms = pos_data.shape[1]
@@ -451,12 +455,12 @@ class TrajectoryReader:
     def read_frame(self, frame_idx: int) -> dict[str, Any]:
         """
         读取指定帧
-        
+
         Parameters
         ----------
         frame_idx : int
             帧索引
-            
+
         Returns
         -------
         dict
@@ -468,42 +472,46 @@ class TrajectoryReader:
         frame_data = {}
 
         # 读取位置
-        positions = self.file['particles/all/position/value'][frame_idx]
-        frame_data['positions'] = positions
+        positions = self.file["particles/all/position/value"][frame_idx]
+        frame_data["positions"] = positions
 
         # 读取时间和步数
-        if 'particles/all/position/time' in self.file:
-            time_dataset = self.file['particles/all/position/time']
+        if "particles/all/position/time" in self.file:
+            time_dataset = self.file["particles/all/position/time"]
             if len(time_dataset) > frame_idx:
-                frame_data['time'] = time_dataset[frame_idx]
+                frame_data["time"] = time_dataset[frame_idx]
 
-        if 'particles/all/position/step' in self.file:
-            step_dataset = self.file['particles/all/position/step']
+        if "particles/all/position/step" in self.file:
+            step_dataset = self.file["particles/all/position/step"]
             if len(step_dataset) > frame_idx:
-                frame_data['step'] = step_dataset[frame_idx]
+                frame_data["step"] = step_dataset[frame_idx]
 
         # 读取盒子
-        if 'particles/all/box/edges/value' in self.file:
-            frame_data['box'] = self.file['particles/all/box/edges/value'][frame_idx]
+        if "particles/all/box/edges/value" in self.file:
+            frame_data["box"] = self.file["particles/all/box/edges/value"][frame_idx]
 
         # 读取速度和力（如果存在）
-        if 'particles/all/velocities/value' in self.file:
-            frame_data['velocities'] = self.file['particles/all/velocities/value'][frame_idx]
+        if "particles/all/velocities/value" in self.file:
+            frame_data["velocities"] = self.file["particles/all/velocities/value"][
+                frame_idx
+            ]
 
-        if 'particles/all/forces/value' in self.file:
-            frame_data['forces'] = self.file['particles/all/forces/value'][frame_idx]
+        if "particles/all/forces/value" in self.file:
+            frame_data["forces"] = self.file["particles/all/forces/value"][frame_idx]
 
         # 读取观测量
-        if 'observables' in self.file:
-            for key in self.file['observables'].keys():
-                frame_data[key] = self.file['observables'][key][frame_idx]
+        if "observables" in self.file:
+            for key in self.file["observables"].keys():
+                frame_data[key] = self.file["observables"][key][frame_idx]
 
         return frame_data
 
-    def read_frames(self, start: int = 0, stop: int | None = None, stride: int = 1) -> list[dict[str, Any]]:
+    def read_frames(
+        self, start: int = 0, stop: int | None = None, stride: int = 1
+    ) -> list[dict[str, Any]]:
         """
         批量读取多帧
-        
+
         Parameters
         ----------
         start : int
@@ -512,7 +520,7 @@ class TrajectoryReader:
             结束帧（不包含）
         stride : int
             步长
-            
+
         Returns
         -------
         list
@@ -531,59 +539,59 @@ class TrajectoryReader:
         """获取元数据"""
         metadata = {}
 
-        if 'h5md' in self.file:
-            h5md = self.file['h5md']
-            metadata['h5md_version'] = h5md.attrs.get('version')
+        if "h5md" in self.file:
+            h5md = self.file["h5md"]
+            metadata["h5md_version"] = h5md.attrs.get("version")
 
-            if 'author' in h5md:
-                metadata['author'] = dict(h5md['author'].attrs)
+            if "author" in h5md:
+                metadata["author"] = dict(h5md["author"].attrs)
 
-            if 'creator' in h5md:
-                metadata['creator'] = dict(h5md['creator'].attrs)
+            if "creator" in h5md:
+                metadata["creator"] = dict(h5md["creator"].attrs)
 
-        if 'parameters' in self.file:
-            metadata['parameters'] = dict(self.file['parameters'].attrs)
+        if "parameters" in self.file:
+            metadata["parameters"] = dict(self.file["parameters"].attrs)
 
         return metadata
 
     def get_trajectory_info(self) -> dict[str, Any]:
         """获取轨迹概要信息"""
         info = {
-            'n_frames': self.n_frames,
-            'n_atoms': self.n_atoms,
-            'filename': str(self.filename),
-            'file_size': self.filename.stat().st_size / (1024**2),  # MB
+            "n_frames": self.n_frames,
+            "n_atoms": self.n_atoms,
+            "filename": str(self.filename),
+            "file_size": self.filename.stat().st_size / (1024**2),  # MB
         }
 
         # 获取可用数据类型
         available_data = []
 
-        if 'particles/all/position/value' in self.file:
-            available_data.append('positions')
+        if "particles/all/position/value" in self.file:
+            available_data.append("positions")
 
-        if 'particles/all/velocities/value' in self.file:
-            available_data.append('velocities')
+        if "particles/all/velocities/value" in self.file:
+            available_data.append("velocities")
 
-        if 'particles/all/forces/value' in self.file:
-            available_data.append('forces')
+        if "particles/all/forces/value" in self.file:
+            available_data.append("forces")
 
-        if 'particles/all/box/edges/value' in self.file:
-            available_data.append('box')
+        if "particles/all/box/edges/value" in self.file:
+            available_data.append("box")
 
-        if 'observables' in self.file:
-            available_data.extend(self.file['observables'].keys())
+        if "observables" in self.file:
+            available_data.extend(self.file["observables"].keys())
 
-        info['available_data'] = available_data
+        info["available_data"] = available_data
 
         # 获取时间范围
-        if 'particles/all/position/time' in self.file:
-            times = self.file['particles/all/position/time']
+        if "particles/all/position/time" in self.file:
+            times = self.file["particles/all/position/time"]
             if len(times) > 0:
-                info['time_range'] = (times[0], times[-1])
-                info['time_unit'] = times.attrs.get('unit', 'unknown')
+                info["time_range"] = (times[0], times[-1])
+                info["time_unit"] = times.attrs.get("unit", "unknown")
             else:
-                info['time_range'] = (0, 0)
-                info['time_unit'] = 'unknown'
+                info["time_range"] = (0, 0)
+                info["time_unit"] = "unknown"
 
         return info
 
@@ -600,11 +608,11 @@ def save_trajectory(
     positions_list: list[np.ndarray],
     boxes_list: list[np.ndarray] | None = None,
     times: list[float] | None = None,
-    **kwargs
+    **kwargs,
 ) -> None:
     """
     便捷函数：保存轨迹数据
-    
+
     Parameters
     ----------
     filename : str
@@ -639,10 +647,12 @@ def save_trajectory(
     writer.close()
 
 
-def load_trajectory(filename: str, start: int = 0, stop: int | None = None, stride: int = 1) -> dict[str, Any]:
+def load_trajectory(
+    filename: str, start: int = 0, stop: int | None = None, stride: int = 1
+) -> dict[str, Any]:
     """
     便捷函数：加载轨迹数据
-    
+
     Parameters
     ----------
     filename : str
@@ -653,7 +663,7 @@ def load_trajectory(filename: str, start: int = 0, stop: int | None = None, stri
         结束帧
     stride : int
         步长
-        
+
     Returns
     -------
     dict
@@ -668,8 +678,4 @@ def load_trajectory(filename: str, start: int = 0, stop: int | None = None, stri
 
     reader.close()
 
-    return {
-        'frames': frames,
-        'info': info,
-        'metadata': metadata
-    }
+    return {"frames": frames, "info": info, "metadata": metadata}

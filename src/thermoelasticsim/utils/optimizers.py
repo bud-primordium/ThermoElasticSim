@@ -541,7 +541,12 @@ class LBFGSOptimizer(Optimizer):
 
         position_logger = PositionIterationLogger(self.supercell_dims)
 
-        options = {"ftol": self.ftol, "gtol": self.gtol, "maxiter": self.maxiter, "disp": True}
+        options = {
+            "ftol": self.ftol,
+            "gtol": self.gtol,
+            "maxiter": self.maxiter,
+            "disp": True,
+        }
         options.update(self.extra_options)
 
         # 详细记录优化参数用于诊断
@@ -569,7 +574,7 @@ class LBFGSOptimizer(Optimizer):
             logger.warning(f"  nfev: {result.nfev}")
             logger.warning(f"  nit: {result.nit}")
             logger.warning(f"  fun: {result.fun}")
-            if hasattr(result, 'jac'):
+            if hasattr(result, "jac"):
                 logger.warning(f"  jac norm: {np.linalg.norm(result.jac):.6e}")
             logger.warning(f"  完整result对象: {result}")
 
@@ -734,7 +739,7 @@ class LBFGSOptimizer(Optimizer):
             logger.info(f"晶格常数变化: {initial_a:.6f} → {final_a:.6f} Å")
             logger.info(f"体积变化: {initial_volume:.6f} → {final_volume:.6f} Å³")
             logger.info(
-                f"相对变化: Δa/a = {(final_a-initial_a)/initial_a*100:.3f}%, ΔV/V = {(final_volume-initial_volume)/initial_volume*100:.3f}%"
+                f"相对变化: Δa/a = {(final_a - initial_a) / initial_a * 100:.3f}%, ΔV/V = {(final_volume - initial_volume) / initial_volume * 100:.3f}%"
             )
         else:
             logger.warning(f"L-BFGS (完全数值梯度) 优化未收敛: {result.message}")

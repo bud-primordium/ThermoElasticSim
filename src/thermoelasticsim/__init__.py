@@ -9,11 +9,4 @@ __author__ = "Gilbert"
 
 from . import core, elastic, interfaces, md, potentials, utils
 
-__all__ = [
-    "core",
-    "potentials",
-    "md",
-    "elastic",
-    "utils",
-    "interfaces"
-]
+__all__ = ["core", "potentials", "md", "elastic", "utils", "interfaces"]

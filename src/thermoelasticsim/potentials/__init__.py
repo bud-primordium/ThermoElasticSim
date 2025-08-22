@@ -20,22 +20,28 @@ __all__ = [
     "MLPotential",
 ]
 
+
 # 2. 使用 __getattr__ 实现延迟加载
 def __getattr__(name):
     if name == "Potential":
         from .base import Potential
+
         return Potential
     elif name == "LennardJonesPotential":
         from .lennard_jones import LennardJonesPotential
+
         return LennardJonesPotential
     elif name == "EAMAl1Potential":
         from .eam import EAMAl1Potential
+
         return EAMAl1Potential
     elif name == "TersoffPotential":
         from .tersoff import TersoffPotential
+
         return TersoffPotential
     elif name == "MLPotential":
         from .mlp import MLPotential
+
         return MLPotential
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

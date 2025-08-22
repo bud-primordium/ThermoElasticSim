@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class FitResult:
     """
     拟合结果数据容器
-    
+
     Attributes
     ----------
     elastic_constant : float
@@ -61,7 +61,7 @@ class FitResult:
 class ElasticAnalysisResult:
     """
     弹性常数分析结果
-    
+
     Attributes
     ----------
     constant_type : str
@@ -89,14 +89,14 @@ class ElasticAnalysisResult:
 class StressStrainAnalyzer:
     """
     应力-应变数据分析器
-    
+
     提供统一的数据分析接口，支持所有类型的弹性常数计算。
-    
+
     Parameters
     ----------
     literature_values : Dict[str, float], optional
         文献值字典，键为弹性常数名称，值为文献值(GPa)
-    
+
     Examples
     --------
     >>> analyzer = StressStrainAnalyzer()
@@ -106,19 +106,19 @@ class StressStrainAnalyzer:
 
     # 默认文献值 (GPa)
     DEFAULT_LITERATURE_VALUES = {
-        'C11': 110.0,
-        'C12': 61.0,
-        'C44': 33.0,
-        'C55': 33.0,
-        'C66': 33.0,
-        'bulk_modulus': 77.3,  # (C11 + 2*C12)/3
-        'shear_modulus': 33.0   # C44
+        "C11": 110.0,
+        "C12": 61.0,
+        "C44": 33.0,
+        "C55": 33.0,
+        "C66": 33.0,
+        "bulk_modulus": 77.3,  # (C11 + 2*C12)/3
+        "shear_modulus": 33.0,  # C44
     }
 
     def __init__(self, literature_values: dict[str, float] | None = None):
         """
         初始化分析器
-        
+
         Parameters
         ----------
         literature_values : Dict[str, float], optional
@@ -132,11 +132,11 @@ class StressStrainAnalyzer:
         data: list[dict],
         strain_key: str = "applied_strain",
         stress_key: str = "measured_stress_GPa",
-        converged_key: str = "optimization_converged"
+        converged_key: str = "optimization_converged",
     ) -> ElasticAnalysisResult:
         """
         分析单个弹性常数
-        
+
         Parameters
         ----------
         constant_type : str
@@ -149,7 +149,7 @@ class StressStrainAnalyzer:
             应力数据的键名
         converged_key : str
             收敛状态的键名
-            
+
         Returns
         -------
         ElasticAnalysisResult
@@ -163,13 +163,19 @@ class StressStrainAnalyzer:
         converged_states = [row[converged_key] for row in data]
 
         # 过滤收敛点
-        converged_strains = [s for s, c in zip(strains, converged_states, strict=False) if c]
-        converged_stresses = [st for st, c in zip(stresses, converged_states, strict=False) if c]
+        converged_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if c
+        ]
+        converged_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if c
+        ]
 
         # 拟合分析
         fit_result = self._perform_linear_fit(
-            converged_strains, converged_stresses,
-            len(converged_states), sum(converged_states)
+            converged_strains,
+            converged_stresses,
+            len(converged_states),
+            sum(converged_states),
         )
 
         # 获取文献值和计算误差
@@ -187,7 +193,7 @@ class StressStrainAnalyzer:
             literature_value=literature_value,
             relative_error=relative_error,
             data_quality=data_quality,
-            raw_data=data
+            raw_data=data,
         )
 
         logger.info(
@@ -201,20 +207,18 @@ class StressStrainAnalyzer:
         return result
 
     def analyze_multiple_constants(
-        self,
-        data_dict: dict[str, list[dict]],
-        **kwargs
+        self, data_dict: dict[str, list[dict]], **kwargs
     ) -> dict[str, ElasticAnalysisResult]:
         """
         分析多个弹性常数
-        
+
         Parameters
         ----------
         data_dict : Dict[str, List[Dict]]
             数据字典，键为弹性常数名称，值为数据点列表
         **kwargs
             传递给analyze_elastic_constant的额外参数
-            
+
         Returns
         -------
         Dict[str, ElasticAnalysisResult]
@@ -233,17 +237,16 @@ class StressStrainAnalyzer:
         return results
 
     def create_summary_report(
-        self,
-        results: dict[str, ElasticAnalysisResult]
+        self, results: dict[str, ElasticAnalysisResult]
     ) -> pd.DataFrame:
         """
         创建分析汇总报告
-        
+
         Parameters
         ----------
         results : Dict[str, ElasticAnalysisResult]
             分析结果字典
-            
+
         Returns
         -------
         pd.DataFrame
@@ -253,17 +256,19 @@ class StressStrainAnalyzer:
 
         for constant_type, result in results.items():
             fit = result.fit_result
-            summary_data.append({
-                'constant': constant_type,
-                'value_GPa': fit.elastic_constant,
-                'literature_GPa': result.literature_value,
-                'error_percent': result.relative_error,
-                'r_squared': fit.r_squared,
-                'convergence_rate': fit.convergence_rate,
-                'converged_points': f"{fit.converged_count}/{fit.total_count}",
-                'data_quality': result.data_quality,
-                'std_error': fit.std_error
-            })
+            summary_data.append(
+                {
+                    "constant": constant_type,
+                    "value_GPa": fit.elastic_constant,
+                    "literature_GPa": result.literature_value,
+                    "error_percent": result.relative_error,
+                    "r_squared": fit.r_squared,
+                    "convergence_rate": fit.convergence_rate,
+                    "converged_points": f"{fit.converged_count}/{fit.total_count}",
+                    "data_quality": result.data_quality,
+                    "std_error": fit.std_error,
+                }
+            )
 
         return pd.DataFrame(summary_data)
 
@@ -272,7 +277,7 @@ class StressStrainAnalyzer:
         strains: list[float],
         stresses: list[float],
         total_count: int,
-        converged_count: int
+        converged_count: int,
     ) -> FitResult:
         """执行线性拟合"""
         if len(strains) < 2:
@@ -285,7 +290,9 @@ class StressStrainAnalyzer:
                 std_error=np.inf,
                 converged_count=converged_count,
                 total_count=total_count,
-                convergence_rate=converged_count / total_count if total_count > 0 else 0.0
+                convergence_rate=converged_count / total_count
+                if total_count > 0
+                else 0.0,
             )
 
         # 线性拟合
@@ -313,24 +320,18 @@ class StressStrainAnalyzer:
             std_error=std_error,
             converged_count=converged_count,
             total_count=total_count,
-            convergence_rate=converged_count / total_count if total_count > 0 else 0.0
+            convergence_rate=converged_count / total_count if total_count > 0 else 0.0,
         )
 
     def _calculate_relative_error(
-        self,
-        calculated_value: float,
-        literature_value: float
+        self, calculated_value: float, literature_value: float
     ) -> float:
         """计算相对误差"""
         if literature_value == 0:
-            return float('inf')
+            return float("inf")
         return (calculated_value - literature_value) / literature_value * 100
 
-    def _assess_data_quality(
-        self,
-        fit_result: FitResult,
-        relative_error: float
-    ) -> str:
+    def _assess_data_quality(self, fit_result: FitResult, relative_error: float) -> str:
         """评估数据质量"""
         # 综合考虑多个因素
         r_squared_good = fit_result.r_squared >= 0.95
@@ -348,20 +349,18 @@ class StressStrainAnalyzer:
             return "Poor"
 
     def export_detailed_analysis(
-        self,
-        results: dict[str, ElasticAnalysisResult],
-        output_path: str
+        self, results: dict[str, ElasticAnalysisResult], output_path: str
     ) -> str:
         """
         导出详细分析结果到CSV
-        
+
         Parameters
         ----------
         results : Dict[str, ElasticAnalysisResult]
             分析结果字典
         output_path : str
             输出文件路径
-            
+
         Returns
         -------
         str
@@ -373,15 +372,17 @@ class StressStrainAnalyzer:
             for row in result.raw_data:
                 # 添加分析结果信息
                 enhanced_row = row.copy()
-                enhanced_row.update({
-                    'elastic_constant_type': constant_type,
-                    'fitted_elastic_constant_GPa': result.fit_result.elastic_constant,
-                    'literature_value_GPa': result.literature_value,
-                    'relative_error_percent': result.relative_error,
-                    'r_squared': result.fit_result.r_squared,
-                    'data_quality': result.data_quality,
-                    'convergence_rate': result.fit_result.convergence_rate
-                })
+                enhanced_row.update(
+                    {
+                        "elastic_constant_type": constant_type,
+                        "fitted_elastic_constant_GPa": result.fit_result.elastic_constant,
+                        "literature_value_GPa": result.literature_value,
+                        "relative_error_percent": result.relative_error,
+                        "r_squared": result.fit_result.r_squared,
+                        "data_quality": result.data_quality,
+                        "convergence_rate": result.fit_result.convergence_rate,
+                    }
+                )
                 all_data.append(enhanced_row)
 
         # 保存到CSV
@@ -396,7 +397,7 @@ class StressStrainAnalyzer:
 class ElasticDataProcessor:
     """
     弹性常数数据预处理器
-    
+
     提供数据清洗、格式转换、异常值检测等功能。
     """
 
@@ -404,30 +405,30 @@ class ElasticDataProcessor:
     def load_from_csv(filepath: str) -> list[dict]:
         """
         从CSV文件加载数据
-        
+
         Parameters
         ----------
         filepath : str
             CSV文件路径
-            
+
         Returns
         -------
         List[Dict]
             数据点列表
         """
         df = pd.read_csv(filepath)
-        return df.to_dict('records')
+        return df.to_dict("records")
 
     @staticmethod
     def group_by_elastic_constant(data: list[dict]) -> dict[str, list[dict]]:
         """
         按弹性常数类型分组数据
-        
+
         Parameters
         ----------
         data : List[Dict]
             数据点列表
-            
+
         Returns
         -------
         Dict[str, List[Dict]]
@@ -449,39 +450,39 @@ class ElasticDataProcessor:
     def _identify_constant_type(row: dict) -> str:
         """根据数据行识别弹性常数类型"""
         # 检查计算方法字段
-        method = row.get('calculation_method', '')
+        method = row.get("calculation_method", "")
 
-        if 'C11' in method or 'uniaxial' in method:
-            strain_dir = row.get('applied_strain_direction', '')
-            stress_dir = row.get('measured_stress_direction', '')
+        if "C11" in method or "uniaxial" in method:
+            strain_dir = row.get("applied_strain_direction", "")
+            stress_dir = row.get("measured_stress_direction", "")
 
             if strain_dir == stress_dir:
-                return 'C11'
+                return "C11"
             else:
-                return 'C12'
-        elif 'C44' in method or 'shear' in method:
-            strain_dir = row.get('applied_strain_direction', '')
-            if 'yz' in strain_dir:
-                return 'C44'
-            elif 'xz' in strain_dir:
-                return 'C55'
-            elif 'xy' in strain_dir:
-                return 'C66'
+                return "C12"
+        elif "C44" in method or "shear" in method:
+            strain_dir = row.get("applied_strain_direction", "")
+            if "yz" in strain_dir:
+                return "C44"
+            elif "xz" in strain_dir:
+                return "C55"
+            elif "xy" in strain_dir:
+                return "C66"
             else:
-                return 'C44'  # 默认
+                return "C44"  # 默认
         else:
-            return 'unknown'
+            return "unknown"
 
     @staticmethod
     def detect_outliers(
         data: list[dict],
         strain_key: str = "applied_strain",
         stress_key: str = "measured_stress_GPa",
-        method: str = "iqr"
+        method: str = "iqr",
     ) -> tuple[list[dict], list[dict]]:
         """
         检测异常值
-        
+
         Parameters
         ----------
         data : List[Dict]
@@ -492,7 +493,7 @@ class ElasticDataProcessor:
             应力数据键名
         method : str
             异常值检测方法 ('iqr', 'zscore')
-            
+
         Returns
         -------
         Tuple[List[Dict], List[Dict]]
@@ -510,19 +511,29 @@ class ElasticDataProcessor:
             lower_bound = Q1 - 1.5 * IQR
             upper_bound = Q3 + 1.5 * IQR
 
-            normal_data = [row for row in data
-                          if lower_bound <= row[stress_key] <= upper_bound]
-            outlier_data = [row for row in data
-                           if not (lower_bound <= row[stress_key] <= upper_bound)]
+            normal_data = [
+                row for row in data if lower_bound <= row[stress_key] <= upper_bound
+            ]
+            outlier_data = [
+                row
+                for row in data
+                if not (lower_bound <= row[stress_key] <= upper_bound)
+            ]
 
         elif method == "zscore":
             mean_stress = np.mean(stresses)
             std_stress = np.std(stresses)
 
-            normal_data = [row for row in data
-                          if abs(row[stress_key] - mean_stress) <= 2 * std_stress]
-            outlier_data = [row for row in data
-                           if abs(row[stress_key] - mean_stress) > 2 * std_stress]
+            normal_data = [
+                row
+                for row in data
+                if abs(row[stress_key] - mean_stress) <= 2 * std_stress
+            ]
+            outlier_data = [
+                row
+                for row in data
+                if abs(row[stress_key] - mean_stress) > 2 * std_stress
+            ]
         else:
             raise ValueError(f"不支持的异常值检测方法: {method}")
 

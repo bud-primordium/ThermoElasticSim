@@ -50,7 +50,6 @@ class StressCalculator:
             动能应力张量 (3x3)
         """
         try:
-
             num_atoms = len(cell.atoms)
             velocities = cell.get_velocities()  # shape: (num_atoms, 3)
             masses = np.array([atom.mass for atom in cell.atoms], dtype=np.float64)
@@ -101,17 +100,26 @@ class StressCalculator:
             # 优先使用C++的EAM维里实现（若可用）
             virial_tensor = None
             try:
-                if hasattr(potential, "cpp_interface") and getattr(potential.cpp_interface, "_lib_name", None) == "eam_al1":
+                if (
+                    hasattr(potential, "cpp_interface")
+                    and getattr(potential.cpp_interface, "_lib_name", None) == "eam_al1"
+                ):
                     num_atoms = len(cell.atoms)
-                    positions = np.ascontiguousarray(cell.get_positions(), dtype=np.float64)
-                    lattice = np.ascontiguousarray(cell.lattice_vectors, dtype=np.float64)
+                    positions = np.ascontiguousarray(
+                        cell.get_positions(), dtype=np.float64
+                    )
+                    lattice = np.ascontiguousarray(
+                        cell.lattice_vectors, dtype=np.float64
+                    )
                     virial_tensor = potential.cpp_interface.calculate_eam_al1_virial(
                         num_atoms,
                         positions,
                         lattice.flatten(),
                     )
             except Exception as e_cpp:
-                logger.debug(f"C++ EAM virial not available, fallback to Python: {e_cpp}")
+                logger.debug(
+                    f"C++ EAM virial not available, fallback to Python: {e_cpp}"
+                )
 
             if virial_tensor is None:
                 # 回退到Python实现（较慢）
@@ -142,7 +150,6 @@ class StressCalculator:
             总应力张量 (3x3)
         """
         try:
-
             kinetic_stress = self.calculate_kinetic_stress(cell)
             virial_stress = self.calculate_virial_stress(cell, potential)
             total_stress = kinetic_stress + virial_stress
@@ -176,7 +183,6 @@ class StressCalculator:
             维里贡献张量 (3x3)
         """
         try:
-
             num_atoms = len(cell.atoms)
             positions = cell.get_positions()
             lattice = cell.lattice_vectors
@@ -208,7 +214,6 @@ class StressCalculator:
             # 计算原子间相互作用力和维里贡献
             for i in range(num_atoms):
                 for j in range(i + 1, num_atoms):  # j > i 避免重复计算
-
                     # 计算原子间最小镜像距离向量（通用于三斜晶胞）
                     rij_cart = positions[i] - positions[j]
                     s = invLT @ rij_cart
@@ -464,7 +469,6 @@ class StressCalculator:
             有限差分应力张量 (3x3)
         """
         try:
-
             # 初始化能量导数矩阵
             dUdh = np.zeros((3, 3), dtype=np.float64)
 
@@ -473,7 +477,6 @@ class StressCalculator:
 
             for i in range(3):
                 for j in range(3):
-
                     # 正向形变矩阵
                     deformation = np.eye(3)
                     deformation[i, j] += dr

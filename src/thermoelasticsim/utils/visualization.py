@@ -112,7 +112,7 @@ class Visualizer:
             ax.quiver(
                 *origin, *vec, color="r", arrow_length_ratio=0.1, linewidth=1.5
             )  # 使用箭头表示晶格矢量
-            logger.debug(f"Plotted lattice vector v{i+1}: {vec}")
+            logger.debug(f"Plotted lattice vector v{i + 1}: {vec}")
 
         # 设置坐标轴标签
         ax.set_xlabel("X (Å)")
@@ -406,7 +406,7 @@ class Visualizer:
 
             lattice_str = "\n".join(
                 [
-                    f"v{i+1}: [{vec[0]:.2f}, {vec[1]:.2f}, {vec[2]:.2f}]"
+                    f"v{i + 1}: [{vec[0]:.2f}, {vec[1]:.2f}, {vec[2]:.2f}]"
                     for i, vec in enumerate(lattice_vectors.T)
                 ]
             )

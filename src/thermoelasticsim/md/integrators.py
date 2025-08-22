@@ -589,7 +589,6 @@ class RK4Integrator(Integrator):
             (dr_dt3, dv_dt3),
             (dr_dt4, dv_dt4),
         ) in zip(cell.atoms, k1, k2, k3, k4, strict=False):
-
             # 更新位置
             dr = dt6 * (dr_dt1 + 2 * dr_dt2 + 2 * dr_dt3 + dr_dt4)
             atom.position += dr

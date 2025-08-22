@@ -77,7 +77,6 @@ class FiniteTempElasticityWorkflow:
         time_step=1,
         save_path=f"./output/finite_temp_elasticity_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
     ):
-
         self.cell = cell
         self.potential = potential
         self.temperature = temperature
@@ -194,7 +193,7 @@ class FiniteTempElasticityWorkflow:
         plt.figure(figsize=(10, 6))
         times = np.arange(0, len(stress_history)) * sampling_interval * self.dt
         for i in range(3):
-            plt.plot(times, [s[i, i] for s in stress_history], label=f"σ{i+1}{i+1}")
+            plt.plot(times, [s[i, i] for s in stress_history], label=f"σ{i + 1}{i + 1}")
         plt.xlabel("Time (fs)")
         plt.ylabel("Stress (eV/Å³)")
         plt.legend()

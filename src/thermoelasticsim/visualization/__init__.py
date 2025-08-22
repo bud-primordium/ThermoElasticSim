@@ -5,4 +5,4 @@
 
 from .elastic import ElasticVisualizer
 
-__all__ = ['ElasticVisualizer']
+__all__ = ["ElasticVisualizer"]

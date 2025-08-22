@@ -1256,7 +1256,7 @@ class LangevinThermostatPropagator(Propagator):
         self._random_work_history = []  # 随机力做功历史
 
         print(f"Langevin恒温器初始化: T={target_temperature}K, γ={friction:.3f} ps⁻¹")
-        print(f"  阻尼时间: τ_damp = {1/friction:.3f} ps")
+        print(f"  阻尼时间: τ_damp = {1 / friction:.3f} ps")
         print(
             f"  预期特性: {'强耦合' if friction >= 5.0 else '弱耦合' if friction <= 0.5 else '中等耦合'}"
         )
@@ -1545,7 +1545,7 @@ class LangevinThermostatPropagator(Propagator):
         self.friction = new_friction
 
         print(f"摩擦系数已更新: {old_friction:.3f} -> {new_friction:.3f} ps⁻¹")
-        print(f"阻尼时间已更新: {1/old_friction:.3f} -> {1/new_friction:.3f} ps")
+        print(f"阻尼时间已更新: {1 / old_friction:.3f} -> {1 / new_friction:.3f} ps")
 
     def get_effective_parameters(self) -> dict:
         """获取当前有效参数
@@ -1955,7 +1955,7 @@ class MTKBarostatPropagator(Propagator):
         kappa = eigvals + np.trace(self._P_g) / (3.0 * N)  # (3,)
         x = -kappa * (dt / self.W)  # (3,)
         scale = np.exp(x)  # (3,)
-        exr = exprel(x)    # (3,)
+        exr = exprel(x)  # (3,)
 
         y_new = y * scale[None, :] + dt * fU * exr[None, :]
         p_new = y_new @ U.T

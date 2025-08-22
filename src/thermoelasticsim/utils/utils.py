@@ -326,7 +326,7 @@ class NeighborList:
         if self.cutoff_with_skin > min_box_length / 2:
             logger.warning(
                 f"Cutoff radius ({self.cutoff_with_skin:.3f}) is too large "
-                f"compared to box size ({min_box_length/2:.3f})"
+                f"compared to box size ({min_box_length / 2:.3f})"
             )
             # 禁用自动调整以保持cutoff一致性（修复C44计算问题）
             logger.warning(
@@ -518,7 +518,9 @@ class NeighborList:
         positions = self.cell.get_positions()
         box_lengths = self.cell.get_box_lengths()
         for i, pos in enumerate(positions):
-            is_boundary = any(abs(p / l - 0.5) > 0.35 for p, l in zip(pos, box_lengths, strict=False))
+            is_boundary = any(
+                abs(p / l - 0.5) > 0.35 for p, l in zip(pos, box_lengths, strict=False)
+            )
             if is_boundary:
                 logger.info(f"Boundary atom {i}:")
                 logger.info(f"  Position: {pos}")

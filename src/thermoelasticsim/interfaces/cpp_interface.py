@@ -633,7 +633,9 @@ class CppInterface:
             )
             return energy[0]
 
-    def calculate_eam_al1_virial(self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray) -> np.ndarray:
+    def calculate_eam_al1_virial(
+        self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray
+    ) -> np.ndarray:
         """计算EAM Al1的维里张量（未除以体积）。返回形状(3,3)。"""
         pos = np.ascontiguousarray(positions, dtype=np.float64)
         if pos.ndim == 2 and pos.shape[1] == 3:
@@ -646,7 +648,9 @@ class CppInterface:
             vir = self._cpp.calculate_eam_al1_virial(num_atoms, pos, lat)
             vir = np.ascontiguousarray(vir, dtype=np.float64)
         else:
-            if not hasattr(self, "lib") or not hasattr(self.lib, "calculate_eam_al1_virial"):
+            if not hasattr(self, "lib") or not hasattr(
+                self.lib, "calculate_eam_al1_virial"
+            ):
                 raise RuntimeError("C++ backend for EAM virial not available")
             vir = np.zeros(9, dtype=np.float64)
             self.lib.calculate_eam_al1_virial(num_atoms, pos, lat, vir)

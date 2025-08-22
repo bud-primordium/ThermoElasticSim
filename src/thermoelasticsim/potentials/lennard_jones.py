@@ -20,6 +20,7 @@ from .base import Potential
 
 logger = logging.getLogger(__name__)
 
+
 class LennardJonesPotential(Potential):
     """
     Lennard-Jones (LJ) 对势的实现。
@@ -49,7 +50,9 @@ class LennardJonesPotential(Potential):
             neighbor_list (NeighborList): 预先构建的邻居列表。
         """
         num_atoms = cell.num_atoms
-        positions = np.ascontiguousarray(cell.get_positions(), dtype=np.float64).flatten()
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
         box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
 
         neighbor_pairs = [
@@ -93,7 +96,9 @@ class LennardJonesPotential(Potential):
             float: 系统的总势能，单位为 eV。
         """
         num_atoms = cell.num_atoms
-        positions = np.ascontiguousarray(cell.get_positions(), dtype=np.float64).flatten()
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
         box_lengths = np.ascontiguousarray(cell.get_box_lengths(), dtype=np.float64)
 
         neighbor_pairs = [

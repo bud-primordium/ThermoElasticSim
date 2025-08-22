@@ -17,6 +17,7 @@ from .base import Potential
 
 logger = logging.getLogger(__name__)
 
+
 class MLPotential(Potential):
     """
     机器学习势 (MLP) 的通用接口框架。

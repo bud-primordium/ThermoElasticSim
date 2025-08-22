@@ -300,11 +300,11 @@ class StructureRelaxer:
             initial_stress = cell.calculate_stress_tensor(potential)
             self.trajectory_recorder.record_deformation_step(
                 cell,
-                getattr(self.trajectory_recorder, 'current_strain', 0.0),
+                getattr(self.trajectory_recorder, "current_strain", 0.0),
                 "before_internal_relax",
                 stress_tensor=initial_stress,
                 energy=initial_energy,
-                converged=False
+                converged=False,
             )
 
         # 内部弛豫（固定晶胞）优先采用用户指定的优化器，推荐 BFGS。
@@ -321,7 +321,8 @@ class StructureRelaxer:
             if opt_type == "L-BFGS":
                 # 传递所有参数，包括maxls和maxfun
                 return LBFGSOptimizer(
-                    supercell_dims=self.supercell_dims, **params  # 传递所有参数
+                    supercell_dims=self.supercell_dims,
+                    **params,  # 传递所有参数
                 )
             elif opt_type == "BFGS":
                 return BFGSOptimizer(
@@ -373,11 +374,11 @@ class StructureRelaxer:
             final_stress = cell.calculate_stress_tensor(potential)
             self.trajectory_recorder.record_deformation_step(
                 cell,
-                getattr(self.trajectory_recorder, 'current_strain', 0.0),
+                getattr(self.trajectory_recorder, "current_strain", 0.0),
                 "after_internal_relax",
                 stress_tensor=final_stress,
                 energy=final_energy,
-                converged=converged
+                converged=converged,
             )
 
         logger.debug(f"内部弛豫{'成功' if converged else '失败'}")
@@ -393,41 +394,41 @@ class StructureRelaxer:
     def uniform_lattice_relax(self, cell: Cell, potential: Potential) -> bool:
         """
         等比例晶格弛豫：只优化晶格常数，保持原子相对位置不变
-        
+
         这种弛豫方式特别适合基态制备，既避免了原子位置的数值噪声，
         又保持了晶体结构的完美对称性，同时计算效率极高。
-        
+
         Parameters
         ----------
         cell : Cell
             待优化的晶胞对象，会被直接修改
         potential : Potential
             势能函数对象
-            
+
         Returns
         -------
         bool
             优化是否成功收敛
-            
+
         Notes
         -----
         数学表述：
-        
+
         .. math::
             \\min_{s} E(r_{\\text{scaled}}, s \\cdot L) \\quad \\text{其中} \\quad r_{\\text{scaled}} = s \\cdot r_{\\text{frac}} \\cdot L
-            
+
         其中：
         - :math:`s`：等比例缩放因子（唯一优化变量）
         - :math:`r_{\\text{frac}}`：固定的分数坐标
         - :math:`L`：原始晶格矢量矩阵
         - :math:`E`：总能量
-        
+
         优势：
         - 自由度仅为1，计算极快
         - 保持晶体结构完美对称性
         - 避免原子位置数值噪声
         - 适合各种晶系（不限于FCC）
-        
+
         Examples
         --------
         >>> relaxer = StructureRelaxer()
@@ -473,11 +474,11 @@ class StructureRelaxer:
             result = minimize_scalar(
                 lambda s: objective_function([s]),
                 bounds=(0.8, 1.2),  # 缩放范围±20%
-                method='bounded',
+                method="bounded",
                 options={
-                    'xatol': self.optimizer_params.get('ftol', 1e-8),
-                    'maxiter': self.optimizer_params.get('maxiter', 500)
-                }
+                    "xatol": self.optimizer_params.get("ftol", 1e-8),
+                    "maxiter": self.optimizer_params.get("maxiter", 500),
+                },
             )
             converged = result.success
             optimal_scale = result.x
@@ -489,12 +490,12 @@ class StructureRelaxer:
                 result = minimize(
                     objective_function,
                     [initial_scale],
-                    method='BFGS',
+                    method="BFGS",
                     options={
-                        'ftol': self.optimizer_params.get('ftol', 1e-8),
-                        'gtol': self.optimizer_params.get('gtol', 1e-6),
-                        'maxiter': self.optimizer_params.get('maxiter', 500)
-                    }
+                        "ftol": self.optimizer_params.get("ftol", 1e-8),
+                        "gtol": self.optimizer_params.get("gtol", 1e-6),
+                        "maxiter": self.optimizer_params.get("maxiter", 500),
+                    },
                 )
                 converged = result.success
                 optimal_scale = result.x[0]
@@ -654,7 +655,7 @@ class ZeroTempDeformationCalculator:
 
         # 记录初始化信息
         logger.info("初始化ZeroTempDeformationCalculator")
-        logger.info(f"应变幅度: {delta:.2e} ({delta*100:.4f}%)")
+        logger.info(f"应变幅度: {delta:.2e} ({delta * 100:.4f}%)")
         logger.info(f"形变步数: {num_steps}")
 
         # 物理合理性提醒
@@ -725,15 +726,15 @@ class ZeroTempDeformationCalculator:
         logger.info("步骤3/5：计算应力响应")
         results = []
         for i, F in enumerate(deformation_matrices):
-            logger.info(f"计算形变 {i+1}/{total_deformations}")
+            logger.info(f"计算形变 {i + 1}/{total_deformations}")
             result = self._compute_single_deformation(F)
             results.append(result)
 
             # 收敛性监控
             if result.converged:
-                logger.debug(f"形变{i+1}计算成功")
+                logger.debug(f"形变{i + 1}计算成功")
             else:
-                logger.warning(f"形变{i+1}优化未收敛")
+                logger.warning(f"形变{i + 1}优化未收敛")
 
         # 步骤4：提取应力应变数据
         logger.info("步骤4/5：收集应力应变数据")
@@ -789,7 +790,7 @@ class ZeroTempDeformationCalculator:
         initial_a = self._get_equivalent_unit_cell_parameter(initial_lattice)
         logger.info("弛豫前状态:")
         logger.info(f"  初始总能量: {initial_energy:.8f} eV")
-        logger.info(f"  每原子能量: {initial_energy/self.cell.num_atoms:.8f} eV/atom")
+        logger.info(f"  每原子能量: {initial_energy / self.cell.num_atoms:.8f} eV/atom")
         logger.info(f"  初始等效单胞晶格常数: a = {initial_a:.6f} Å")
         logger.info(f"  初始体积: {self.cell.volume:.6f} Å³")
 
@@ -805,11 +806,11 @@ class ZeroTempDeformationCalculator:
 
         logger.info("弛豫后状态:")
         logger.info(f"  最终总能量: {final_energy:.8f} eV")
-        logger.info(f"  每原子能量: {final_energy/self.cell.num_atoms:.8f} eV/atom")
+        logger.info(f"  每原子能量: {final_energy / self.cell.num_atoms:.8f} eV/atom")
         logger.info(f"  能量变化: {energy_change:.8f} eV")
         logger.info(f"  弛豫后等效单胞晶格常数: a = {final_a:.6f} Å")
         logger.info(
-            f"  晶格常数变化: Δa = {final_a - initial_a:.6f} Å ({(final_a - initial_a)/initial_a*100:.3f}%)"
+            f"  晶格常数变化: Δa = {final_a - initial_a:.6f} Å ({(final_a - initial_a) / initial_a * 100:.3f}%)"
         )
         logger.info(f"  最终体积: {self.cell.volume:.6f} Å³")
 
@@ -830,7 +831,7 @@ class ZeroTempDeformationCalculator:
         stress_gpa = self.reference_stress * 160.2176  # eV/Å³ to GPa conversion
         logger.info("基态应力张量 (GPa):")
         for i in range(3):
-            row_str = "  ".join(f"{stress_gpa[i,j]:10.6f}" for j in range(3))
+            row_str = "  ".join(f"{stress_gpa[i, j]:10.6f}" for j in range(3))
             logger.info(f"  [{row_str}]")
 
         stress_magnitude = np.linalg.norm(stress_gpa)
@@ -840,7 +841,7 @@ class ZeroTempDeformationCalculator:
         max_stress = np.max(np.abs(self.reference_stress))
         if max_stress > 0.01:  # 0.01 eV/Å³ ≈ 16 GPa
             logger.warning(
-                f"基态应力较大({max_stress:.6f} eV/Å³ = {max_stress*160.2176:.2f} GPa)，可能未完全弛豫"
+                f"基态应力较大({max_stress:.6f} eV/Å³ = {max_stress * 160.2176:.2f} GPa)，可能未完全弛豫"
             )
         else:
             logger.info("✓ 基态应力较小，弛豫质量良好")

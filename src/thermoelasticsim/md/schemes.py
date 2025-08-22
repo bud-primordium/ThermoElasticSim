@@ -15,7 +15,6 @@
 Created: 2025-08-18
 """
 
-
 import numpy as np
 
 from ..core.structure import Cell
@@ -67,9 +66,7 @@ class NVEScheme(IntegrationScheme):
         """
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
-        self.f_prop: ForcePropagator | None = (
-            None  # 延迟初始化，第一次调用step时创建
-        )
+        self.f_prop: ForcePropagator | None = None  # 延迟初始化，第一次调用step时创建
 
         # 统计信息
         self._step_count = 0
