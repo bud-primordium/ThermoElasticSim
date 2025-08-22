@@ -261,7 +261,7 @@ class DashboardGenerator:
                 平均收敛率: {{ "%.1f" | format(summary_statistics.overall.average_convergence_rate * 100) | default("N/A") }}%
             </div>
         </div>
-        
+
         {% for const_type, const_stats in summary_statistics.elastic_constants.items() %}
         <div class="stat-card elastic-constant-card" data-constant="{{ const_type }}">
             <div class="stat-title">{{ const_type }}</div>
@@ -315,7 +315,7 @@ class DashboardGenerator:
         plots_template = """
 <div class="section">
     <div class="section-title">可视化图表</div>
-    
+
     {% if plot_files %}
         {% for plot_type, plot_path in plot_files.items() %}
         <div class="plot-container">
@@ -344,7 +344,7 @@ class DashboardGenerator:
         details_template = """
 <div class="section">
     <div class="section-title">详细分析</div>
-    
+
     {% for const_type, result in analysis_results.items() %}
     <div class="section">
         <h3>{{ const_type }} 详细分析</h3>
@@ -354,13 +354,13 @@ class DashboardGenerator:
                 <div class="stat-value">{{ "%.2f" | format(result.elastic_constant) }}</div>
                 <div class="stat-detail">GPa</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-title">拟合质量</div>
                 <div class="stat-value">{{ "%.4f" | format(result.r_squared) }}</div>
                 <div class="stat-detail">R² 决定系数</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-title">相对误差</div>
                 <div class="stat-value {% if result.relative_error|abs <= 10 %}success{% elif result.relative_error|abs <= 25 %}warning{% else %}error{% endif %}">
@@ -383,7 +383,7 @@ class DashboardGenerator:
         trajectory_template = """
 <div class="section">
     <div class="section-title">轨迹动画</div>
-    
+
     {% if metadata.has_trajectory %}
     <div class="trajectory-preview">
         <h4>轨迹数据概览</h4>
@@ -437,7 +437,7 @@ class DashboardGenerator:
             <h1>弹性常数分析仪表板</h1>
             <p>生成时间: {{ generation_time }}</p>
         </div>
-        
+
         <div class="stats">
             {% for const_type, result in analysis_results.items() %}
             <div class="stat-card">
@@ -449,7 +449,7 @@ class DashboardGenerator:
             </div>
             {% endfor %}
         </div>
-        
+
         <h2>详细结果</h2>
         <table>
             <thead>
@@ -475,7 +475,7 @@ class DashboardGenerator:
                 {% endfor %}
             </tbody>
         </table>
-        
+
         {% if plot_files %}
         <h2>可视化图表</h2>
         {% for plot_type, plot_path in plot_files.items() %}
@@ -664,7 +664,7 @@ class DashboardGenerator:
             <p>生成时间: {{ generation_time }}</p>
             <p>共 {{ datasets|length }} 个数据集</p>
         </div>
-        
+
         <div class="datasets">
             {% for dataset in datasets %}
             <div class="dataset-card">
