@@ -1294,10 +1294,10 @@ class ElasticConstantsSolver:
     def _per_mode_columnwise_solve(
         self, strains: np.ndarray, stresses: np.ndarray
     ) -> tuple[np.ndarray, float]:
-        """
-        逐列稳健求解 C：
+        """逐列稳健求解 C
+
         - 对第 k 个 Voigt 分量，仅用该分量非零且其余分量近零的样本行，拟合 C[:, k]
-        - 适用于我们“单分量逐一施加形变”的数据结构，可显著降低全局拟合的病态和串扰
+        - 适用于我们"单分量逐一施加形变"的数据结构，可显著降低全局拟合的病态和串扰
         """
         num_modes = 6
         C = np.zeros((num_modes, num_modes), dtype=np.float64)
@@ -1339,9 +1339,9 @@ class ElasticConstantsSolver:
     def _cubic_constrained_fit(
         self, strains: np.ndarray, stresses: np.ndarray
     ) -> tuple[np.ndarray, float]:
-        """
-        在立方晶系假设下拟合：仅 C11, C12, C44。
-        使用“单分量形变”的行，分别以稳健统计（中位数斜率）估计：
+        """在立方晶系假设下拟合：仅 C11, C12, C44。
+
+        使用"单分量形变"的行，分别以稳健统计（中位数斜率）估计：
         - C11: 使用 ε11 行的 σ11/ε11、ε22 行的 σ22/ε22、ε33 行的 σ33/ε33 的中位数
         - C12: 使用 ε11 行的 σ22/ε11、σ33/ε11 等跨分量比值的中位数（再与其它轴对换求中位数）
         - C44: 使用 γ23 行的 σ23/γ23、γ13 行的 σ13/γ13、γ12 行的 σ12/γ12 的中位数
@@ -1491,13 +1491,7 @@ class ElasticConstantsSolver:
         ss_tot = np.sum((stresses - np.mean(stresses)) ** 2)  # 总平方和
 
         # 处理零方差情况（所有应力都相同）
-        if ss_tot == 0:
-            if ss_res == 0:
-                r2_score = 1.0  # 完美拟合：零数据零预测
-            else:
-                r2_score = 0.0  # 无法拟合：零数据非零预测
-        else:
-            r2_score = 1 - ss_res / ss_tot
+        r2_score = (1.0 if ss_res == 0 else 0.0) if ss_tot == 0 else 1 - ss_res / ss_tot
 
         # 记录求解信息
         logger.debug(f"矩阵秩: {rank}/6")
@@ -1566,13 +1560,7 @@ class ElasticConstantsSolver:
         ss_tot = np.sum((stresses - np.mean(stresses)) ** 2)
 
         # 处理零方差情况（所有应力都相同）
-        if ss_tot == 0:
-            if ss_res == 0:
-                r2_score = 1.0  # 完美拟合：零数据零预测
-            else:
-                r2_score = 0.0  # 无法拟合：零数据非零预测
-        else:
-            r2_score = 1 - ss_res / ss_tot
+        r2_score = (1.0 if ss_res == 0 else 0.0) if ss_tot == 0 else 1 - ss_res / ss_tot
 
         # 记录求解信息
         logger.debug(f"正则化后条件数: {np.linalg.cond(XTX_reg):.2e}")

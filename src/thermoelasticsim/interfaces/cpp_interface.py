@@ -83,9 +83,10 @@ except Exception:  # pragma: no cover - 环境未构建扩展时忽略
 
 
 class CppInterface:
-    """
+    """用于调用 C++ 实现的函数的接口类
+
     @class CppInterface
-    @brief 用于调用 C++ 实现的函数的接口类。
+    @brief 用于调用 C++ 实现的函数的接口类
 
     Parameters
     ----------
@@ -131,11 +132,12 @@ class CppInterface:
                     self._use_pybind = True
                     logger.debug("Using pybind11 backend for Nose-Hoover Chain")
                     return
-            elif lib_name == "parrinello_rahman_hoover":
-                if hasattr(_cpp_core, "parrinello_rahman_hoover"):
-                    self._use_pybind = True
-                    logger.debug("Using pybind11 backend for Parrinello-Rahman-Hoover")
-                    return
+            elif lib_name == "parrinello_rahman_hoover" and hasattr(
+                _cpp_core, "parrinello_rahman_hoover"
+            ):
+                self._use_pybind = True
+                logger.debug("Using pybind11 backend for Parrinello-Rahman-Hoover")
+                return
 
         # Fallback到ctypes实现
         logger.debug(f"Using ctypes backend for {lib_name}")
@@ -792,6 +794,7 @@ class CppInterface:
         target_pressure: np.ndarray,  # 9 components
         W: float,
     ):
+        """执行Parrinello-Rahman-Hoover恒压器积分步骤"""
         # 检查输入数组的形状
         if masses.shape != (num_atoms,):
             raise ValueError(

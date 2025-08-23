@@ -15,10 +15,10 @@
 Created: 2025-08-18
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 
-class MDComponent(ABC):
+class MDComponent:
     """MD组件基类
 
     所有MD相关组件的基础抽象类，用于统一接口标准。

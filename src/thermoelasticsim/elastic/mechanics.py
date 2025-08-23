@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class StressCalculator:
-    """
-    应力张量计算器
+    """应力张量计算器
+
     处理三个张量贡献：
     1. 动能张量: p_i⊗p_i/m_i
     2. 维里张量: r_i⊗f_i

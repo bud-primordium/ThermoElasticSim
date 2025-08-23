@@ -547,15 +547,15 @@ class TestEdgeCases:
 
     def test_non_converged_relaxation(self, sample_cell, mock_potential):
         """测试弛豫不收敛的情况"""
-        with patch.object(StructureRelaxer, "full_relax", return_value=False):
-            with patch.object(
-                sample_cell, "calculate_stress_tensor", return_value=np.zeros((3, 3))
-            ):
-                calculator = ZeroTempDeformationCalculator(sample_cell, mock_potential)
+        with (
+            patch.object(StructureRelaxer, "full_relax", return_value=False),
+            patch.object(sample_cell, "calculate_stress_tensor", return_value=np.zeros((3, 3)))
+        ):
+            calculator = ZeroTempDeformationCalculator(sample_cell, mock_potential)
 
-                # 即使不收敛，也应该能完成基态制备
-                calculator._prepare_reference_state()
-                assert calculator.reference_stress is not None
+            # 即使不收敛，也应该能完成基态制备
+            calculator._prepare_reference_state()
+            assert calculator.reference_stress is not None
 
 
 if __name__ == "__main__":

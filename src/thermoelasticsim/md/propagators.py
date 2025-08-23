@@ -837,10 +837,7 @@ class NoseHooverChainPropagator(Propagator):
         self._num_atoms_global = len(cell.atoms)
 
         # 计算有效自由度（移除质心运动）
-        if self._num_atoms_global == 1:
-            N_f = 3  # 单原子系统
-        else:
-            N_f = 3 * self._num_atoms_global  # 不移除质心
+        N_f = 3 if self._num_atoms_global == 1 else 3 * self._num_atoms_global
 
         # 温度单位转换
         kB_T = KB_IN_EV * self.target_temperature

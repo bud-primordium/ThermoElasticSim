@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""
-matplotlib字体配置模块
+"""matplotlib字体配置模块
+
 一劳永逸解决中文字体显示问题
 
 Usage:

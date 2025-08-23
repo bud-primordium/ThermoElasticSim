@@ -31,6 +31,8 @@ plt.ioff()  # 关闭交互模式，避免 GUI 启动警告
 
 
 class Visualizer:
+    """晶体结构和数据可视化工具类"""
+
     def __init__(self):
         """初始化可视化工具类"""
         pass

@@ -542,14 +542,12 @@ class ModernVisualizer:
             step_type = step_type.decode("utf-8")
         step_type = str(step_type)
 
-        if step_type == "base_state":
-            return "Base"
-        elif step_type == "before_internal_relax":
-            return f"Deform{strain_value:.3f}"
-        elif step_type == "after_internal_relax":
-            return f"Relax{strain_value:.3f}"
-        else:
-            return f"{step_type}"
+        step_mapping = {
+            "base_state": "Base",
+            "before_internal_relax": f"Deform{strain_value:.3f}",
+            "after_internal_relax": f"Relax{strain_value:.3f}",
+        }
+        return step_mapping.get(step_type, f"{step_type}")
 
     def plot_energy_evolution(
         self, trajectory_file: str, save_file: str | None = None

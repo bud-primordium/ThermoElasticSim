@@ -19,6 +19,7 @@
 Created: 2025-08-20
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -31,10 +32,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # 尝试加载统一的绘图风格（可选）
-try:
+with contextlib.suppress(Exception):
     from thermoelasticsim.utils.plot_config import plt  # type: ignore
-except Exception:
-    pass
 
 
 # 将 src 加入路径
