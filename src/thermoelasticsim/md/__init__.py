@@ -1,12 +1,15 @@
-"""
-分子动力学模块
-"""
+"""分子动力学模块"""
 
 __all__ = [
     "MDSimulator",
-    "Integrator",
-    "VelocityVerletIntegrator",
-    "RK4Integrator",
+    # Schemes (new architecture)
+    "NVEScheme",
+    "BerendsenNVTScheme",
+    "AndersenNVTScheme",
+    "NoseHooverNVTScheme",
+    "LangevinNVTScheme",
+    "MTKNPTScheme",
+    # Legacy thermostats/barostats (will be deprecated)
     "Thermostat",
     "NoseHooverThermostat",
     "NoseHooverChainThermostat",
@@ -21,18 +24,32 @@ def __getattr__(name):
         from .md_simulator import MDSimulator
 
         return MDSimulator
-    elif name == "Integrator":
-        from .integrators import Integrator
+    # New schemes
+    elif name == "NVEScheme":
+        from .schemes import NVEScheme
 
-        return Integrator
-    elif name == "VelocityVerletIntegrator":
-        from .integrators import VelocityVerletIntegrator
+        return NVEScheme
+    elif name == "BerendsenNVTScheme":
+        from .schemes import BerendsenNVTScheme
 
-        return VelocityVerletIntegrator
-    elif name == "RK4Integrator":
-        from .integrators import RK4Integrator
+        return BerendsenNVTScheme
+    elif name == "AndersenNVTScheme":
+        from .schemes import AndersenNVTScheme
 
-        return RK4Integrator
+        return AndersenNVTScheme
+    elif name == "NoseHooverNVTScheme":
+        from .schemes import NoseHooverNVTScheme
+
+        return NoseHooverNVTScheme
+    elif name == "LangevinNVTScheme":
+        from .schemes import LangevinNVTScheme
+
+        return LangevinNVTScheme
+    elif name == "MTKNPTScheme":
+        from .schemes import MTKNPTScheme
+
+        return MTKNPTScheme
+    # Legacy thermostats/barostats
     elif name == "Thermostat":
         from .thermostats import Thermostat
 

@@ -1,12 +1,10 @@
 """测试NVE算符分离实现
 
-验证新的NVEScheme与原有VelocityVerletIntegrator的一致性，
-确保算符分离重构没有引入数值误差。
+验证NVEScheme的物理正确性，确保算符分离实现满足核心物理性质。
 
 测试内容：
-1. 轨迹一致性：相同初始条件下产生相同轨迹
-2. 能量守恒：验证NVE的核心物理性质
-3. 数值精度：检查长时间积分的稳定性
+1. 能量守恒：验证NVE的核心物理性质
+2. 数值精度：检查长时间积分的稳定性
 """
 
 from unittest.mock import Mock
@@ -15,9 +13,8 @@ import numpy as np
 import pytest
 
 from thermoelasticsim.core.structure import Atom, Cell
-from thermoelasticsim.md.integrators import VelocityVerletIntegrator
 
-# 测试相关导入（需要根据实际项目结构调整）
+# 测试相关导入
 from thermoelasticsim.md.schemes import NVEScheme
 
 
@@ -111,44 +108,7 @@ class TestNVEConsistency:
 
         return Cell(cell.lattice_vectors.copy(), atoms_copy)
 
-    def test_trajectory_consistency(self, simple_system):
-        """测试轨迹一致性：新旧实现应产生相同轨迹"""
-        cell, potential = simple_system
-
-        # 创建两个相同的系统
-        cell1 = self.copy_system(cell)
-        cell2 = self.copy_system(cell)
-
-        # 确保初始状态完全相同
-        for a1, a2 in zip(cell1.atoms, cell2.atoms, strict=False):
-            assert np.allclose(a1.position, a2.position, rtol=1e-15)
-            assert np.allclose(a1.velocity, a2.velocity, rtol=1e-15)
-
-        # 初始化力
-        potential.calculate_forces(cell1)
-        potential.calculate_forces(cell2)
-
-        # 创建积分器
-        new_scheme = NVEScheme()
-        old_integrator = VelocityVerletIntegrator()
-
-        dt = 0.1  # fs
-        n_steps = 100
-
-        # 运行积分
-        for step in range(n_steps):
-            new_scheme.step(cell1, potential, dt)
-            old_integrator.integrate(cell2, potential, dt)
-
-            # 每10步检查一次一致性
-            if step % 10 == 0:
-                for a1, a2 in zip(cell1.atoms, cell2.atoms, strict=False):
-                    pos_diff = np.max(np.abs(a1.position - a2.position))
-                    vel_diff = np.max(np.abs(a1.velocity - a2.velocity))
-
-                    # 允许小的数值误差
-                    assert pos_diff < 1e-12, f"步数{step}: 位置差异{pos_diff}超出容差"
-                    assert vel_diff < 1e-12, f"步数{step}: 速度差异{vel_diff}超出容差"
+    # test_trajectory_consistency已移除（旧integrator已废弃）
 
     def test_energy_conservation(self, simple_system):
         """测试能量守恒：NVE系统的总能量应保持常数"""
