@@ -549,7 +549,9 @@ class TestEdgeCases:
         """测试弛豫不收敛的情况"""
         with (
             patch.object(StructureRelaxer, "full_relax", return_value=False),
-            patch.object(sample_cell, "calculate_stress_tensor", return_value=np.zeros((3, 3)))
+            patch.object(
+                sample_cell, "calculate_stress_tensor", return_value=np.zeros((3, 3))
+            ),
         ):
             calculator = ZeroTempDeformationCalculator(sample_cell, mock_potential)
 
