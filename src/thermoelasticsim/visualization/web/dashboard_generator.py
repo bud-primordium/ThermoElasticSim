@@ -320,8 +320,8 @@ class DashboardGenerator:
         {% for plot_type, plot_path in plot_files.items() %}
         <div class="plot-container">
             <h3>{{ plot_type.replace('_', ' ').title() }}</h3>
-            <img src="{{ plot_path }}" 
-                 alt="{{ plot_type.replace('_', ' ').title() }}" 
+            <img src="{{ plot_path }}"
+                 alt="{{ plot_type.replace('_', ' ').title() }}"
                  class="plot-image"
                  onclick="togglePlotFullscreen(this)"
                  style="cursor: pointer;"

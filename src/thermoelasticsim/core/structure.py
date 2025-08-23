@@ -670,6 +670,7 @@ class Cell:
     def build_supercell(self, repetition: tuple) -> "Cell":
         """
         构建超胞，返回一个新的 Cell 对象。
+
         采用更简单、更健壮的算法，直接在笛卡尔坐标系下操作。
 
         Parameters
@@ -771,22 +772,6 @@ class Cell:
     def num_atoms(self):
         """返回原子数量"""
         return len(self.atoms)
-
-    def set_positions(self, positions: np.ndarray):
-        """
-        设置所有原子的位置。
-
-        Parameters
-        ----------
-        positions : np.ndarray
-            原子位置数组，形状为 (num_atoms, 3)。
-        """
-        if positions.shape != (self.num_atoms, 3):
-            raise ValueError(
-                f"位置数组形状应为 ({self.num_atoms}, 3)，但得到 {positions.shape}"
-            )
-        for i, atom in enumerate(self.atoms):
-            atom.position = positions[i]
 
     def set_lattice_vectors(self, lattice_vectors: np.ndarray):
         """

@@ -240,7 +240,7 @@ class ElasticVisualizer:
             supercell_size = self._infer_supercell_size()
             output_path = self.output_dir / "c11_c12_combined_response.png"
 
-            plot_file = self.plotter.plot_c11_c12_combined_response(
+            self.plotter.plot_c11_c12_combined_response(
                 c11_data, c12_data, supercell_size, str(output_path)
             )
             plot_files["c11_c12_combined"] = str(output_path)
@@ -273,7 +273,7 @@ class ElasticVisualizer:
             supercell_size = self._infer_supercell_size()
             output_path = self.output_dir / "shear_response.png"
 
-            plot_file = self.plotter.plot_shear_response(
+            self.plotter.plot_shear_response(
                 shear_data, supercell_size, str(output_path)
             )
             plot_files["shear_response"] = str(output_path)

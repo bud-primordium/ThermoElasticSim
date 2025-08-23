@@ -13,19 +13,18 @@
 - 较短时间以加快测试速度
 """
 
-import unittest
-import numpy as np
-import os
-from pathlib import Path
-
 # 添加项目路径
 import sys
+import unittest
+from pathlib import Path
+
+import numpy as np
 
 sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
 
-from thermoelasticsim.core.structure import Cell, Atom
-from thermoelasticsim.potentials.eam import EAMAl1Potential
+from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.md.schemes import create_mtk_npt_scheme
+from thermoelasticsim.potentials.eam import EAMAl1Potential
 
 
 class TestMTKNPT(unittest.TestCase):
@@ -138,7 +137,7 @@ class TestMTKNPT(unittest.TestCase):
         avg_temp = np.mean(stable_temps)
         temp_error = abs(avg_temp - self.target_temp) / self.target_temp * 100
 
-        print(f"\nMTK-NPT温度控制测试:")
+        print("\nMTK-NPT温度控制测试:")
         print(f"目标温度: {self.target_temp:.1f} K")
         print(f"平均温度: {avg_temp:.1f} K")
         print(f"温度误差: {temp_error:.2f}%")
@@ -174,7 +173,7 @@ class TestMTKNPT(unittest.TestCase):
         avg_pressure = np.mean(stable_pressures)
         pressure_error = abs(avg_pressure - self.target_pressure)
 
-        print(f"\nMTK-NPT压力控制测试:")
+        print("\nMTK-NPT压力控制测试:")
         print(f"目标压力: {self.target_pressure:.3f} GPa")
         print(f"平均压力: {avg_pressure:.3f} GPa")
         print(f"压力误差: {pressure_error:.3f} GPa")
@@ -212,7 +211,7 @@ class TestMTKNPT(unittest.TestCase):
             slope, _ = np.polyfit(times, conserved_energies, 1)
             drift_rate = abs(slope * 1000)  # neV/ps
 
-            print(f"\nMTK-NPT守恒量测试:")
+            print("\nMTK-NPT守恒量测试:")
             print(
                 f"守恒量范围: {min(conserved_energies):.3f} - {max(conserved_energies):.3f} eV"
             )
@@ -253,7 +252,7 @@ class TestMTKNPT(unittest.TestCase):
         final_volume = np.mean(volume_history[-10:])  # 最后10个点平均
         volume_change = (final_volume - initial_volume) / initial_volume * 100
 
-        print(f"\nMTK-NPT体积响应测试:")
+        print("\nMTK-NPT体积响应测试:")
         print(f"目标压力: {target_pressure:.1f} GPa (压缩)")
         print(f"初始体积: {initial_volume:.2f} Å³")
         print(f"最终体积: {final_volume:.2f} Å³")

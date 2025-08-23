@@ -9,15 +9,16 @@
 3. 数值精度：检查长时间积分的稳定性
 """
 
+from unittest.mock import Mock
+
 import numpy as np
 import pytest
-from unittest.mock import Mock
+
+from thermoelasticsim.core.structure import Atom, Cell
+from thermoelasticsim.md.integrators import VelocityVerletIntegrator
 
 # 测试相关导入（需要根据实际项目结构调整）
 from thermoelasticsim.md.schemes import NVEScheme
-from thermoelasticsim.md.integrators import VelocityVerletIntegrator
-from thermoelasticsim.core.structure import Atom, Cell
-from thermoelasticsim.potentials.eam import EAMAl1Potential
 
 
 class TestNVEConsistency:
@@ -119,7 +120,7 @@ class TestNVEConsistency:
         cell2 = self.copy_system(cell)
 
         # 确保初始状态完全相同
-        for a1, a2 in zip(cell1.atoms, cell2.atoms):
+        for a1, a2 in zip(cell1.atoms, cell2.atoms, strict=False):
             assert np.allclose(a1.position, a2.position, rtol=1e-15)
             assert np.allclose(a1.velocity, a2.velocity, rtol=1e-15)
 
@@ -141,7 +142,7 @@ class TestNVEConsistency:
 
             # 每10步检查一次一致性
             if step % 10 == 0:
-                for a1, a2 in zip(cell1.atoms, cell2.atoms):
+                for a1, a2 in zip(cell1.atoms, cell2.atoms, strict=False):
                     pos_diff = np.max(np.abs(a1.position - a2.position))
                     vel_diff = np.max(np.abs(a1.velocity - a2.velocity))
 
@@ -235,11 +236,11 @@ class TestNVEConsistency:
 
         # 每步应该只调用一次force计算
         expected_calls = initial_count + n_steps
-        assert (
-            call_count["count"] == expected_calls
-        ), f"期望{expected_calls}次力计算，实际{call_count['count']}次"
+        assert call_count["count"] == expected_calls, (
+            f"期望{expected_calls}次力计算，实际{call_count['count']}次"
+        )
 
-    # 测试已删除 - Mock对象数学运算问题  
+    # 测试已删除 - Mock对象数学运算问题
     # def test_step_statistics(self):
 
 

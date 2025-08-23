@@ -14,11 +14,12 @@ Nose-Hoover链恒温器基础功能测试
 目标: 验证NHC基础功能的正确性
 """
 
-import sys
 import os
-import pytest
-import numpy as np
+import sys
 from unittest.mock import MagicMock
+
+import numpy as np
+import pytest
 
 # 添加src路径
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,15 +27,15 @@ SRC = os.path.join(ROOT, "src")
 if SRC not in sys.path:
     sys.path.append(SRC)
 
-from thermoelasticsim.core.structure import Cell, Atom
+from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.md.propagators import (
-    NoseHooverChainPropagator,
     FOURTH_ORDER_COEFFS,
+    NoseHooverChainPropagator,
 )
 from thermoelasticsim.utils.utils import KB_IN_EV
 
 # 导入测试辅助函数
-from .test_helpers import create_fcc_aluminum, apply_maxwell_velocities
+from .test_helpers import apply_maxwell_velocities, create_fcc_aluminum
 
 
 class TestSuzukiYoshidaCoefficients:
@@ -219,6 +220,7 @@ class TestKineticEnergyCalculation:
         # atom2: 0.5 * (2.0 * 104.3968445) * 2.0 = 208.793689
         # 总计: 52.19842225 + 208.793689 = 260.99211125
         from thermoelasticsim.utils.utils import AMU_TO_EVFSA2
+
         expected = 0.5 * (1.0 * AMU_TO_EVFSA2) * 1.0 + 0.5 * (2.0 * AMU_TO_EVFSA2) * 2.0
         assert abs(kinetic - expected) < 1e-12
 

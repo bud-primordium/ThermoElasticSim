@@ -3,6 +3,7 @@
 """
 
 import pytest
+
 from thermoelasticsim.potentials.base import Potential
 
 

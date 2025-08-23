@@ -30,12 +30,11 @@ E_potential_thermostat = N_f*k_B*T₀*ζ₀ + k_B*T₀*Σ(ζⱼ, j=1...M-1)
 目标: 验证NHC的核心物理正确性
 """
 
-import sys
 import os
-import pytest
-import numpy as np
-import matplotlib.pyplot as plt
+import sys
 from unittest.mock import MagicMock
+
+import numpy as np
 
 # 添加src路径
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,17 +42,16 @@ SRC = os.path.join(ROOT, "src")
 if SRC not in sys.path:
     sys.path.append(SRC)
 
-from thermoelasticsim.core.structure import Cell, Atom
+from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.md.propagators import NoseHooverChainPropagator
 from thermoelasticsim.potentials.eam import EAMAl1Potential
 from thermoelasticsim.utils.utils import KB_IN_EV
 
 # 导入测试辅助函数
 from .test_helpers import (
-    create_fcc_aluminum,
     apply_maxwell_velocities,
+    create_fcc_aluminum,
     simple_energy_minimization,
-    create_equilibrated_fcc_aluminum,
 )
 
 
@@ -133,11 +131,11 @@ class TestConservedEnergyCalculation:
 
         # 设置原子已知动能
         cell.atoms[0].velocity = np.array([1.0, 0.0, 0.0])
-        
+
         # 手动计算期望动能：0.5 * m * v²
         # v² = 1.0² + 0.0² + 0.0² = 1.0
         kinetic_expected = 0.5 * cell.atoms[0].mass * 1.0
-        
+
         print(f"原子质量: {cell.atoms[0].mass:.6f}")
         print(f"速度: {cell.atoms[0].velocity}")
         print(f"v²: {np.dot(cell.atoms[0].velocity, cell.atoms[0].velocity):.6f}")
@@ -150,7 +148,7 @@ class TestConservedEnergyCalculation:
         kinetic_calc = nhc._calculate_instantaneous_kinetic_energy(cell)
         print(f"计算动能: {kinetic_calc:.6f}")
         print(f"差异: {abs(kinetic_calc - kinetic_expected):.6f}")
-        
+
         assert abs(kinetic_calc - kinetic_expected) < 0.1  # 进一步放宽容差
 
         # 验证守恒量有合理量级
@@ -220,7 +218,7 @@ class TestShortTermConservation:
         energy_std = np.std(conserved_energies)
         energy_range = np.max(conserved_energies) - np.min(conserved_energies)
 
-        print(f"短期守恒量统计:")
+        print("短期守恒量统计:")
         print(f"  平均值: {np.mean(conserved_energies):.6f} eV")
         print(f"  标准差: {energy_std:.2e} eV")
         print(f"  范围: {energy_range:.2e} eV")
@@ -247,7 +245,7 @@ class TestShortTermConservation:
 
             final_energy = nhc.get_conserved_energy(cell)
             print(f"dt={dt:.1f}fs: 最终能量={final_energy:.2e}")
-            
+
             # 避免除零错误和nan处理
             if np.isnan(initial_energy) or np.isnan(final_energy):
                 print(f"dt={dt:.1f}fs: 检测到nan值，跳过此测试")
@@ -255,15 +253,17 @@ class TestShortTermConservation:
             elif abs(initial_energy) < 1e-12:
                 relative_error = abs(final_energy - initial_energy)
             else:
-                relative_error = abs(final_energy - initial_energy) / abs(initial_energy)
+                relative_error = abs(final_energy - initial_energy) / abs(
+                    initial_energy
+                )
 
             print(f"dt={dt:.1f}fs: 相对误差 {relative_error:.2e}")
 
             # 较小时间步长应该有更好的守恒性
             if dt <= 0.5:
-                assert (
-                    relative_error < 1e-6
-                ), f"dt={dt}时守恒性不足: {relative_error:.2e}"
+                assert relative_error < 1e-6, (
+                    f"dt={dt}时守恒性不足: {relative_error:.2e}"
+                )
 
 
 class TestLongTermConservation:
@@ -321,8 +321,8 @@ class TestLongTermConservation:
         # 线性拟合检测漂移
         slope, intercept = np.polyfit(times, conserved_energies, 1)
 
-        print(f"长期守恒量分析:")
-        print(f"  总步数: 1000")
+        print("长期守恒量分析:")
+        print("  总步数: 1000")
         print(f"  时间范围: {times[-1]:.1f} ps")
         print(f"  漂移率: {slope:.2e} eV/ps")
         print(f"  相对漂移: {abs(slope) / abs(np.mean(conserved_energies)):.2e} /ps")
@@ -410,7 +410,7 @@ class TestNumericalStability:
     # 测试已删除 - 极端条件测试不稳定
     # def test_extreme_conditions(self):
 
-    # 测试已删除 - 零初始条件要求过于严格  
+    # 测试已删除 - 零初始条件要求过于严格
     # def test_zero_initial_conditions(self):
 
 
@@ -438,7 +438,7 @@ def run_comprehensive_test():
     if converged:
         print(f"  ✓ 结构优化收敛，能量: {final_energy:.6f} eV")
     else:
-        print(f"  ⚠️ 结构优化未完全收敛，继续测试")
+        print("  ⚠️ 结构优化未完全收敛，继续测试")
 
     # 重新设置合理的初始速度
     apply_maxwell_velocities(cell, temperature=50.0)
@@ -455,13 +455,13 @@ def run_comprehensive_test():
     # Mock势能计算（简化测试）
     cell.calculate_potential_energy = MagicMock(return_value=final_energy)
 
-    print(f"系统设置:")
+    print("系统设置:")
     print(f"  原子数: {len(cell.atoms)}")
     print(f"  目标温度: {nhc.target_temperature} K")
     print(f"  时间常数: {nhc.tdamp} fs")
     print(f"  链长度: {nhc.tchain}")
     print(f"  系统体积: {cell.calculate_volume():.1f} Å³")
-    print(f"  原子密度: {len(cell.atoms)/cell.calculate_volume():.3f} 原子/Å³")
+    print(f"  原子密度: {len(cell.atoms) / cell.calculate_volume():.3f} 原子/Å³")
 
     # 检查初始温度
     initial_temp = cell.calculate_temperature()
@@ -528,12 +528,12 @@ def run_comprehensive_test():
     temp_error_percent = temp_error / 300.0 * 100
 
     print(f"\n分析结果 (跳过前{skip_steps}个记录点):")
-    print(f"守恒量统计:")
+    print("守恒量统计:")
     print(f"  平均值: {energy_mean:.6f} eV")
     print(f"  标准差: {energy_std:.2e} eV")
     print(f"  范围: {energy_range:.2e} eV")
     print(f"  漂移: {energy_drift:.2e} eV")
-    print(f"温度统计:")
+    print("温度统计:")
     print(f"  平均温度: {temp_mean:.1f} K")
     print(f"  温度标准差: {temp_std:.1f} K")
     print(f"  温度误差: {temp_error:.1f} K ({temp_error_percent:.2f}%)")
@@ -558,10 +558,10 @@ def run_comprehensive_test():
 
     # 数值稳定性检查
     if np.any(np.isnan(conserved_energies)) or np.any(np.isinf(conserved_energies)):
-        print(f"  ❌ 发现数值不稳定性（NaN或Inf）")
+        print("  ❌ 发现数值不稳定性（NaN或Inf）")
         success = False
     else:
-        print(f"  ✅ 数值稳定性良好")
+        print("  ✅ 数值稳定性良好")
 
     # 温度涨落检查（32原子系统的理论标准差）
     theoretical_temp_std = 300.0 * np.sqrt(2.0 / (3.0 * len(cell.atoms)))

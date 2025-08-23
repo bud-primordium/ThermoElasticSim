@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 对 EAM 势进行严格的集成测试 (累加逻辑版本)
 """
-import pytest
-import numpy as np
-import matplotlib.pyplot as plt
-import os
+
 import ctypes
-import importlib.util
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
 from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.potentials.eam import EAMAl1Potential
 
 # 检查 pybind11 模块是否可用
 try:
     import thermoelasticsim._cpp_core as _cpp_core
-    HAS_PYBIND = hasattr(_cpp_core, 'calculate_eam_al1_energy')
+
+    HAS_PYBIND = hasattr(_cpp_core, "calculate_eam_al1_energy")
 except Exception:
     HAS_PYBIND = False
 
@@ -269,7 +271,7 @@ def test_eam_pybind_ctypes_energy_consistency():
     """若旧 ctypes 库与新 pybind11 模块均可用，则对比能量一致性"""
     if not HAS_PYBIND:
         pytest.skip("pybind11 module _cpp_core not available")
-    
+
     # 尝试定位旧 ctypes 库
     here = os.path.dirname(os.path.abspath(__file__))
     cur = here
@@ -279,59 +281,64 @@ def test_eam_pybind_ctypes_energy_consistency():
             project_root = cur
             break
         cur = os.path.dirname(cur)
-    
+
     if not project_root:
         pytest.skip("Cannot locate project root to find ctypes library")
-    
-    ctypes_lib_path = os.path.join(project_root, "src", "thermoelasticsim", "lib", "libeam_al1.so")
+
+    ctypes_lib_path = os.path.join(
+        project_root, "src", "thermoelasticsim", "lib", "libeam_al1.so"
+    )
     if not os.path.exists(ctypes_lib_path):
         # macOS 使用 .dylib
         ctypes_lib_path = ctypes_lib_path.replace(".so", ".dylib")
-    
+
     if not os.path.exists(ctypes_lib_path):
         pytest.skip(f"ctypes library not found: {ctypes_lib_path}")
-    
+
     # 加载 ctypes 库
     ctypes_lib = ctypes.CDLL(ctypes_lib_path)
     ctypes_lib.calculate_eam_al1_energy.argtypes = [
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_double),
         ctypes.POINTER(ctypes.c_double),  # box_lengths
-        ctypes.POINTER(ctypes.c_double)   # energy (output)
+        ctypes.POINTER(ctypes.c_double),  # energy (output)
     ]
     ctypes_lib.calculate_eam_al1_energy.restype = ctypes.c_void_p
-    
+
     # 创建测试数据
     r = 3.0
     cell = create_two_atom_cell(r)
-    
+
     # 准备 ctypes 调用的数据
     n_atoms = len(cell.atoms)
-    positions = np.array([atom.position for atom in cell.atoms], dtype=np.float64).flatten()
+    positions = np.array(
+        [atom.position for atom in cell.atoms], dtype=np.float64
+    ).flatten()
     positions_ptr = positions.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     box_lengths = np.array([20.0, 20.0, 20.0], dtype=np.float64)  # 从cell_vectors获取
     box_lengths_ptr = box_lengths.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     energy_ctypes = ctypes.c_double(0.0)
-    
+
     # 调用 ctypes
     ctypes_lib.calculate_eam_al1_energy(
         n_atoms, positions_ptr, box_lengths_ptr, ctypes.byref(energy_ctypes)
     )
-    
+
     # 调用 pybind11
     import thermoelasticsim._cpp_core as _cpp_core
+
     energy_pybind = _cpp_core.calculate_eam_al1_energy(n_atoms, positions, box_lengths)
-    
+
     # 比较结果
     assert energy_pybind == pytest.approx(energy_ctypes.value, abs=1e-12)
 
 
-@pytest.mark.migration  
+@pytest.mark.migration
 def test_eam_pybind_ctypes_forces_consistency():
     """若旧 ctypes 库与新 pybind11 模块均可用，则对比力计算一致性"""
     if not HAS_PYBIND:
         pytest.skip("pybind11 module _cpp_core not available")
-    
+
     # 定位 ctypes 库
     here = os.path.dirname(os.path.abspath(__file__))
     cur = here
@@ -341,49 +348,56 @@ def test_eam_pybind_ctypes_forces_consistency():
             project_root = cur
             break
         cur = os.path.dirname(cur)
-    
+
     if not project_root:
         pytest.skip("Cannot locate project root to find ctypes library")
-    
-    ctypes_lib_path = os.path.join(project_root, "src", "thermoelasticsim", "lib", "libeam_al1.so")
+
+    ctypes_lib_path = os.path.join(
+        project_root, "src", "thermoelasticsim", "lib", "libeam_al1.so"
+    )
     if not os.path.exists(ctypes_lib_path):
         ctypes_lib_path = ctypes_lib_path.replace(".so", ".dylib")
-    
+
     if not os.path.exists(ctypes_lib_path):
         pytest.skip(f"ctypes library not found: {ctypes_lib_path}")
-    
+
     # 加载 ctypes 库
     ctypes_lib = ctypes.CDLL(ctypes_lib_path)
     ctypes_lib.calculate_eam_al1_forces.argtypes = [
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_double),
         ctypes.POINTER(ctypes.c_double),  # box_lengths
-        ctypes.POINTER(ctypes.c_double)   # forces (output)
+        ctypes.POINTER(ctypes.c_double),  # forces (output)
     ]
     ctypes_lib.calculate_eam_al1_forces.restype = ctypes.c_void_p
-    
+
     # 创建测试数据
     r = 3.0
     cell = create_two_atom_cell(r)
-    
+
     # 准备数据
     n_atoms = len(cell.atoms)
-    positions = np.array([atom.position for atom in cell.atoms], dtype=np.float64).flatten()
+    positions = np.array(
+        [atom.position for atom in cell.atoms], dtype=np.float64
+    ).flatten()
     positions_ptr = positions.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     box_lengths = np.array([20.0, 20.0, 20.0], dtype=np.float64)
     box_lengths_ptr = box_lengths.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     forces_ctypes = np.zeros(n_atoms * 3, dtype=np.float64)
     forces_ptr = forces_ctypes.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    
+
     # 调用 ctypes
     ctypes_lib.calculate_eam_al1_forces(
         n_atoms, positions_ptr, box_lengths_ptr, forces_ptr
     )
-    
+
     # 调用 pybind11
     import thermoelasticsim._cpp_core as _cpp_core
+
     forces_pybind_array = np.zeros(n_atoms * 3, dtype=np.float64)
-    _cpp_core.calculate_eam_al1_forces(n_atoms, positions, box_lengths, forces_pybind_array)
-    
+    _cpp_core.calculate_eam_al1_forces(
+        n_atoms, positions, box_lengths, forces_pybind_array
+    )
+
     # 比较结果
     assert np.allclose(forces_pybind_array, forces_ctypes, atol=1e-12)

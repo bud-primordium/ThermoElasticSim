@@ -136,7 +136,7 @@ class ResponsePlotter:
         )
 
         # C11/C12对比图
-        C11_fitted = self._plot_elastic_constant_bar(
+        self._plot_elastic_constant_bar(
             ax3,
             c11_strains,
             c11_stresses,
@@ -145,7 +145,7 @@ class ResponsePlotter:
             self.literature_values["C11"],
         )
 
-        C12_fitted = self._plot_elastic_constant_bar(
+        self._plot_elastic_constant_bar(
             ax4,
             c12_strains,
             c12_stresses,

@@ -11,11 +11,12 @@ Berendsen NVT方案测试脚本
 创建时间: 2025-08-17
 """
 
-import numpy as np
-import sys
 import os
-import pytest
+import sys
 from unittest.mock import Mock
+
+import numpy as np
+import pytest
 
 # 添加项目路径
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,10 +24,9 @@ SRC = os.path.join(ROOT, "src")
 if SRC not in sys.path:
     sys.path.append(SRC)
 
-from thermoelasticsim.core.structure import Cell, Atom
-from thermoelasticsim.potentials.eam import EAMAl1Potential
+from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.md.schemes import BerendsenNVTScheme, create_berendsen_nvt_scheme
-from thermoelasticsim.utils.utils import KB_IN_EV
+from thermoelasticsim.potentials.eam import EAMAl1Potential
 
 
 class TestBerendsenNVT:

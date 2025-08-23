@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 对比 EAM 和 Lennard-Jones 势能曲线
 """
-import numpy as np
-import matplotlib.pyplot as plt
+
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 # --- 1. 定义势能函数 ---
 
