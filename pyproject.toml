@@ -41,9 +41,7 @@ dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "pytest-html>=4.1.1",
-    "black>=22.0",
-    "isort>=5.0",
-    "flake8>=5.0",
+    "ruff>=0.8.3",  # 替代black、isort、flake8的统一工具
     "pre-commit>=3.0",
 ]
 docs = [
@@ -76,11 +74,76 @@ python_functions = ["test_*"]
 norecursedirs = ["tests/archive"]
 addopts = "--tb=short"
 
-[tool.black]
+[tool.ruff]
+# ========== 基础配置 ==========
+# 每行最大长度，88是black的默认值，比PEP8的79更宽松
 line-length = 88
-target-version = ['py39']
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
+# 目标Python版本，py311表示Python 3.11
+# 这会影响一些语法检查，比如py310才有的match语句
+target-version = "py311"
+
+# ========== Lint配置 ==========
+[tool.ruff.lint]
+# 选择的规则集
+select = [
+    "E",     # pycodestyle错误（如E501行过长，E401多个import在一行）
+    "W",     # pycodestyle警告（如W291行尾空格）
+    "F",     # pyflakes（检测未使用的导入、变量等）
+    "I",     # isort（import排序）
+    "N",     # pep8-naming（命名规范，如类名用CamelCase）
+    "D",     # pydocstyle（文档字符串规范）
+    "UP",    # pyupgrade（自动升级代码到目标Python版本）
+    "B",     # flake8-bugbear（找出可能的bug和设计问题）
+    "SIM",   # flake8-simplify（简化代码建议）
+    "NPY",   # NumPy特定规则（如禁用过时的np.int）
+]
+
+# 忽略的规则
+ignore = [
+    "D100",  # 公共模块缺少docstring（很多__init__.py不需要）
+    "D104",  # 公共包缺少docstring
+    "D203",  # 类docstring前需要1个空行（与D211冲突）
+    "D213",  # 多行docstring的摘要应从第二行开始（与D212冲突）
+    "D400",  # 中文docstring标题不强制句号（文化适应性）
+    "E501",  # 行过长（让formatter处理，不要linter报错）
+    "E741",  # 不要使用l、O、I作为变量名（物理公式中常用）
+    "N803",  # 允许物理量参数使用大写（C、F、Q、W等标准记号）
+    "N806",  # 允许函数内大写变量（物理变量如E、F、T、P等）
+    "B007",  # 科学计算中循环变量未使用很常见（时间步迭代）
+    "NPY002", # 保持NumPy随机数兼容性，避免破坏重现性
+]
+
+# 每个文件的特殊规则
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "E402"]          # 测试文件不强制要求docstring，允许sys.path操作后导入
+"examples/*" = ["D", "E402"]        # 示例脚本可以放宽docstring要求，允许sys.path操作后导入
+"__init__.py" = ["F401"]            # __init__文件允许未使用的导入（用于重导出）
+"debug/*" = ["D", "E402"]           # 调试脚本不要求docstring，允许导入位置灵活
+# 物理量函数允许大写命名
+"src/thermoelasticsim/elastic/mechanics.py" = ["N802"]  # _F, _F_grad等物理函数
+"src/thermoelasticsim/md/propagators.py" = ["N802"]      # _initialize_Q_parameters等
+"src/thermoelasticsim/md/thermostats.py" = ["N802"]      # _calculate_Q等
+"tests/md/test_nose_hoover_nvt.py" = ["N802"]            # test_Q_parameter_effect
+"tests/potentials/test_eam.py" = ["N802"]                # cpp_F, cpp_F_grad
+"tests/potentials/test_potential_curves.py" = ["N802"]   # cpp_F
+
+# 文档字符串风格
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"  # 使用NumPy风格的docstring（适合科学计算）
+
+# Import排序配置
+[tool.ruff.lint.isort]
+known-first-party = ["thermoelasticsim"]  # 标识项目自己的包
+
+# ========== 格式化配置 ==========
+[tool.ruff.format]
+# 字符串引号风格：双引号（与black一致）
+quote-style = "double"
+# 缩进风格：空格
+indent-style = "space"
+# 尾随逗号：智能添加（有助于git diff）
+skip-magic-trailing-comma = false
+# 行结束符：自动检测（LF或CRLF）
+line-ending = "auto"
 

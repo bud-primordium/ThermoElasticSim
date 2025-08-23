@@ -1,0 +1,11 @@
+# Ruff code formatting commits
+# These commits only contain formatting changes and should be ignored by git blame
+
+# Initial ruff formatting
+987cfef style: apply ruff code formatter
+
+# Remove trailing whitespace
+81b22bd style: remove whitespace from blank lines (W293)
+
+# Auto-fix ruff linting issues  
+78dc53c style: auto-fix ruff linting issues
