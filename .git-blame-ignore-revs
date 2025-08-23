@@ -1,11 +1,27 @@
-# Ruff code formatting commits
-# These commits only contain formatting changes and should be ignored by git blame
+# Ruff code formatting and linting commits
+# These commits only contain formatting changes and linting fixes
+# and should be ignored by git blame for better code history
 
-# Initial ruff formatting
+# Ruff linting error fixes (B904, B008, F821)
+5453dce fix: resolve ruff linting errors (B904, B008, F821)
+
+# Auto-fix ruff linting issues
+78dc53c style: auto-fix ruff linting issues
+
+# Fix F841 unused variables (ruff-related)
+7f8e357 fix: resolve F841 unused variables
+
+# Apply ruff code formatter
 987cfef style: apply ruff code formatter
 
-# Remove trailing whitespace
+# Remove trailing whitespace (W293)
 81b22bd style: remove whitespace from blank lines (W293)
 
-# Auto-fix ruff linting issues  
-78dc53c style: auto-fix ruff linting issues
+# Earlier ruff formatting
+187278e style: apply ruff code formatter
+
+# Earlier auto-fix
+466056f style: auto-fix ruff linting issues
+
+# Fix all remaining ruff linting issues
+2c6b9a8 fix: resolve all remaining ruff linting issues
