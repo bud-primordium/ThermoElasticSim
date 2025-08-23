@@ -172,7 +172,7 @@ def calculate_c44_with_trajectory_recording(
                     # 基态点（已记录）
                     stress_value = base_stress[i, j]
                     converged = True
-                    energy = base_energy
+                    # energy = base_energy  # 基态能量，暂未使用
                 else:
                     # 形变点
                     deformed_cell = apply_lammps_box_shear(base_cell, direction, strain)

@@ -612,7 +612,7 @@ class AndersenThermostatPropagator(Propagator):
 
         # 按照研究报告的算法步骤：遵历所有原子
         step_collisions = 0
-        total_expected_collisions = system_collision_probability
+        # total_expected_collisions = system_collision_probability  # 用于监控，暂未使用
 
         for atom in cell.atoms:
             # 对每个原子，使用平均碰撞概率 = 系统碰撞概率 / 原子数

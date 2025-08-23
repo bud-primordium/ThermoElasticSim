@@ -237,8 +237,8 @@ class VelocityVerletIntegrator(Integrator):
         try:
             atoms = cell.atoms
 
-            # 记录初始状态用于错误恢复
-            initial_state = self._save_state(atoms)
+            # 记录初始状态用于错误恢复（暂时注释掉的错误恢复功能）
+            # initial_state = self._save_state(atoms)
 
             # 速度先更新半步
             self._update_velocities_half_step(atoms, dt)
@@ -252,11 +252,11 @@ class VelocityVerletIntegrator(Integrator):
             # 速度再更新半步
             self._update_velocities_half_step(atoms, dt)
 
-            # 监控能量守恒
-            current_time = len(self.time_history) * dt
-            energy_error = self.monitor_energy_conservation(
-                cell, potential, current_time
-            )
+            # 监控能量守恒（暂未启用错误恢复机制）
+            # current_time = len(self.time_history) * dt
+            # energy_error = self.monitor_energy_conservation(
+            #     cell, potential, current_time
+            # )
 
             # # 如果能量误差过大，回滚到初始状态
             # if energy_error > 1e-2:  # 可配置的阈值
@@ -429,11 +429,11 @@ class SymplecticIntegrator(Integrator):
             # 计算最终力
             potential.calculate_forces(cell)
 
-            # 监控能量守恒
-            current_time = len(self.time_history) * dt
-            energy_error = self.monitor_energy_conservation(
-                cell, potential, current_time
-            )
+            # 监控能量守恒（暂未启用错误恢复机制）
+            # current_time = len(self.time_history) * dt
+            # energy_error = self.monitor_energy_conservation(
+            #     cell, potential, current_time
+            # )
 
             if energy_error > 1e-2:
                 self._restore_state(atoms, initial_state)
@@ -467,133 +467,3 @@ class SymplecticIntegrator(Integrator):
             atom.position = pos
             atom.velocity = vel
             atom.force = force
-
-
-class RK4Integrator(Integrator):
-    """
-    优化的四阶Runge-Kutta (RK4) 积分器实现
-
-    虽然RK4不是辛积分器，但在某些情况下仍然有用：
-    1. 系统不是哈密顿系统时
-    2. 需要高精度的短期积分时
-    3. 处理强非线性问题时
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.name = "RK4"
-
-    def integrate(self, cell, potential, dt):
-        """执行RK4积分"""
-        try:
-            # 保存初始状态用于出错恢复
-            initial_state = self._get_state(cell.atoms)
-
-            # 执行RK4步骤
-            k1 = self._compute_derivatives(cell, potential)
-
-            self._advance_state(cell, k1, dt / 2)
-            k2 = self._compute_derivatives(cell, potential)
-
-            self._restore_state(cell.atoms, initial_state)
-            self._advance_state(cell, k2, dt / 2)
-            k3 = self._compute_derivatives(cell, potential)
-
-            self._restore_state(cell.atoms, initial_state)
-            self._advance_state(cell, k3, dt)
-            k4 = self._compute_derivatives(cell, potential)
-
-            # 最终更新
-            self._restore_state(cell.atoms, initial_state)
-            self._final_update(cell, k1, k2, k3, k4, dt)
-
-            # 更新力
-            potential.calculate_forces(cell)
-
-            # 监控能量守恒
-            current_time = len(self.time_history) * dt
-            energy_error = self.monitor_energy_conservation(
-                cell, potential, current_time
-            )
-
-            if energy_error > 1e-2:
-                self._restore_state(cell.atoms, initial_state)
-                raise RuntimeError("积分步骤因能量守恒违反而失败")
-
-        except Exception as e:
-            logger.error(f"RK4积分器错误: {str(e)}")
-            raise
-
-    def _get_state(self, atoms):
-        """获取当前状态"""
-        return [(atom.position.copy(), atom.velocity.copy()) for atom in atoms]
-
-    def _restore_state(self, atoms, state):
-        """恢复到保存的状态"""
-        for atom, (pos, vel) in zip(atoms, state, strict=False):
-            atom.position = pos
-            atom.velocity = vel
-
-    def _compute_derivatives(self, cell, potential):
-        """计算导数"""
-        potential.calculate_forces(cell)
-        derivatives = []
-        for atom in cell.atoms:
-            derivatives.append(
-                (
-                    atom.velocity.copy(),  # dr/dt = v
-                    atom.force.copy() / atom.mass,  # dv/dt = F/m
-                )
-            )
-        return derivatives
-
-    def _advance_state(self, cell, derivatives, dt):
-        """
-        基于导数前进系统状态
-
-        Parameters
-        ----------
-        cell : Cell
-            晶胞对象
-        derivatives : list
-            导数列表，每个元素包含位置和速度的导数
-        dt : float
-            时间步长
-        """
-        for atom, (dr_dt, dv_dt) in zip(cell.atoms, derivatives, strict=False):
-            atom.position += dr_dt * dt
-            atom.position = cell.apply_periodic_boundary(atom.position)
-            atom.velocity += dv_dt * dt
-
-    def _final_update(self, cell, k1, k2, k3, k4, dt):
-        """
-        使用RK4方法执行最终状态更新
-
-        采用经典的RK4权重组合:
-        y(t + dt) = y(t) + dt/6 * (k1 + 2k2 + 2k3 + k4)
-
-        Parameters
-        ----------
-        cell : Cell
-            晶胞对象
-        k1, k2, k3, k4 : list
-            四个RK步骤的导数
-        dt : float
-            时间步长
-        """
-        dt6 = dt / 6.0
-        for (
-            atom,
-            (dr_dt1, dv_dt1),
-            (dr_dt2, dv_dt2),
-            (dr_dt3, dv_dt3),
-            (dr_dt4, dv_dt4),
-        ) in zip(cell.atoms, k1, k2, k3, k4, strict=False):
-            # 更新位置
-            dr = dt6 * (dr_dt1 + 2 * dr_dt2 + 2 * dr_dt3 + dr_dt4)
-            atom.position += dr
-            atom.position = cell.apply_periodic_boundary(atom.position)
-
-            # 更新速度
-            dv = dt6 * (dv_dt1 + 2 * dv_dt2 + 2 * dv_dt3 + dv_dt4)
-            atom.velocity += dv

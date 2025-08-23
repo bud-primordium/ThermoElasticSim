@@ -32,14 +32,14 @@
 创建时间：2025年8月
 """
 
-import numpy as np
-import time
-import sys
-import os
 import logging
+import os
+import sys
+import time
 from datetime import datetime
+
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
+import numpy as np
 import pandas as pd
 
 # 设置中文字体避免乱码
@@ -52,16 +52,18 @@ SRC = os.path.join(ROOT, "src")
 if SRC not in sys.path:
     sys.path.append(SRC)
 
-from thermoelasticsim.core.structure import Cell, Atom
-from thermoelasticsim.potentials.eam import EAMAl1Potential
+from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.elastic.deformation_method.zero_temp import (
     StructureRelaxer,
     ZeroTempDeformationCalculator,
 )
-from thermoelasticsim.utils.utils import EV_TO_GPA
-from thermoelasticsim.visualization.elastic.trajectory_recorder import ElasticTrajectoryRecorder
-from thermoelasticsim.visualization.elastic.response_plotter import ResponsePlotter
+from thermoelasticsim.potentials.eam import EAMAl1Potential
 from thermoelasticsim.utils.modern_visualization import ModernVisualizer
+from thermoelasticsim.utils.utils import EV_TO_GPA
+from thermoelasticsim.visualization.elastic.response_plotter import ResponsePlotter
+from thermoelasticsim.visualization.elastic.trajectory_recorder import (
+    ElasticTrajectoryRecorder,
+)
 
 
 def setup_logging(test_name: str = "c44_final_v7"):
@@ -216,10 +218,18 @@ def plot_stress_strain_response(
         converged_states = result["converged_states"]
 
         # 分别绘制收敛和不收敛的点
-        converged_strains = [s for s, c in zip(strains, converged_states) if c]
-        converged_stresses = [st for st, c in zip(stresses, converged_states) if c]
-        failed_strains = [s for s, c in zip(strains, converged_states) if not c]
-        failed_stresses = [st for st, c in zip(stresses, converged_states) if not c]
+        converged_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if c
+        ]
+        converged_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if c
+        ]
+        failed_strains = [
+            s for s, c in zip(strains, converged_states, strict=False) if not c
+        ]
+        failed_stresses = [
+            st for st, c in zip(stresses, converged_states, strict=False) if not c
+        ]
 
         # 收敛点：实心符号
         if converged_strains:
@@ -326,7 +336,7 @@ def plot_stress_strain_response(
     )
 
     # 根据收敛质量调整透明度
-    for bar, quality in zip(bars, convergence_quality):
+    for bar, quality in zip(bars, convergence_quality, strict=False):
         bar.set_alpha(0.3 + 0.7 * quality)  # 收敛质量高的更不透明
 
     # 文献值参考线
@@ -340,7 +350,7 @@ def plot_stress_strain_response(
 
     # 添加数值标签和收敛质量
     for i, (bar, value, quality) in enumerate(
-        zip(bars, elastic_constants, convergence_quality)
+        zip(bars, elastic_constants, convergence_quality, strict=False)
     ):
         height = bar.get_height()
         ax_summary.text(
@@ -421,43 +431,58 @@ def calculate_c44_lammps_method(
     cell = create_aluminum_fcc(supercell_size)
 
     # 初始化轨迹记录器
-    trajectory_file = os.path.join(run_dir, f"c44_trajectory_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.h5")
-    recorder = ElasticTrajectoryRecorder(
-        trajectory_file, 
-        "C44", 
-        "shear_lammps", 
-        supercell_size
+    trajectory_file = os.path.join(
+        run_dir,
+        f"c44_trajectory_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.h5",
     )
-    
+    recorder = ElasticTrajectoryRecorder(
+        trajectory_file, "C44", "shear_lammps", supercell_size
+    )
+
     # 应变点定义
-    strain_points_c44 = np.array([
-        -0.004, -0.003, -0.002, -0.0015, -0.001, -0.0005, 
-        0.0, 0.0005, 0.001, 0.0015, 0.002, 0.003, 0.004
-    ])
-    
+    strain_points_c44 = np.array(
+        [
+            -0.004,
+            -0.003,
+            -0.002,
+            -0.0015,
+            -0.001,
+            -0.0005,
+            0.0,
+            0.0005,
+            0.001,
+            0.0015,
+            0.002,
+            0.003,
+            0.004,
+        ]
+    )
+
     # 初始化轨迹记录
     recorder.initialize(cell, potential, strain_points_c44.tolist())
 
     # 基态弛豫 - 使用等比例晶格弛豫（更快且保持对称性）
     base_cell = cell.copy()
-    
+
     # 创建支持轨迹记录的relaxer
     enhanced_relaxer = StructureRelaxer(
         optimizer_type=relaxer.optimizer_type,
         optimizer_params=relaxer.optimizer_params,
         supercell_dims=relaxer.supercell_dims,
-        trajectory_recorder=recorder
+        trajectory_recorder=recorder,
     )
-    
+
     enhanced_relaxer.uniform_lattice_relax(base_cell, potential)
     base_stress = base_cell.calculate_stress_tensor(potential)
-    
+
     # 记录基态
     recorder.record_deformation_step(
-        base_cell, 0.0, "base_state", 
-        stress_tensor=base_stress, 
+        base_cell,
+        0.0,
+        "base_state",
+        stress_tensor=base_stress,
         energy=potential.calculate_energy(base_cell),
-        converged=True
+        converged=True,
     )
 
     # 基态诊断
@@ -479,9 +504,11 @@ def calculate_c44_lammps_method(
     detailed_results = []
     csv_data_all = []  # 存储所有CSV数据
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # 暂未使用
 
-    for direction, name, (i, j) in zip(directions, direction_names, stress_indices):
+    for direction, name, (i, j) in zip(
+        directions, direction_names, stress_indices, strict=False
+    ):
         logger.debug(f"开始计算 {name} 方向，共{len(strain_points_c44)}个应变点")
 
         strains = []
@@ -492,13 +519,13 @@ def calculate_c44_lammps_method(
         for strain in strain_points_c44:
             # 设置轨迹记录器当前应变
             recorder.set_current_strain(strain)
-            
+
             if strain == 0.0:
                 # 基态已经记录过了，跳过
                 stress_value = base_stress[i, j] * EV_TO_GPA
                 converged = True
                 energy = potential.calculate_energy(base_cell)
-                
+
                 csv_row = {
                     "method": "C44_shear",
                     "direction": name.split("(")[0],
@@ -511,17 +538,17 @@ def calculate_c44_lammps_method(
             else:
                 # 施加形变
                 deformed_cell = apply_lammps_box_shear(base_cell, direction, strain)
-                
+
                 # 内部弛豫 - enhanced_relaxer会自动记录轨迹
                 converged = enhanced_relaxer.internal_relax(deformed_cell, potential)
-                
+
                 # 获取最终状态
                 energy_after = potential.calculate_energy(deformed_cell)
                 stress_after = deformed_cell.calculate_stress_tensor(potential)
                 stress_value = stress_after[i, j] * EV_TO_GPA
-                
+
                 csv_row = {
-                    "method": "C44_shear", 
+                    "method": "C44_shear",
                     "direction": name.split("(")[0],
                     "strain": strain,
                     "stress_GPa": stress_value,
@@ -544,10 +571,10 @@ def calculate_c44_lammps_method(
 
         # 只用收敛点计算弹性常数
         converged_strains = np.array(
-            [s for s, c in zip(strains, converged_states) if c]
+            [s for s, c in zip(strains, converged_states, strict=False) if c]
         )
         converged_stresses = np.array(
-            [st for st, c in zip(stresses, converged_states) if c]
+            [st for st, c in zip(stresses, converged_states, strict=False) if c]
         )
 
         if len(converged_strains) >= 2:
@@ -629,50 +656,61 @@ def calculate_c44_lammps_method(
     plot_filename = plot_stress_strain_response(
         supercell_size, detailed_results, strain_magnitude, run_dir
     )
-    
+
     # 完成轨迹记录
     trajectory_path = recorder.finalize()
-    
+
     # 生成轨迹动画
     try:
         visualizer = ModernVisualizer()
-        
+
         # 生成交互式HTML动画
-        animation_html = os.path.join(run_dir, f"c44_trajectory_animation_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.html")
+        animation_html = os.path.join(
+            run_dir,
+            f"c44_trajectory_animation_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.html",
+        )
         visualizer.create_trajectory_animation_plotly(
             trajectory_path, animation_html, skip=2, duration=500
         )
-        
+
         # 生成GIF动画（较快）
-        animation_gif = os.path.join(run_dir, f"c44_trajectory_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.gif")
+        animation_gif = os.path.join(
+            run_dir,
+            f"c44_trajectory_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.gif",
+        )
         visualizer.create_trajectory_video(
             trajectory_path, animation_gif, fps=5, skip=3, dpi=80, figsize=(8, 6)
         )
-        
-        logger.info(f"轨迹动画生成完成: {os.path.basename(animation_html)}, {os.path.basename(animation_gif)}")
+
+        logger.info(
+            f"轨迹动画生成完成: {os.path.basename(animation_html)}, {os.path.basename(animation_gif)}"
+        )
         print(f"  🎬 轨迹动画: {os.path.basename(animation_html)}")
         print(f"  📱 轨迹GIF: {os.path.basename(animation_gif)}")
-        
+
         animation_files = {
             "html": os.path.basename(animation_html),
-            "gif": os.path.basename(animation_gif)
+            "gif": os.path.basename(animation_gif),
         }
-        
+
     except Exception as e:
         logger.warning(f"动画生成失败: {e}")
         print(f"  ⚠️ 动画生成失败: {e}")
         animation_files = {}
-    
+
     # 使用新的ResponsePlotter生成增强的拟合图（替换原有图）
     try:
         plotter = ResponsePlotter()
-        enhanced_plot = os.path.join(run_dir, f"c44_enhanced_response_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.png")
+        enhanced_plot = os.path.join(
+            run_dir,
+            f"c44_enhanced_response_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.png",
+        )
         enhanced_filename = plotter.plot_shear_response(
             detailed_results, supercell_size, enhanced_plot
         )
         logger.info(f"增强拟合图生成完成: {enhanced_filename}")
         print(f"  📈 增强拟合图: {enhanced_filename}")
-        
+
         # 确保删除原有的重复图（使用原始文件名）
         original_plot_path = os.path.join(run_dir, plot_filename)
         if os.path.exists(original_plot_path) and original_plot_path != enhanced_plot:
@@ -682,9 +720,9 @@ def calculate_c44_lammps_method(
                 print(f"  🗑️ 删除重复图: {os.path.basename(original_plot_path)}")
             except Exception as e:
                 logger.warning(f"删除重复图失败: {e}")
-        
+
         plot_filename = os.path.basename(enhanced_filename)  # 统一使用增强图
-        
+
     except Exception as e:
         logger.warning(f"增强拟合图生成失败: {e}")
         enhanced_filename = plot_filename
@@ -726,10 +764,18 @@ def plot_c12_stress_strain_response(supercell_size, csv_data, run_dir):
     converged_states = [row["converged"] for row in csv_data]
 
     # 分别绘制收敛和不收敛的点
-    converged_strains = [s for s, c in zip(strains, converged_states) if c]
-    converged_stresses = [st for st, c in zip(stresses, converged_states) if c]
-    failed_strains = [s for s, c in zip(strains, converged_states) if not c]
-    failed_stresses = [st for st, c in zip(stresses, converged_states) if not c]
+    converged_strains = [
+        s for s, c in zip(strains, converged_states, strict=False) if c
+    ]
+    converged_stresses = [
+        st for st, c in zip(stresses, converged_states, strict=False) if c
+    ]
+    failed_strains = [
+        s for s, c in zip(strains, converged_states, strict=False) if not c
+    ]
+    failed_stresses = [
+        st for st, c in zip(stresses, converged_states, strict=False) if not c
+    ]
 
     # 左图：应力-应变关系
     if converged_strains:
@@ -886,10 +932,18 @@ def plot_c11_stress_strain_response(supercell_size, csv_data, run_dir):
     converged_states = [row["converged"] for row in csv_data]
 
     # 分别绘制收敛和不收敛的点
-    converged_strains = [s for s, c in zip(strains, converged_states) if c]
-    converged_stresses = [st for st, c in zip(stresses, converged_states) if c]
-    failed_strains = [s for s, c in zip(strains, converged_states) if not c]
-    failed_stresses = [st for st, c in zip(stresses, converged_states) if not c]
+    converged_strains = [
+        s for s, c in zip(strains, converged_states, strict=False) if c
+    ]
+    converged_stresses = [
+        st for st, c in zip(stresses, converged_states, strict=False) if c
+    ]
+    failed_strains = [
+        s for s, c in zip(strains, converged_states, strict=False) if not c
+    ]
+    failed_stresses = [
+        st for st, c in zip(stresses, converged_states, strict=False) if not c
+    ]
 
     # 左图：应力-应变关系
     if converged_strains:
@@ -1037,11 +1091,11 @@ def plot_c11_stress_strain_response(supercell_size, csv_data, run_dir):
 def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_dir):
     """
     高效联合计算C11/C12：一次单轴应变同时得到C11和C12
-    
+
     原理：施加xx应变，测量：
     - σxx → C11 (同轴应力)
     - σyy, σzz → C12 (横向应力)
-    
+
     这样可以大大提高数据利用效率
     """
     logger = logging.getLogger(__name__)
@@ -1049,7 +1103,7 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
     # 创建系统
     cell = create_aluminum_fcc(supercell_size)
 
-    print(f"\n高效联合计算C11/C12 - 一次应变双重收获")
+    print("\n高效联合计算C11/C12 - 一次应变双重收获")
     print(
         f"系统: {supercell_size[0]}×{supercell_size[1]}×{supercell_size[2]} ({cell.num_atoms}原子)"
     )
@@ -1059,7 +1113,7 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
     relaxer.uniform_lattice_relax(base_cell, potential)
     base_energy = potential.calculate_energy(base_cell)
 
-    logger.info(f"C11/C12联合基态诊断: 系统设置完成")
+    logger.info("C11/C12联合基态诊断: 系统设置完成")
 
     # 相同的应变点（与C44一致）
     strain_points = np.array(
@@ -1086,8 +1140,8 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
             stress_xx = total_stress[0, 0]
             # C12: xx应变 → yy应力 (或zz应力，应该相同)
             stress_yy = total_stress[1, 1]
-            stress_zz = total_stress[2, 2]
-            
+            # stress_zz = total_stress[2, 2]  # 已在记录中直接使用total_stress[2,2]
+
             converged = True
             energy = base_energy
 
@@ -1095,7 +1149,7 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
             c11_row = {
                 "calculation_method": "C11_uniaxial_combined",
                 "applied_strain_direction": "xx",
-                "measured_stress_direction": "xx", 
+                "measured_stress_direction": "xx",
                 "applied_strain": strain,
                 "measured_stress_GPa": stress_xx,
                 "stress_total_xx_GPa": total_stress[0, 0],
@@ -1109,7 +1163,7 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
                 "is_reference_state": True,
                 "optimization_status": "Base state (uniform lattice relaxed)",
             }
-            
+
             # C12数据记录 - 使用yy应力
             c12_row = {
                 "calculation_method": "C12_cross_combined",
@@ -1174,9 +1228,9 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
                 "energy_change_eV": energy_after - energy_before,
                 "optimization_converged": converged,
                 "is_reference_state": False,
-                "optimization_status": f'Internal relax: {"SUCCESS" if converged else "FAILED"}',
+                "optimization_status": f"Internal relax: {'SUCCESS' if converged else 'FAILED'}",
             }
-            
+
             # C12数据记录
             c12_row = {
                 "calculation_method": "C12_cross_combined",
@@ -1195,12 +1249,12 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
                 "energy_change_eV": energy_after - energy_before,
                 "optimization_converged": converged,
                 "is_reference_state": False,
-                "optimization_status": f'Internal relax: {"SUCCESS" if converged else "FAILED"}',
+                "optimization_status": f"Internal relax: {'SUCCESS' if converged else 'FAILED'}",
             }
 
         c11_data_all.append(c11_row)
         c12_data_all.append(c12_row)
-        
+
         logger.debug(
             f"  应变={strain:+.4f}: C11应力={stress_xx:.4f} GPa, C12应力={stress_yy:.4f} GPa, 收敛={converged}"
         )
@@ -1208,7 +1262,7 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
     # 保存联合数据
     csv_filename = f"c11_c12_combined_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.csv"
     csv_filepath = os.path.join(run_dir, csv_filename)
-    
+
     # 合并C11和C12数据
     combined_data = c11_data_all + c12_data_all
     df = pd.DataFrame(combined_data)
@@ -1239,10 +1293,10 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
         C12_fitted = 0.0
 
     print(
-        f"  C11拟合结果 = {C11_fitted:.1f} GPa (文献: 110, 误差: {(C11_fitted/110-1)*100:+.1f}%)"
+        f"  C11拟合结果 = {C11_fitted:.1f} GPa (文献: 110, 误差: {(C11_fitted / 110 - 1) * 100:+.1f}%)"
     )
     print(
-        f"  C12拟合结果 = {C12_fitted:.1f} GPa (文献: 61, 误差: {(C12_fitted/61-1)*100:+.1f}%)"
+        f"  C12拟合结果 = {C12_fitted:.1f} GPa (文献: 61, 误差: {(C12_fitted / 61 - 1) * 100:+.1f}%)"
     )
 
     # 生成联合可视化图
@@ -1256,8 +1310,12 @@ def calculate_c11_c12_combined_method(supercell_size, potential, relaxer, run_di
         "success": C11_fitted > 0 and C12_fitted > 0,
         "csv_file": csv_filename,
         "plot_file": plot_filename,
-        "c11_converged_count": sum(1 for row in c11_data_all if row["optimization_converged"]),
-        "c12_converged_count": sum(1 for row in c12_data_all if row["optimization_converged"]),
+        "c11_converged_count": sum(
+            1 for row in c11_data_all if row["optimization_converged"]
+        ),
+        "c12_converged_count": sum(
+            1 for row in c12_data_all if row["optimization_converged"]
+        ),
         "total_count": len(c11_data_all),
         "csv_data": combined_data,
     }
@@ -1268,23 +1326,31 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
     生成C11/C12联合应力-应变响应关系图
     """
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
-    
+
     # 准备C11数据
     c11_strains = [row["applied_strain"] for row in c11_data]
     c11_stresses = [row["measured_stress_GPa"] for row in c11_data]
     c11_converged_states = [row["optimization_converged"] for row in c11_data]
-    
+
     # 准备C12数据
     c12_strains = [row["applied_strain"] for row in c12_data]
     c12_stresses = [row["measured_stress_GPa"] for row in c12_data]
     c12_converged_states = [row["optimization_converged"] for row in c12_data]
-    
+
     # 分别绘制收敛和不收敛的点
     # C11图
-    c11_converged_strains = [s for s, c in zip(c11_strains, c11_converged_states) if c]
-    c11_converged_stresses = [st for st, c in zip(c11_stresses, c11_converged_states) if c]
-    c11_failed_strains = [s for s, c in zip(c11_strains, c11_converged_states) if not c]
-    c11_failed_stresses = [st for st, c in zip(c11_stresses, c11_converged_states) if not c]
+    c11_converged_strains = [
+        s for s, c in zip(c11_strains, c11_converged_states, strict=False) if c
+    ]
+    c11_converged_stresses = [
+        st for st, c in zip(c11_stresses, c11_converged_states, strict=False) if c
+    ]
+    c11_failed_strains = [
+        s for s, c in zip(c11_strains, c11_converged_states, strict=False) if not c
+    ]
+    c11_failed_stresses = [
+        st for st, c in zip(c11_stresses, c11_converged_states, strict=False) if not c
+    ]
 
     if c11_converged_strains:
         ax1.scatter(
@@ -1326,11 +1392,18 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
 
     if len(c11_converged_strains) >= 2:
         coeffs = np.polyfit(c11_converged_strains, c11_converged_stresses, 1)
-        fit_strains = np.linspace(min(c11_converged_strains), max(c11_converged_strains), 100)
+        fit_strains = np.linspace(
+            min(c11_converged_strains), max(c11_converged_strains), 100
+        )
         fit_stresses = np.polyval(coeffs, fit_strains)
         ax1.plot(
-            fit_strains, fit_stresses, "--", color="#2E86C1", alpha=0.7, linewidth=2,
-            label=f"拟合斜率 ({coeffs[0]:.1f} GPa)"
+            fit_strains,
+            fit_stresses,
+            "--",
+            color="#2E86C1",
+            alpha=0.7,
+            linewidth=2,
+            label=f"拟合斜率 ({coeffs[0]:.1f} GPa)",
         )
         C11_fitted = coeffs[0]
     else:
@@ -1339,17 +1412,25 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
     ax1.set_xlabel("单轴应变 εxx", fontsize=12)
     ax1.set_ylabel("同轴应力 σxx (GPa)", fontsize=12)
     ax1.set_title(
-        f"C11: xx应变→xx应力",
+        "C11: xx应变→xx应力",
         fontsize=13,
     )
     ax1.grid(True, alpha=0.3)
     ax1.legend(fontsize=10, loc="best")
 
     # C12图
-    c12_converged_strains = [s for s, c in zip(c12_strains, c12_converged_states) if c]
-    c12_converged_stresses = [st for st, c in zip(c12_stresses, c12_converged_states) if c]
-    c12_failed_strains = [s for s, c in zip(c12_strains, c12_converged_states) if not c]
-    c12_failed_stresses = [st for st, c in zip(c12_stresses, c12_converged_states) if not c]
+    c12_converged_strains = [
+        s for s, c in zip(c12_strains, c12_converged_states, strict=False) if c
+    ]
+    c12_converged_stresses = [
+        st for st, c in zip(c12_stresses, c12_converged_states, strict=False) if c
+    ]
+    c12_failed_strains = [
+        s for s, c in zip(c12_strains, c12_converged_states, strict=False) if not c
+    ]
+    c12_failed_stresses = [
+        st for st, c in zip(c12_stresses, c12_converged_states, strict=False) if not c
+    ]
 
     if c12_converged_strains:
         ax2.scatter(
@@ -1390,11 +1471,18 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
 
     if len(c12_converged_strains) >= 2:
         coeffs = np.polyfit(c12_converged_strains, c12_converged_stresses, 1)
-        fit_strains = np.linspace(min(c12_converged_strains), max(c12_converged_strains), 100)
+        fit_strains = np.linspace(
+            min(c12_converged_strains), max(c12_converged_strains), 100
+        )
         fit_stresses = np.polyval(coeffs, fit_strains)
         ax2.plot(
-            fit_strains, fit_stresses, "--", color="#E74C3C", alpha=0.7, linewidth=2,
-            label=f"拟合斜率 ({coeffs[0]:.1f} GPa)"
+            fit_strains,
+            fit_stresses,
+            "--",
+            color="#E74C3C",
+            alpha=0.7,
+            linewidth=2,
+            label=f"拟合斜率 ({coeffs[0]:.1f} GPa)",
         )
         C12_fitted = coeffs[0]
     else:
@@ -1403,7 +1491,7 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
     ax2.set_xlabel("单轴应变 εxx", fontsize=12)
     ax2.set_ylabel("横向应力 σyy (GPa)", fontsize=12)
     ax2.set_title(
-        f"C12: xx应变→yy应力",
+        "C12: xx应变→yy应力",
         fontsize=13,
     )
     ax2.grid(True, alpha=0.3)
@@ -1411,7 +1499,7 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
 
     # C11单独对比图
     convergence_rate_c11 = sum(c11_converged_states) / len(c11_converged_states)
-    
+
     bar1 = ax3.bar(
         ["C11"],
         [C11_fitted],
@@ -1470,14 +1558,14 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
         )
 
     ax3.set_ylabel("弹性常数 (GPa)", fontsize=12)
-    ax3.set_title(f"C11计算结果", fontsize=13)
+    ax3.set_title("C11计算结果", fontsize=13)
     ax3.grid(True, alpha=0.3, axis="y")
     ax3.legend(fontsize=10)
     ax3.set_ylim(0, max(C11_fitted if C11_fitted > 0 else 0, literature_C11) * 1.3)
 
     # C12单独对比图
     convergence_rate_c12 = sum(c12_converged_states) / len(c12_converged_states)
-    
+
     bar2 = ax4.bar(
         ["C12"],
         [C12_fitted],
@@ -1536,12 +1624,16 @@ def plot_c11_c12_combined_response(supercell_size, c11_data, c12_data, run_dir):
         )
 
     ax4.set_ylabel("弹性常数 (GPa)", fontsize=12)
-    ax4.set_title(f"C12计算结果", fontsize=13)
+    ax4.set_title("C12计算结果", fontsize=13)
     ax4.grid(True, alpha=0.3, axis="y")
     ax4.legend(fontsize=10)
     ax4.set_ylim(0, max(C12_fitted if C12_fitted > 0 else 0, literature_C12) * 1.3)
 
-    plt.suptitle(f"C11/C12联合计算 - {supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}系统", fontsize=16, weight="bold")
+    plt.suptitle(
+        f"C11/C12联合计算 - {supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}系统",
+        fontsize=16,
+        weight="bold",
+    )
     plt.tight_layout()
 
     # 保存图片到运行目录
@@ -1593,7 +1685,7 @@ def calculate_c12_method(supercell_size, potential, relaxer, run_dir):
     # 创建系统
     cell = create_aluminum_fcc(supercell_size)
 
-    print(f"\n计算C12 - yy应变→xx应力")
+    print("\n计算C12 - yy应变→xx应力")
     print(
         f"系统: {supercell_size[0]}×{supercell_size[1]}×{supercell_size[2]} ({cell.num_atoms}原子)"
     )
@@ -1603,7 +1695,7 @@ def calculate_c12_method(supercell_size, potential, relaxer, run_dir):
     relaxer.uniform_lattice_relax(base_cell, potential)
     base_energy = potential.calculate_energy(base_cell)
 
-    logger.info(f"C12基态诊断: 系统设置完成")
+    logger.info("C12基态诊断: 系统设置完成")
 
     # 相同的应变点（与C11一致）
     strain_points = np.array(
@@ -1623,8 +1715,8 @@ def calculate_c12_method(supercell_size, potential, relaxer, run_dir):
                 base_cell, potential
             )
 
-            kinetic_stress = stress_components["kinetic"] * EV_TO_GPA
-            virial_stress = stress_components["virial"] * EV_TO_GPA
+            # kinetic_stress = stress_components["kinetic"] * EV_TO_GPA  # 暂未使用
+            # virial_stress = stress_components["virial"] * EV_TO_GPA    # 暂未使用
             total_stress = stress_components["total"] * EV_TO_GPA
             finite_diff_stress = stress_components["finite_diff"] * EV_TO_GPA
 
@@ -1685,8 +1777,8 @@ def calculate_c12_method(supercell_size, potential, relaxer, run_dir):
                 deformed_cell, potential
             )
 
-            kinetic_stress = stress_components["kinetic"] * EV_TO_GPA
-            virial_stress = stress_components["virial"] * EV_TO_GPA
+            # kinetic_stress = stress_components["kinetic"] * EV_TO_GPA  # 暂未使用
+            # virial_stress = stress_components["virial"] * EV_TO_GPA    # 暂未使用
             total_stress = stress_components["total"] * EV_TO_GPA
             finite_diff_stress = stress_components["finite_diff"] * EV_TO_GPA
 
@@ -1724,7 +1816,7 @@ def calculate_c12_method(supercell_size, potential, relaxer, run_dir):
                 "energy_change_eV": energy_after - energy_before,
                 "converged": converged,
                 "base_state": False,
-                "optimization_details": f'Internal relax: {"SUCCESS" if converged else "FAILED"}',
+                "optimization_details": f"Internal relax: {'SUCCESS' if converged else 'FAILED'}",
             }
 
         csv_data_all.append(csv_row)
@@ -1754,7 +1846,7 @@ def calculate_c12_method(supercell_size, potential, relaxer, run_dir):
         C12_fitted = 0.0
 
     print(
-        f"  C12拟合结果 = {C12_fitted:.1f} GPa (文献: 61, 误差: {(C12_fitted/61-1)*100:+.1f}%)"
+        f"  C12拟合结果 = {C12_fitted:.1f} GPa (文献: 61, 误差: {(C12_fitted / 61 - 1) * 100:+.1f}%)"
     )
 
     # 生成C12应力-应变图
@@ -1782,7 +1874,7 @@ def calculate_c11_c12_standard_method(supercell_size, potential, run_dir):
     # 创建系统
     cell = create_aluminum_fcc(supercell_size)
 
-    print(f"\n计算C11/C12对比 - 标准方法")
+    print("\n计算C11/C12对比 - 标准方法")
     print(
         f"系统: {supercell_size[0]}×{supercell_size[1]}×{supercell_size[2]} ({cell.num_atoms}原子)"
     )
@@ -1806,9 +1898,9 @@ def calculate_c11_c12_standard_method(supercell_size, potential, run_dir):
         supercell_dims=supercell_size,
     )
 
-    logger.info(f"开始C11/C12标准计算")
+    logger.info("开始C11/C12标准计算")
     logger.info(
-        f"应变范围: ±{calculator.delta*calculator.num_steps*100:.1f}% ({2*calculator.num_steps+1}个点)"
+        f"应变范围: ±{calculator.delta * calculator.num_steps * 100:.1f}% ({2 * calculator.num_steps + 1}个点)"
     )
 
     start_time = time.time()
@@ -1865,13 +1957,13 @@ def calculate_c11_c12_standard_method(supercell_size, potential, run_dir):
         logger.info(f"💾 C11/C12数据已保存: {csv_filename}")
 
         print(
-            f"  C11 = {C11:7.1f} GPa (文献: {lit_C11:.0f}, 误差: {(C11/lit_C11-1)*100:+.1f}%)"
+            f"  C11 = {C11:7.1f} GPa (文献: {lit_C11:.0f}, 误差: {(C11 / lit_C11 - 1) * 100:+.1f}%)"
         )
         print(
-            f"  C12 = {C12:7.1f} GPa (文献: {lit_C12:.0f}, 误差: {(C12/lit_C12-1)*100:+.1f}%)"
+            f"  C12 = {C12:7.1f} GPa (文献: {lit_C12:.0f}, 误差: {(C12 / lit_C12 - 1) * 100:+.1f}%)"
         )
         print(
-            f"  C44 = {C44:7.1f} GPa (文献: {lit_C44:.0f}, 误差: {(C44/lit_C44-1)*100:+.1f}%)"
+            f"  C44 = {C44:7.1f} GPa (文献: {lit_C44:.0f}, 误差: {(C44 / lit_C44 - 1) * 100:+.1f}%)"
         )
         print(f"  R² = {r2_score:.4f}")
         print(f"  📋 标准方法CSV: {csv_filename}")
@@ -1897,9 +1989,9 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
     """测试特定尺寸系统的C44计算"""
     nx, ny, nz = supercell_size
 
-    print(f"\n{'='*80}")
-    print(f"测试 {nx}×{ny}×{nz} 系统 ({nx*ny*nz*4} 原子) - LAMMPS方法")
-    print(f"{'='*80}")
+    print(f"\n{'=' * 80}")
+    print(f"测试 {nx}×{ny}×{nz} 系统 ({nx * ny * nz * 4} 原子) - LAMMPS方法")
+    print(f"{'=' * 80}")
 
     logger = logging.getLogger(__name__)
     logger.info(f"开始测试 {nx}×{ny}×{nz} 系统")
@@ -1919,9 +2011,9 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
         supercell_dims=supercell_size,
     )
 
-    print(f"配置参数:")
-    print(f"  应变幅度: {strain_magnitude*100:.3f}%")
-    print(f"  基态弛豫: 等比例晶格优化 (uniform_lattice_relax)")
+    print("配置参数:")
+    print(f"  应变幅度: {strain_magnitude * 100:.3f}%")
+    print("  基态弛豫: 等比例晶格优化 (uniform_lattice_relax)")
     print(
         f"  收敛条件: ftol={relaxer.optimizer_params['ftol']}, gtol={relaxer.optimizer_params['gtol']} (改进的稳定参数)"
     )
@@ -1930,7 +2022,7 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
     print(f"  函数评估: {relaxer.optimizer_params['maxfun']}")
 
     # 日志记录优化器参数传递
-    logger.info(f"优化器参数传递验证:")
+    logger.info("优化器参数传递验证:")
     logger.info(f"  传递的参数: {relaxer.optimizer_params}")
     logger.info(f"  优化器类型: {relaxer.optimizer_type}")
 
@@ -1950,12 +2042,12 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
         c44_result["time"] = calc_time
 
         # 3. 合并数据和统计对比
-        print(f"\n📊 收敛率对比:")
+        print("\n📊 收敛率对比:")
         print(
-            f"  C11单轴变形(xx→xx): {c11_c12_result['c11_converged_count']}/{c11_c12_result['total_count']} = {c11_c12_result['c11_converged_count']/c11_c12_result['total_count']:.1%}"
+            f"  C11单轴变形(xx→xx): {c11_c12_result['c11_converged_count']}/{c11_c12_result['total_count']} = {c11_c12_result['c11_converged_count'] / c11_c12_result['total_count']:.1%}"
         )
         print(
-            f"  C12交叉变形(xx→yy): {c11_c12_result['c12_converged_count']}/{c11_c12_result['total_count']} = {c11_c12_result['c12_converged_count']/c11_c12_result['total_count']:.1%}"
+            f"  C12交叉变形(xx→yy): {c11_c12_result['c12_converged_count']}/{c11_c12_result['total_count']} = {c11_c12_result['c12_converged_count'] / c11_c12_result['total_count']:.1%}"
         )
 
         total_c44_converged = sum(
@@ -1965,11 +2057,11 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
             result["total_count"] for result in c44_result["detailed_results"]
         )
         print(
-            f"  C44剪切变形(shear): {total_c44_converged}/{total_c44_points} = {total_c44_converged/total_c44_points:.1%}"
+            f"  C44剪切变形(shear): {total_c44_converged}/{total_c44_points} = {total_c44_converged / total_c44_points:.1%}"
         )
 
         # 合并CSV数据
-        print(f"\n📋 合并详细数据到统一CSV...")
+        print("\n📋 合并详细数据到统一CSV...")
         combined_csv_filename = f"combined_elastic_data_{supercell_size[0]}x{supercell_size[1]}x{supercell_size[2]}.csv"
         combined_csv_path = os.path.join(run_dir, combined_csv_filename)
 
@@ -2003,35 +2095,39 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
         print(f"  📋 合并弹性常数CSV: {combined_csv_filename}")
         print(f"  📊 C11/C12联合可视化: {c11_c12_result['plot_file']}")
         print(f"  📊 C44可视化: {c44_result['plot_file']}")
-        if 'trajectory_file' in c44_result:
+        if "trajectory_file" in c44_result:
             print(f"  🗂️ C44轨迹数据: {c44_result['trajectory_file']}")
-        if 'animation_files' in c44_result and c44_result['animation_files']:
-            animation_files = c44_result['animation_files']
-            if 'html' in animation_files:
+        if "animation_files" in c44_result and c44_result["animation_files"]:
+            animation_files = c44_result["animation_files"]
+            if "html" in animation_files:
                 print(f"  🎬 交互式动画: {animation_files['html']}")
-            if 'gif' in animation_files:
+            if "gif" in animation_files:
                 print(f"  📱 轨迹GIF: {animation_files['gif']}")
 
         results = c44_result
 
         # 输出结果
-        print(f"\n🎯 弹性常数结果:")
-        print(f"  C11 = {c11_c12_result['C11']:7.1f} GPa (文献: 110, 误差: {(c11_c12_result['C11']/110-1)*100:+.1f}%)")
-        print(f"  C12 = {c11_c12_result['C12']:7.1f} GPa (文献: 61, 误差: {(c11_c12_result['C12']/61-1)*100:+.1f}%)")
+        print("\n🎯 弹性常数结果:")
+        print(
+            f"  C11 = {c11_c12_result['C11']:7.1f} GPa (文献: 110, 误差: {(c11_c12_result['C11'] / 110 - 1) * 100:+.1f}%)"
+        )
+        print(
+            f"  C12 = {c11_c12_result['C12']:7.1f} GPa (文献: 61, 误差: {(c11_c12_result['C12'] / 61 - 1) * 100:+.1f}%)"
+        )
         for i, (name, C) in enumerate(
-            zip(["C44", "C55", "C66"], results["elastic_constants"])
+            zip(["C44", "C55", "C66"], results["elastic_constants"], strict=False)
         ):
             error = (C - 33) / 33 * 100
             print(f"  {name} = {C:7.1f} GPa (误差: {error:+.1f}%)")
 
-        print(f"\n立方对称化:")
+        print("\n立方对称化:")
         print(f"  平均C44 = {results['C44']:7.1f} GPa")
         print(f"  标准差 = {results['std_dev']:7.1f} GPa")
-        print(f"  文献值 = 33.0 GPa")
+        print("  文献值 = 33.0 GPa")
         print(f"  总误差 = {results['error_percent']:+.1f}%")
 
         # 质量指标
-        print(f"\n质量评估:")
+        print("\n质量评估:")
         checks = results["quality_checks"]
         for check, passed in checks.items():
             status = "✓" if passed else "✗"
@@ -2039,17 +2135,17 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
         print(f"  成功得分: {results['success_score']:.1%}")
 
         # 诊断信息
-        print(f"\n系统诊断:")
+        print("\n系统诊断:")
         print(f"  基态应力: {results['base_stress_magnitude']:.4f} GPa")
         print(f"  晶格对称性: {results['asymmetry']:.2e} Å")
         print(f"  计算时间: {calc_time:.1f} 秒")
 
         if results["success_score"] >= 0.8:
-            print(f"  🎉 配置优秀！")
+            print("  🎉 配置优秀！")
         elif results["success_score"] >= 0.6:
-            print(f"  ✅ 配置良好")
+            print("  ✅ 配置良好")
         else:
-            print(f"  ⚠️ 需要改进")
+            print("  ⚠️ 需要改进")
 
         logger.info(
             f"测试完成: C44={results['C44']:.1f} GPa, 误差={results['error_percent']:+.1f}%"
@@ -2061,38 +2157,38 @@ def test_system_size_c44(supercell_size, potential, run_dir, strain_magnitude=0.
             f"最终弹性常数结果 - {supercell_size[0]}×{supercell_size[1]}×{supercell_size[2]} 系统"
         )
         logger.info(f"原子数量: {results['atoms']}")
-        logger.info(f"应变幅度: {strain_magnitude*100:.3f}%")
+        logger.info(f"应变幅度: {strain_magnitude * 100:.3f}%")
         for i, (name, C) in enumerate(
-            zip(["C44", "C55", "C66"], results["elastic_constants"])
+            zip(["C44", "C55", "C66"], results["elastic_constants"], strict=False)
         ):
             error = (C - 33) / 33 * 100
             logger.info(f"  {name} = {C:7.1f} GPa (误差: {error:+5.1f}%)")
-        logger.info(f"立方对称化结果:")
+        logger.info("立方对称化结果:")
         logger.info(f"  平均C44 = {results['C44']:7.1f} GPa")
         logger.info(f"  标准差   = {results['std_dev']:7.1f} GPa")
-        logger.info(f"  文献值   = 33.0 GPa")
+        logger.info("  文献值   = 33.0 GPa")
         logger.info(f"  总误差   = {results['error_percent']:+6.1f}%")
         logger.info(f"质量评估得分: {results['success_score']:.1%}")
         logger.info(f"计算时间: {results['time']:.1f} 秒")
 
         # 对比C11/C12联合计算结果
         if c11_c12_result.get("success"):
-            logger.info(f"C11/C12联合计算结果:")
+            logger.info("C11/C12联合计算结果:")
             logger.info(f"  C11 = {c11_c12_result['C11']:7.1f} GPa (文献: 110 GPa)")
             logger.info(f"  C12 = {c11_c12_result['C12']:7.1f} GPa (文献: 61 GPa)")
             logger.info(
-                f"  C11收敛率 = {c11_c12_result['c11_converged_count']}/{c11_c12_result['total_count']} ({c11_c12_result['c11_converged_count']/c11_c12_result['total_count']:.1%})"
+                f"  C11收敛率 = {c11_c12_result['c11_converged_count']}/{c11_c12_result['total_count']} ({c11_c12_result['c11_converged_count'] / c11_c12_result['total_count']:.1%})"
             )
             logger.info(
-                f"  C12收敛率 = {c11_c12_result['c12_converged_count']}/{c11_c12_result['total_count']} ({c11_c12_result['c12_converged_count']/c11_c12_result['total_count']:.1%})"
+                f"  C12收敛率 = {c11_c12_result['c12_converged_count']}/{c11_c12_result['total_count']} ({c11_c12_result['c12_converged_count'] / c11_c12_result['total_count']:.1%})"
             )
             logger.info(f"  联合可视化图: {c11_c12_result['plot_file']}")
 
-        logger.info(f"收敛率对比:")
+        logger.info("收敛率对比:")
         logger.info(
-            f"  C11/C12联合: {(c11_c12_result['c11_converged_count'] + c11_c12_result['c12_converged_count'])/(c11_c12_result['total_count']*2):.1%}"
+            f"  C11/C12联合: {(c11_c12_result['c11_converged_count'] + c11_c12_result['c12_converged_count']) / (c11_c12_result['total_count'] * 2):.1%}"
         )
-        logger.info(f"  C44剪切: {total_c44_converged/total_c44_points:.1%}")
+        logger.info(f"  C44剪切: {total_c44_converged / total_c44_points:.1%}")
         logger.info(f"合并数据文件: {combined_csv_filename}")
         logger.info(
             f"可视化图表: C11/C12联合({c11_c12_result.get('plot_file', 'N/A')}), C44({c44_result['plot_file']})"
@@ -2152,9 +2248,9 @@ def main():
     total_time = 0
 
     for i, config in enumerate(test_configs):
-        print(f"\n进度: [{i+1}/{len(test_configs)}] - {config['desc']}")
+        print(f"\n进度: [{i + 1}/{len(test_configs)}] - {config['desc']}")
         if total_time > 0:
-            print(f"已用时: {total_time/60:.1f} 分钟")
+            print(f"已用时: {total_time / 60:.1f} 分钟")
 
         start = time.time()
         results[config["size"]] = test_system_size_c44(
@@ -2176,7 +2272,7 @@ def main():
             results[config["size"]].get("success")
             and abs(results[config["size"]].get("error_percent", 100)) < 30
         ):
-            print(f"\n✨ 发现良好配置，可选择继续或停止测试")
+            print("\n✨ 发现良好配置，可选择继续或停止测试")
 
     # 结果汇总
     print("\n" + "=" * 80)
@@ -2211,20 +2307,20 @@ def main():
     # 最佳配置推荐
     if best_result:
         size, result = best_result
-        print(f"\n🏆 最佳配置推荐:")
+        print("\n🏆 最佳配置推荐:")
         print(f"  系统尺寸: {size[0]}×{size[1]}×{size[2]} ({result['atoms']}原子)")
         print(f"  C44结果: {result['C44']:.1f} GPa")
         print(f"  误差: {result['error_percent']:+.1f}%")
         print(f"  质量得分: {result['success_score']:.1%}")
 
         if abs(result["error_percent"]) < 25:
-            print(f"  🎉 建议应用到主代码！")
+            print("  🎉 建议应用到主代码！")
         elif abs(result["error_percent"]) < 50:
-            print(f"  ✅ 配置良好，可考虑进一步优化")
+            print("  ✅ 配置良好，可考虑进一步优化")
         else:
-            print(f"  ⚠️ 仍需改进")
+            print("  ⚠️ 仍需改进")
 
-    print(f"\n总计算时间: {total_time/60:.1f} 分钟")
+    print(f"\n总计算时间: {total_time / 60:.1f} 分钟")
     print(f"详细日志目录: {run_dir}")
 
     # 将汇总结果也写入日志

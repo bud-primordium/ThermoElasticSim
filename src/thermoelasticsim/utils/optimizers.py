@@ -648,7 +648,7 @@ class LBFGSOptimizer(Optimizer):
                 energy = energy_fn(xk)
                 positions, lattice, _ = unpack_variables(xk)
                 current_a = np.linalg.norm(lattice[0])
-                current_volume = np.abs(np.linalg.det(lattice))
+                # current_volume = np.abs(np.linalg.det(lattice))  # 体积监控，暂未使用
 
                 # 计算相对于上一步的变化量
                 energy_change_step = (
@@ -662,11 +662,11 @@ class LBFGSOptimizer(Optimizer):
                 # 计算等效单胞参数（如果是超胞的话）
                 if self.supercell_dims is not None:
                     equiv_a = current_a / self.supercell_dims[0]
-                    equiv_volume = current_volume / (
-                        self.supercell_dims[0]
-                        * self.supercell_dims[1]
-                        * self.supercell_dims[2]
-                    )
+                    # equiv_volume = current_volume / (
+                    #     self.supercell_dims[0]
+                    #     * self.supercell_dims[1]
+                    #     * self.supercell_dims[2]
+                    # )  # 等效体积，暂未使用
                     a_change_step = (
                         equiv_a - self.prev_a
                         if self.prev_a is not None
