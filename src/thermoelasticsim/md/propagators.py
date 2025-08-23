@@ -886,9 +886,10 @@ class NoseHooverChainPropagator(Propagator):
         采用三步四阶Suzuki-Yoshida分解保证高精度和长期稳定性。
 
         算法流程：
+
         1. 对每个SY系数w_k：
-           2. 对tloop次循环：
-              3. 执行NHC_integration_loop(w_k * dt / tloop)
+        2. 对tloop次循环：
+        3. 执行NHC_integration_loop(w_k * dt / tloop)
 
         Parameters
         ----------
@@ -1157,60 +1158,65 @@ def create_nve_propagators(potential):
 
 
 class LangevinThermostatPropagator(Propagator):
-    """Langevin动力学恒温器传播子
+    r"""Langevin动力学恒温器传播子
 
     基于Brunger-Brooks-Karplus (BBK)积分算法实现Langevin动力学恒温器。
     该恒温器通过在牛顿运动方程中加入摩擦阻力项和随机力项来模拟系统与热浴的相互作用。
 
-    核心特点：
-    - 基于物理模型的随机恒温方法
-    - 严格产生正确的正则系综分布
-    - 通过涨落-耗散定理联系摩擦系数和温度
-    - 特别适合生物分子模拟和隐式溶剂系统
+    Notes
+    -----
+    **理论基础**
 
-    数学基础：
     Langevin运动方程：
-    m_i * d²r_i/dt² = F_i(r) - γ*m_i*dr_i/dt + R_i(t)
+
+    .. math::
+        m_i \frac{d^2\mathbf{r}_i}{dt^2} = \mathbf{F}_i(\mathbf{r}) - \gamma m_i \frac{d\mathbf{r}_i}{dt} + \mathbf{R}_i(t)
 
     其中：
-    - F_i(r): 保守力
-    - γ: 摩擦系数（friction coefficient）
-    - R_i(t): 随机力，满足涨落-耗散定理
 
-    涨落-耗散定理：
-    <R_i(t)> = 0
-    <R_i,α(t) R_j,β(t')> = 2*m_i*γ*k_B*T_0*δ_ij*δ_αβ*δ(t-t')
+    - :math:`\mathbf{F}_i(\mathbf{r})`: 保守力
+    - :math:`\gamma`: 摩擦系数（friction coefficient）
+    - :math:`\mathbf{R}_i(t)`: 随机力，满足涨落-耗散定理
 
-    BBK积分算法：
-    1. 计算常数：c1 = exp(-γ*dt), σ = sqrt(k_B*T*(1-c1²)/m)
-    2. 半步速度更新：v(t+dt/2) = v(t) + 0.5*a(t)*dt
-    3. 位置更新：r(t+dt) = r(t) + v(t+dt/2)*dt
-    4. 计算新力：a(t+dt) = F(r(t+dt))/m
-    5. 最终速度更新：v_det = v(t+dt/2) + 0.5*a(t+dt)*dt
-                     v(t+dt) = c1*v_det + σ*R（包含随机力）
+    涨落-耗散定理保证热力学一致性：
 
-    参数选择指南：
-    - 平衡阶段：γ ~ 1-10 ps⁻¹（快速温度控制）
-    - 生产阶段：γ ~ 0.1-5 ps⁻¹（保持动力学真实性）
-    - 过阻尼极限：γ >> 系统振动频率（布朗动力学）
+    .. math::
+        :nowrap:
 
-    优点：
-    - 严格的正则系综采样
-    - 数值稳定性好，无遍历性问题
-    - 物理模型清晰，适合隐式溶剂
-    - 允许较大时间步长
+        \begin{align}
+        \langle \mathbf{R}_i(t) \rangle &= 0 \\
+        \langle R_{i,\alpha}(t) R_{j,\beta}(t') \rangle &= 2m_i\gamma k_B T_0 \delta_{ij}\delta_{\alpha\beta}\delta(t-t')
+        \end{align}
 
-    缺点：
-    - 随机性影响动力学性质
-    - 摩擦项减慢粒子运动
-    - 破坏速度时间相关性
-    - 非确定性和不可逆
+    **BBK积分算法步骤**
 
-    适用场景：
-    - 生物分子模拟
-    - 隐式溶剂系统
-    - 需要鲁棒NVT采样的场合
-    - 平衡和生产阶段模拟
+    1. **计算常数**:
+       :math:`c_1 = \exp(-\gamma dt), \quad \sigma = \sqrt{k_B T(1-c_1^2)/m}`
+
+    2. **半步速度更新**:
+       :math:`\mathbf{v}(t+dt/2) = \mathbf{v}(t) + \frac{1}{2}\mathbf{a}(t)dt`
+
+    3. **位置更新**:
+       :math:`\mathbf{r}(t+dt) = \mathbf{r}(t) + \mathbf{v}(t+dt/2)dt`
+
+    4. **计算新力**:
+       :math:`\mathbf{a}(t+dt) = \mathbf{F}(\mathbf{r}(t+dt))/m`
+
+    5. **最终速度更新**:
+       :math:`\mathbf{v}(t+dt) = c_1 \mathbf{v}_{\text{det}} + \sigma \boldsymbol{\xi}`
+
+    **参数选择建议**
+
+    - **平衡阶段**: :math:`\gamma \sim 1-10 \text{ ps}^{-1}` （快速温度控制）
+    - **生产阶段**: :math:`\gamma \sim 0.1-5 \text{ ps}^{-1}` （保持动力学真实性）
+    - **过阻尼极限**: :math:`\gamma \gg` 系统振动频率（布朗动力学）
+
+    **算法特性**
+
+    - **严格正则系综**: 产生正确的正则分布
+    - **物理一致性**: 基于真实的系统-热浴耦合
+    - **参数灵活**: 摩擦系数可调节耦合强度
+    - **涨落保持**: 保留自然的热涨落
     """
 
     def __init__(self, target_temperature: float, friction: float = 1.0):

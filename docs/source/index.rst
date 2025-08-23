@@ -125,8 +125,8 @@ ThermoElasticSim 文档
 获取帮助
 ========
 
-* GitHub: https://github.com/yourusername/ThermoElasticSim
-* 问题反馈: https://github.com/yourusername/ThermoElasticSim/issues
+* GitHub: https://github.com/bud-primordium/ThermoElasticSim
+* 问题反馈: https://github.com/bud-primordium/ThermoElasticSim/issues
 * 邮件: gilbertyoung0015@gmail.com
 
 索引与搜索

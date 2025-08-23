@@ -57,7 +57,7 @@ Examples
 >>> cell = Cell(lattice, atoms)
 
 .. moduleauthor:: Gilbert Young
-.. version:: 4.0.0
+.. versionadded:: 4.0.0
 """
 
 __version__ = "4.0.0"

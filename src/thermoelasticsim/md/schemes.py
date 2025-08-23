@@ -754,12 +754,16 @@ class LangevinNVTScheme(IntegrationScheme):
     该方案组合Velocity-Verlet积分和Langevin恒温器，提供基于物理模型的随机恒温。
 
     算法步骤（BBK积分）：
+
     1. 标准Velocity-Verlet积分（NVE部分）：
+
        - v(t+dt/2) = v(t) + F(t)/m * dt/2
        - r(t+dt) = r(t) + v(t+dt/2) * dt
        - F(t+dt) = -∇U(r(t+dt))
        - v_det(t+dt) = v(t+dt/2) + F(t+dt)/m * dt/2
+
     2. Langevin恒温器修正（NVT部分）：
+
        - 计算BBK常数：c1 = exp(-γ*dt), σ = sqrt(k_B*T*(1-c1²)/m)
        - 应用随机-摩擦修正：v(t+dt) = c1*v_det(t+dt) + σ*R
 
@@ -1400,7 +1404,7 @@ class MTKNPTScheme(IntegrationScheme):
                         atom.velocity *= scale
                     cell.remove_com_motion()
 
-    def _initialize_propagators(self, cell: Cell) -> None:
+    def _initialize_propagators(self, _cell: Cell) -> None:
         """初始化传播子"""
         if self._thermostat is None:
             self._thermostat = NoseHooverChainPropagator(
