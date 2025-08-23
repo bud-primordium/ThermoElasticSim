@@ -1,0 +1,216 @@
+"""
+Sphinx配置文件 - ThermoElasticSim项目文档
+
+该配置文件设置了Sphinx文档生成系统的所有参数。
+支持NumPy风格的docstring和LaTeX数学公式渲染。
+"""
+
+import os
+import sys
+from datetime import datetime
+
+# 添加项目路径，以便autodoc能找到模块
+sys.path.insert(0, os.path.abspath("../../src"))
+
+# -- 项目信息 ----------------------------------------------------------------
+
+project = "ThermoElasticSim"
+copyright = f"{datetime.now().year}, Gilbert Young"
+author = "Gilbert Young"
+version = "4.0.0"
+release = "4.0.0"
+language = "zh_CN"
+
+# -- 通用配置 ----------------------------------------------------------------
+
+# Sphinx扩展列表
+extensions = [
+    "sphinx.ext.autodoc",  # 自动从代码提取文档
+    "sphinx.ext.napoleon",  # 支持NumPy和Google风格的docstring
+    "sphinx.ext.viewcode",  # 添加源代码链接
+    "sphinx.ext.mathjax",  # LaTeX数学公式渲染
+    "sphinx.ext.intersphinx",  # 链接到其他项目文档
+    "sphinx.ext.coverage",  # 文档覆盖率检查
+    "sphinx.ext.todo",  # TODO标记支持
+    "numpydoc",  # NumPy文档风格支持
+]
+
+# 模板路径
+templates_path = ["_templates"]
+
+# 排除的文件模式
+exclude_patterns = []
+
+# 源文件后缀
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
+
+# 主文档
+master_doc = "index"
+
+# -- autodoc配置 --------------------------------------------------------------
+
+# 自动文档选项
+autodoc_default_options = {
+    "members": True,  # 包含成员
+    "member-order": "bysource",  # 按源码顺序
+    "special-members": "__init__",  # 包含__init__
+    "undoc-members": False,  # 不包含无文档成员
+    "exclude-members": "__weakref__",  # 排除弱引用
+    "show-inheritance": True,  # 显示继承关系
+    "inherited-members": False,  # 不显示继承的成员
+    "private-members": False,  # 不显示私有成员
+}
+
+# Mock导入（对于C扩展等）
+autodoc_mock_imports = [
+    "pybind11",
+    "thermoelasticsim._cpp_core",
+]
+
+# 类型提示配置
+autodoc_typehints = "description"
+autodoc_type_aliases = {
+    "ArrayLike": "array_like",
+}
+
+# -- Napoleon配置 (NumPy文档风格) --------------------------------------------
+
+napoleon_google_docstring = False  # 不使用Google风格
+napoleon_numpy_docstring = True  # 使用NumPy风格
+napoleon_include_init_with_doc = True
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = True
+napoleon_use_admonition_for_notes = True
+napoleon_use_admonition_for_references = True
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_type_aliases = None
+
+# NumPy文档参数
+napoleon_attr_annotations = True
+napoleon_custom_sections = [
+    "Theory",  # 理论基础
+    "Algorithm",  # 算法说明
+]
+
+# -- MathJax配置 (数学公式) --------------------------------------------------
+
+# MathJax版本和配置
+mathjax_version = "3"
+mathjax3_config = {
+    "tex": {
+        "macros": {
+            "bm": [r"\boldsymbol{#1}", 1],  # 粗体向量
+            "avg": [r"\langle #1 \rangle", 1],  # 平均值
+            "ket": [r"|#1\rangle", 1],  # 狄拉克ket
+            "bra": [r"\langle #1|", 1],  # 狄拉克bra
+        },
+        "packages": {"[+]": ["ams", "physics"]},  # 加载额外包
+    },
+}
+
+# -- HTML输出配置 -------------------------------------------------------------
+
+# HTML主题
+html_theme = "sphinx_rtd_theme"
+
+# 主题选项
+html_theme_options = {
+    "navigation_depth": 4,  # 导航深度
+    "collapse_navigation": False,  # 不折叠导航
+    "sticky_navigation": True,  # 固定导航栏
+    "includehidden": True,  # 包含隐藏的toctree
+    "titles_only": False,  # 显示子标题
+    "display_version": True,  # 显示版本号
+    "prev_next_buttons_location": "bottom",  # 上下页按钮位置
+}
+
+# 静态文件路径
+html_static_path = ["_static"]
+
+# 网站图标
+# html_favicon = '_static/favicon.ico'
+# html_logo = '_static/logo.png'
+
+# HTML标题
+html_title = f"{project} v{version} 文档"
+
+# 侧边栏
+html_sidebars = {
+    "**": [
+        "globaltoc.html",
+        "relations.html",
+        "sourcelink.html",
+        "searchbox.html",
+    ]
+}
+
+# 显示源码链接
+html_show_sourcelink = True
+html_copy_source = True
+
+# -- LaTeX输出配置 ------------------------------------------------------------
+
+latex_engine = "xelatex"  # 支持中文
+latex_elements = {
+    "papersize": "a4paper",
+    "pointsize": "11pt",
+    "preamble": r"""
+\usepackage{amsmath,amssymb}
+\usepackage{physics}
+\usepackage[UTF8]{ctex}
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+""",
+    "fncychap": r"\usepackage[Bjornstrup]{fncychap}",
+    "printindex": r"\footnotesize\raggedright\printindex",
+}
+
+# LaTeX文档结构
+latex_documents = [
+    (
+        master_doc,
+        "ThermoElasticSim.tex",
+        "ThermoElasticSim Documentation",
+        "Gilbert Young",
+        "manual",
+    ),
+]
+
+# -- Intersphinx配置 (链接到其他项目) ----------------------------------------
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+    "matplotlib": ("https://matplotlib.org/stable/", None),
+}
+
+# -- 其他配置 ----------------------------------------------------------------
+
+# TODO扩展配置
+todo_include_todos = True
+
+# 代码高亮风格
+pygments_style = "sphinx"
+
+# 保持成员顺序
+autodoc_member_order = "bysource"
+
+# 忽略的警告
+suppress_warnings = ["autodoc.import_error"]
+
+# 默认角色
+default_role = "py:obj"
+
+
+# 添加自定义CSS（如果需要）
+def setup(app):
+    """Sphinx应用设置钩子"""
+    # app.add_css_file('custom.css')
+    pass

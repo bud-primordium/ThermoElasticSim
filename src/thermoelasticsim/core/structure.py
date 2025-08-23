@@ -1,33 +1,63 @@
 #!/usr/bin/env python3
-"""
-ThermoElasticSim - 结构模块
+r"""
+分子动力学结构模块
 
-该模块提供原子和晶胞类，用于分子动力学模拟中的结构表示和操作。
+该模块提供分子动力学模拟中的基础数据结构，包括原子和晶胞的表示。
+实现了周期性边界条件、最小镜像约定等关键算法。
 
-.. moduleauthor:: Gilbert Young
-.. created:: 2024-10-14
-.. modified:: 2025-08-18
-.. version:: 4.0.0
-
-Classes:
-    Atom: 表示单个原子，包含位置、速度和质量等属性
-    Cell: 表示晶胞结构，包含晶格矢量和原子列表
-
-Examples
+理论基础
 --------
-    创建原子和晶胞的基本用法::
+周期性边界条件 (Periodic Boundary Conditions, PBC)：
 
-        >>> from thermoelasticsim.core.structure import Atom, Cell
-        >>> atom = Atom(id=1, symbol="Al", mass_amu=26.98, position=[0, 0, 0])
-        >>> print(atom.symbol)
-        'Al'
+.. math::
+    \mathbf{r}_{frac} = \mathbf{L}^{-T} \cdot \mathbf{r}_{cart}
+
+其中：
+- :math:`\mathbf{r}_{cart}` - 笛卡尔坐标
+- :math:`\mathbf{r}_{frac}` - 分数坐标
+- :math:`\mathbf{L}` - 晶格矢量矩阵
+
+最小镜像约定 (Minimum Image Convention)：
+
+.. math::
+    \mathbf{r}_{min} = \mathbf{r} - \mathbf{L} \cdot \text{round}(\mathbf{L}^{-1} \cdot \mathbf{r})
+
+Classes
+-------
+Atom
+    表示单个原子，包含位置、速度、力等属性
+Cell
+    表示晶胞结构，管理原子集合和晶格矢量
+
+Functions
+---------
+_apply_pbc_numba
+    JIT优化的周期性边界条件应用函数
 
 Notes
 -----
-    本模块是 ThermoElasticSim 包的核心组件，提供了分子动力学模拟的基础数据结构。
+本模块是ThermoElasticSim的核心组件，为分子动力学模拟提供基础数据结构。
+所有长度单位为埃(Å)，时间单位为飞秒(fs)，能量单位为电子伏特(eV)。
 
-.. versionadded:: 4.0.0
-   重构版本，增强了数值稳定性和异常处理。
+Examples
+--------
+创建简单的铝晶胞：
+
+>>> from thermoelasticsim.core.structure import Atom, Cell
+>>> import numpy as np
+>>> # 创建FCC铝的原胞
+>>> a = 4.05  # 晶格常数
+>>> lattice = np.array([[a, 0, 0], [0, a, 0], [0, 0, a]])
+>>> atoms = [
+...     Atom(0, "Al", 26.98, [0, 0, 0]),
+...     Atom(1, "Al", 26.98, [a/2, a/2, 0]),
+...     Atom(2, "Al", 26.98, [a/2, 0, a/2]),
+...     Atom(3, "Al", 26.98, [0, a/2, a/2])
+... ]
+>>> cell = Cell(lattice, atoms)
+
+.. moduleauthor:: Gilbert Young
+.. version:: 4.0.0
 """
 
 __version__ = "4.0.0"
@@ -46,39 +76,80 @@ from thermoelasticsim.utils.utils import AMU_TO_EVFSA2, KB_IN_EV
 logger = logging.getLogger(__name__)
 
 
-# 在类外部定义可JIT优化的函数
 @jit(nopython=True)
 def _apply_pbc_numba(positions, lattice_inv, lattice_vectors):
+    """JIT优化的周期性边界条件应用
+
+    Parameters
+    ----------
+    positions : numpy.ndarray
+        原子位置数组 (N, 3)
+    lattice_inv : numpy.ndarray
+        晶格逆矩阵 (3, 3)
+    lattice_vectors : numpy.ndarray
+        晶格矢量矩阵 (3, 3)
+
+    Returns
+    -------
+    numpy.ndarray
+        应用PBC后的位置数组
+    """
     fractional = np.dot(positions, lattice_inv)
     fractional = fractional % 1.0
     return np.dot(fractional, lattice_vectors.T)
 
 
 class Atom:
-    """
-    原子类，包含原子的属性和操作
+    r"""原子对象，分子动力学模拟的基本单元
+
+    表示一个原子的完整状态，包括位置、速度、受力等物理属性。
+    在MD模拟中，原子遵循牛顿运动方程：
+
+    .. math::
+        m \frac{d^2\mathbf{r}}{dt^2} = \mathbf{F}
 
     Parameters
     ----------
     id : int
         原子的唯一标识符
     symbol : str
-        原子符号，如 'H', 'O', 'C' 等
+        元素符号 (如 'Al', 'Cu', 'Si')
     mass_amu : float
-        原子的质量，以 amu 为单位
+        原子质量，原子质量单位 (amu)
     position : array_like
-        原子的初始位置，3D 笛卡尔坐标
+        初始位置，3D笛卡尔坐标 (Å)
     velocity : array_like, optional
-        原子的初始速度，3D 笛卡尔坐标，默认为 0
+        初始速度，3D笛卡尔坐标 (Å/fs)，默认为零
 
     Attributes
     ----------
+    id : int
+        原子唯一标识符
+    symbol : str
+        元素符号
+    mass_amu : float
+        原始质量 (amu)
+    mass : float
+        转换后的质量 (eV·fs²/Å²)
     position : numpy.ndarray
-        原子的当前位置
+        当前位置向量 (3,)
     velocity : numpy.ndarray
-        原子的当前速度
+        当前速度向量 (3,)
     force : numpy.ndarray
-        作用在原子上的力
+        当前受力向量 (3,)
+
+    Notes
+    -----
+    质量单位转换关系：
+    1 amu = 1.66054e-27 kg = 103.62 eV·fs²/Å²
+
+    Examples
+    --------
+    创建铝原子：
+
+    >>> atom = Atom(id=1, symbol="Al", mass_amu=26.98, position=[0, 0, 0])
+    >>> atom.velocity = np.array([1.0, 0.0, 0.0])  # 设置速度
+    >>> print(f"动能: {0.5 * atom.mass * np.dot(atom.velocity, atom.velocity):.4f} eV")
     """
 
     def __init__(
@@ -177,30 +248,82 @@ class Atom:
 
 
 class Cell:
-    """
-    晶胞类，包含晶格矢量和原子列表
+    r"""晶胞对象，管理原子集合和晶格结构
+
+    晶胞是分子动力学模拟的基本容器，定义了模拟盒子的几何形状
+    和其中包含的原子。支持周期性边界条件和最小镜像约定。
+
+    晶格矢量定义为行向量：
+
+    .. math::
+        \mathbf{L} = \begin{pmatrix}
+            \mathbf{a}_1 \\
+            \mathbf{a}_2 \\
+            \mathbf{a}_3
+        \end{pmatrix}
+
+    晶胞体积计算：
+
+    .. math::
+        V = |\mathbf{a}_1 \cdot (\mathbf{a}_2 \times \mathbf{a}_3)|
 
     Parameters
     ----------
     lattice_vectors : array_like
-        3x3 矩阵，表示晶胞的晶格矢量
+        3×3晶格矢量矩阵，每行为一个晶格矢量 (Å)
     atoms : list of Atom
-        原子列表，表示晶胞中的原子
+        晶胞中的原子列表
     pbc_enabled : bool, optional
-        是否启用周期性边界条件，默认为 True
+        是否启用周期性边界条件，默认True
 
     Attributes
     ----------
     lattice_vectors : numpy.ndarray
-        晶胞的晶格矢量
+        晶格矢量矩阵 (3, 3)
     atoms : list of Atom
-        原子列表
+        原子对象列表
     volume : float
-        晶胞的体积
+        晶胞体积 (Å³)
     pbc_enabled : bool
-        是否启用周期性边界条件
+        周期性边界条件标志
     lattice_locked : bool
-        晶格矢量是否被锁定
+        晶格锁定标志（用于内部弛豫）
+    lattice_inv : numpy.ndarray
+        晶格逆矩阵，用于坐标转换
+    num_atoms : int
+        原子数量（属性）
+
+    Methods
+    -------
+    apply_periodic_boundary(positions)
+        应用周期性边界条件
+    minimum_image(displacement)
+        计算最小镜像位移
+    calculate_temperature()
+        计算瞬时温度
+    build_supercell(repetition)
+        构建超胞
+
+    Notes
+    -----
+    分数坐标与笛卡尔坐标转换：
+    - 笛卡尔→分数: :math:`\mathbf{s} = \mathbf{L}^{-T} \cdot \mathbf{r}`
+    - 分数→笛卡尔: :math:`\mathbf{r} = \mathbf{L}^T \cdot \mathbf{s}`
+
+    Examples
+    --------
+    创建FCC铝晶胞：
+
+    >>> a = 4.05  # 晶格常数
+    >>> lattice = a * np.eye(3)  # 立方晶格
+    >>> atoms = [
+    ...     Atom(0, "Al", 26.98, [0, 0, 0]),
+    ...     Atom(1, "Al", 26.98, [a/2, a/2, 0]),
+    ...     Atom(2, "Al", 26.98, [a/2, 0, a/2]),
+    ...     Atom(3, "Al", 26.98, [0, a/2, a/2])
+    ... ]
+    >>> cell = Cell(lattice, atoms)
+    >>> print(f"晶胞体积: {cell.volume:.2f} Å³")
     """
 
     def __init__(
@@ -456,8 +579,18 @@ class Cell:
             logger.debug(f"Updated cell volume: {self.volume}")
 
     def apply_periodic_boundary(self, positions):
-        """
-        改进的周期性边界条件实现，增加数值稳定性检查
+        r"""应用周期性边界条件
+
+        将原子位置映射回主晶胞内，使用标准的最小镜像约定。
+
+        算法：
+
+        .. math::
+            \mathbf{s} = \mathbf{L}^{-T} \cdot \mathbf{r}
+
+            \mathbf{s}' = \mathbf{s} - \lfloor \mathbf{s} + 0.5 \rfloor
+
+            \mathbf{r}' = \mathbf{L}^T \cdot \mathbf{s}'
 
         Parameters
         ----------
@@ -467,7 +600,26 @@ class Cell:
         Returns
         -------
         numpy.ndarray
-            应用周期性边界条件后的位置
+            应用PBC后的位置，保持输入形状
+
+        Raises
+        ------
+        ValueError
+            如果位置数组形状不正确或包含非有限值
+
+        Notes
+        -----
+        该实现使用分数坐标进行周期性映射，确保数值稳定性。
+        对于三斜晶系也能正确处理。
+
+        Examples
+        --------
+        >>> # 单个原子位置
+        >>> pos = np.array([5.0, 6.0, 7.0])
+        >>> new_pos = cell.apply_periodic_boundary(pos)
+        >>> # 批量处理
+        >>> positions = np.random.randn(100, 3) * 10
+        >>> new_positions = cell.apply_periodic_boundary(positions)
         """
         if not self.pbc_enabled:
             return positions
@@ -508,22 +660,43 @@ class Cell:
         return cell_copy
 
     def calculate_temperature(self) -> float:
-        """计算当前系统的温度，扣除质心运动
+        r"""计算系统的瞬时温度
+
+        使用均分定理计算温度，扣除质心运动贡献：
+
+        .. math::
+            T = \frac{2 E_{kin}}{k_B \cdot N_{dof}}
+
+        其中动能（扣除质心）：
+
+        .. math::
+            E_{kin} = \sum_i \frac{1}{2} m_i |\mathbf{v}_i - \mathbf{v}_{cm}|^2
+
+        自由度数：
+        - 多原子系统: :math:`N_{dof} = 3N - 3` (扣除质心平动)
+        - 单原子系统: :math:`N_{dof} = 3` (不扣除)
 
         Returns
         -------
-            系统温度，单位为K
+        float
+            系统温度 (K)
 
         Notes
         -----
-            对于多个原子：dof = 3*N - 3 (扣除质心运动)
-            对于单个原子：dof = 3*N (不扣除质心运动)
+        瞬时温度会有涨落，通常需要时间平均来获得稳定值。
+        对于NVE系综，温度是守恒量的函数。
 
         Examples
         --------
-            >>> cell = Cell(lattice_vectors, atoms)
-            >>> temp = cell.calculate_temperature()
-            >>> print(f"系统温度: {temp:.2f} K")
+        >>> temp = cell.calculate_temperature()
+        >>> print(f"瞬时温度: {temp:.1f} K")
+        >>> # 计算时间平均温度
+        >>> temps = [cell.calculate_temperature() for _ in range(1000)]
+        >>> avg_temp = np.mean(temps)
+
+        See Also
+        --------
+        calculate_kinetic_energy : 计算总动能（含质心运动）
         """
         kb = KB_IN_EV  # 使用utils.py中的标准常数
         num_atoms = len(self.atoms)
@@ -621,8 +794,15 @@ class Cell:
         return np.array([atom.force for atom in self.atoms], dtype=np.float64)
 
     def minimum_image(self, displacement):
-        """
-        改进的最小镜像约定实现，增加数值检查与修正
+        r"""计算最小镜像位移向量
+
+        根据最小镜像约定，找到最近的周期镜像之间的位移。
+        这对于正确计算周期性系统中的距离和力至关重要。
+
+        数学原理：
+
+        .. math::
+            \mathbf{d}_{min} = \mathbf{d} - \mathbf{L} \cdot \text{round}(\mathbf{L}^{-1} \cdot \mathbf{d})
 
         Parameters
         ----------
@@ -632,7 +812,28 @@ class Cell:
         Returns
         -------
         numpy.ndarray
-            最小镜像位移向量
+            最小镜像位移向量 (3,)
+
+        Raises
+        ------
+        ValueError
+            如果位移向量不是3D或包含非有限值
+
+        Notes
+        -----
+        该方法确保返回的位移向量长度最小，对应于最近的周期镜像。
+        在计算原子间相互作用时必须使用此方法。
+
+        Examples
+        --------
+        >>> # 计算两原子间的最小距离
+        >>> r12 = atom2.position - atom1.position
+        >>> r12_min = cell.minimum_image(r12)
+        >>> distance = np.linalg.norm(r12_min)
+
+        See Also
+        --------
+        apply_periodic_boundary : 应用周期性边界条件
         """
         if not isinstance(displacement, np.ndarray):
             displacement = np.array(displacement, dtype=np.float64)
