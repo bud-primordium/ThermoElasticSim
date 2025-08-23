@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 ThermoElasticSim - EAM 势模块
 
 .. moduleauthor:: Gilbert Young

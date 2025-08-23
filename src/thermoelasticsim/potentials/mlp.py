@@ -45,9 +45,7 @@ class MLPotential(Potential):
         raise NotImplementedError("模型加载功能尚未实现。")
 
     def calculate_forces(self, cell: Cell, neighbor_list: NeighborList) -> None:
-        """
-        使用ML势计算力（尚未实现）。
-        """
+        """使用ML势计算力（尚未实现）。"""
         # 在这里添加具体的力计算逻辑，例如：
         # positions = cell.get_positions()
         # forces = self.model.predict_forces(positions)
@@ -56,9 +54,7 @@ class MLPotential(Potential):
         raise NotImplementedError("ML势的力计算尚未实现。")
 
     def calculate_energy(self, cell: Cell, neighbor_list: NeighborList) -> float:
-        """
-        使用ML势计算能量（尚未实现）。
-        """
+        """使用ML势计算能量（尚未实现）。"""
         # 在这里添加具体的能量计算逻辑，例如：
         # positions = cell.get_positions()
         # energy = self.model.predict_energy(positions)

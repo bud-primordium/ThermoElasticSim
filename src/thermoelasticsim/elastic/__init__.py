@@ -1,6 +1,4 @@
-"""
-弹性常数计算模块
-"""
+"""弹性常数计算模块"""
 
 from .deformation import Deformer
 from .deformation_method import ElasticConstantsWorkflow, FiniteTempElasticityWorkflow

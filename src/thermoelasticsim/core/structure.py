@@ -265,10 +265,7 @@ class Cell:
             return False
 
         # 检查体积是否为正
-        if np.linalg.det(lattice_vectors) <= 0:
-            return False
-
-        return True
+        return not np.linalg.det(lattice_vectors) <= 0
 
     def _validate_atoms(self) -> None:
         """验证原子属性的有效性

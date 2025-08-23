@@ -180,7 +180,7 @@ class ModernVisualizer:
                 z=[vertices[start, 2], vertices[end, 2]],
                 mode="lines",
                 line=dict(color="red", width=2),
-                showlegend=True if i == 0 else False,
+                showlegend=i == 0,
                 name="Box",
                 legendgroup="box",
             )

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-可视化系统
-"""
+"""可视化系统"""
 
 from .elastic import ElasticVisualizer
 

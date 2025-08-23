@@ -339,7 +339,7 @@ class TrajectoryWriter:
                 maxshape = (None,)
                 chunk_shape = (self.chunk_size,)
                 dtype = h5py.string_dtype(encoding="utf-8")
-            elif isinstance(data, (int, float)):
+            elif isinstance(data, int | float):
                 shape = (0,)
                 maxshape = (None,)
                 chunk_shape = (self.chunk_size,)
@@ -364,7 +364,7 @@ class TrajectoryWriter:
         else:
             dataset = self.observables_group[name]
 
-        if isinstance(data, str) or isinstance(data, (int, float)):
+        if isinstance(data, str | int | float):
             dataset.resize((frame_idx + 1,))
             dataset[frame_idx] = data
         else:
@@ -501,7 +501,7 @@ class TrajectoryReader:
 
         # 读取观测量
         if "observables" in self.file:
-            for key in self.file["observables"].keys():
+            for key in self.file["observables"]:
                 frame_data[key] = self.file["observables"][key][frame_idx]
 
         return frame_data

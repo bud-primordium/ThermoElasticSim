@@ -508,9 +508,7 @@ class StressCalculator:
             raise
 
     def calculate_lattice_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
-        """
-        为保持向后兼容性的别名方法 - 指向有限差分应力方法
-        """
+        """为保持向后兼容性的别名方法 - 指向有限差分应力方法"""
         return self.calculate_finite_difference_stress(cell, potential, dr)
 
     def get_all_stress_components(self, cell, potential) -> dict[str, np.ndarray]:

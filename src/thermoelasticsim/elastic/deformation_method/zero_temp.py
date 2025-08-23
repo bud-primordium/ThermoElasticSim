@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 零温显式形变法弹性常数计算模块
 
 该模块实现零温条件下通过显式形变法计算弹性常数。采用三层架构：
@@ -163,7 +163,7 @@ class StructureRelaxer:
         self.trajectory_recorder = trajectory_recorder
 
     def full_relax(self, cell: Cell, potential: Potential) -> bool:
-        """
+        r"""
         执行完全弛豫：同时优化原子位置和晶胞参数
 
         完全弛豫用于制备无应力基态，是零温弹性常数计算的第一步。
@@ -251,7 +251,7 @@ class StructureRelaxer:
         return converged
 
     def internal_relax(self, cell: Cell, potential: Potential) -> bool:
-        """
+        r"""
         执行内部弛豫：仅优化原子位置，保持晶胞形状固定
 
         内部弛豫用于形变后的结构优化，在保持宏观形变的前提下，
@@ -392,7 +392,7 @@ class StructureRelaxer:
         return converged
 
     def uniform_lattice_relax(self, cell: Cell, potential: Potential) -> bool:
-        """
+        r"""
         等比例晶格弛豫：只优化晶格常数，保持原子相对位置不变
 
         这种弛豫方式特别适合基态制备，既避免了原子位置的数值噪声，
@@ -535,7 +535,7 @@ class StructureRelaxer:
 
 
 class ZeroTempDeformationCalculator:
-    """
+    r"""
     零温显式形变法计算器
 
     管理从基态制备到弹性常数求解的完整计算流程。
@@ -849,7 +849,7 @@ class ZeroTempDeformationCalculator:
         logger.info("无应力基态制备完成")
 
     def _generate_deformation_matrices(self) -> list[np.ndarray]:
-        """
+        r"""
         生成形变矩阵序列
 
         为6个独立的Voigt应变分量生成形变矩阵。每个分量按指定步数
@@ -932,7 +932,7 @@ class ZeroTempDeformationCalculator:
     def _compute_single_deformation(
         self, deformation_matrix: np.ndarray
     ) -> DeformationResult:
-        """
+        r"""
         计算单个形变的应力响应
 
         对给定的形变矩阵，执行形变→内部弛豫→应力计算的完整流程。
@@ -1111,7 +1111,7 @@ class ZeroTempDeformationCalculator:
         )
 
     def _calculate_stress_tensor(self, cell: Cell) -> np.ndarray:
-        """
+        r"""
         计算应力张量
 
         Parameters
@@ -1148,7 +1148,7 @@ class ZeroTempDeformationCalculator:
 
 
 class ElasticConstantsSolver:
-    """
+    r"""
     弹性常数求解器
 
     从应力应变数据通过线性回归求解弹性常数矩阵。
@@ -1199,7 +1199,7 @@ class ElasticConstantsSolver:
         method: str = "least_squares",
         alpha: float = 1e-5,
     ) -> tuple[np.ndarray, float]:
-        """
+        r"""
         求解弹性常数矩阵
 
         Parameters
@@ -1454,7 +1454,7 @@ class ElasticConstantsSolver:
     def _least_squares_solve(
         self, strains: np.ndarray, stresses: np.ndarray
     ) -> tuple[np.ndarray, float]:
-        """
+        r"""
         最小二乘法求解弹性常数
 
         Parameters
@@ -1516,7 +1516,7 @@ class ElasticConstantsSolver:
     def _ridge_regression_solve(
         self, strains: np.ndarray, stresses: np.ndarray, alpha: float
     ) -> tuple[np.ndarray, float]:
-        """
+        r"""
         岭回归求解弹性常数
 
         Parameters
@@ -1630,7 +1630,7 @@ class ElasticConstantsSolver:
 def calculate_zero_temp_elastic_constants(
     cell: Cell, potential: Potential, delta: float = 0.005, num_steps: int = 5, **kwargs
 ) -> tuple[np.ndarray, float]:
-    """
+    r"""
     零温弹性常数计算的便捷函数
 
     这是一个高级接口，封装了完整的零温弹性常数计算流程。

@@ -34,13 +34,9 @@ class TersoffPotential(Potential):
         logger.warning("Tersoff a势尚未完全实现，这是一个占位符。")
 
     def calculate_forces(self, cell: Cell, neighbor_list: NeighborList) -> None:
-        """
-        计算Tersoff势下的力（尚未实现）。
-        """
+        """计算Tersoff势下的力（尚未实现）。"""
         raise NotImplementedError("Tersoff a势的力计算尚未实现。")
 
     def calculate_energy(self, cell: Cell, neighbor_list: NeighborList) -> float:
-        """
-        计算Tersoff势下的能量（尚未实现）。
-        """
+        """计算Tersoff势下的能量（尚未实现）。"""
         raise NotImplementedError("Tersoff势的能量计算尚未实现。")

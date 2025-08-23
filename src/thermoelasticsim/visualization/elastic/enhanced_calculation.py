@@ -12,6 +12,8 @@ Author: Gilbert Young
 Created: 2025-08-15
 """
 
+import builtins
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -306,10 +308,8 @@ def calculate_c44_with_trajectory_recording(
 
     except Exception as e:
         # 确保轨迹文件被正确关闭
-        try:
+        with contextlib.suppress(builtins.BaseException):
             trajectory_recorder.finalize()
-        except:
-            pass
         logger.error(f"C44计算失败: {e}")
         raise
 

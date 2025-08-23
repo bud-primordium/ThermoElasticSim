@@ -118,7 +118,7 @@ class Thermostat:
 
 
 class BerendsenThermostat(Thermostat):
-    """
+    r"""
     Berendsen 恒温器
 
     通过速度缩放实现温度控制，使系统快速达到目标温度。
@@ -139,7 +139,7 @@ class BerendsenThermostat(Thermostat):
         self.tau = tau
 
     def apply(self, cell, dt: float, potential) -> None:
-        """
+        r"""
         应用 Berendsen 恒温器以控制系统温度。
 
         该恒温器通过以下缩放因子 `\\lambda` 来调整原子速度：
@@ -181,7 +181,7 @@ class BerendsenThermostat(Thermostat):
 
 
 class AndersenThermostat(Thermostat):
-    """
+    r"""
     Andersen 恒温器
 
     通过随机碰撞来控制温度，实现符合正则系综的采样。
@@ -202,7 +202,7 @@ class AndersenThermostat(Thermostat):
         self.collision_frequency = collision_frequency
 
     def apply(self, cell, dt: float, potential) -> None:
-        """
+        r"""
         应用 Andersen 恒温器以控制系统温度。
 
         在每个时间步，针对每个原子，发生碰撞的概率为 `p`：

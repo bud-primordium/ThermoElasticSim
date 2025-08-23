@@ -477,9 +477,7 @@ class LBFGSOptimizer(Optimizer):
     def optimize(
         self, cell: Cell, potential: Potential, relax_cell: bool = False
     ) -> tuple[bool, list[dict]]:
-        """
-        执行 L-BFGS 优化。
-        """
+        """执行 L-BFGS 优化。"""
         if relax_cell:
             return self._optimize_full(cell, potential)
         else:

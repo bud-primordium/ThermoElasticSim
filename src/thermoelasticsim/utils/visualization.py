@@ -32,9 +32,7 @@ plt.ioff()  # 关闭交互模式，避免 GUI 启动警告
 
 class Visualizer:
     def __init__(self):
-        """
-        初始化可视化工具类
-        """
+        """初始化可视化工具类"""
         pass
 
     def _ensure_directory_exists(self, filepath):

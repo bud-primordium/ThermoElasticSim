@@ -25,9 +25,7 @@ KB_IN_EV = 8.617332385e-5
 
 
 class TensorConverter:
-    """
-    张量转换工具类，支持应力和应变张量的 Voigt 与 3x3 矩阵表示之间的相互转换。
-    """
+    """张量转换工具类，支持应力和应变张量的 Voigt 与 3x3 矩阵表示之间的相互转换。"""
 
     @staticmethod
     def to_voigt(tensor: np.ndarray, tensor_type: str, tol: float = 1e-8) -> np.ndarray:
@@ -236,9 +234,7 @@ class DataCollector:
                 self.stats[key].append(state[key])
 
     def save_trajectory(self):
-        """
-        将轨迹数据保存到 HDF5 文件
-        """
+        """将轨迹数据保存到 HDF5 文件"""
         try:
             with h5py.File(self.output_file, "w") as f:
                 # 保存轨迹数据
@@ -277,9 +273,9 @@ class NeighborList:
     """
 
     def __init__(self, cutoff: float, skin: float = 0.3):
-        if not isinstance(cutoff, (int, float)) or cutoff <= 0:
+        if not isinstance(cutoff, int | float) or cutoff <= 0:
             raise ValueError("Cutoff must be a positive number")
-        if not isinstance(skin, (int, float)) or skin < 0:
+        if not isinstance(skin, int | float) or skin < 0:
             raise ValueError("Skin must be non-negative")
 
         self.cutoff = float(cutoff)
@@ -378,9 +374,7 @@ class NeighborList:
             raise
 
     def _build_brute_force(self, cell, positions, num_atoms, cutoff):
-        """
-        使用双重循环构建小系统的邻居列表。
-        """
+        """使用双重循环构建小系统的邻居列表。"""
         self.neighbor_list = [[] for _ in range(num_atoms)]
         cutoff_squared = cutoff**2
 
@@ -396,9 +390,7 @@ class NeighborList:
                     self.neighbor_list[j].append(i)
 
     def _build_with_grid(self, cell, positions, num_atoms, box_size, cutoff):
-        """
-        改进的基于网格的邻居列表构建。
-        """
+        """改进的基于网格的邻居列表构建。"""
         # 验证截断半径
         self._validate_cutoff(box_size)
 
@@ -474,9 +466,7 @@ class NeighborList:
         return max_displacement > (self.skin * 0.5)
 
     def update(self):
-        """
-        更新邻居列表，如果需要的话。
-        """
+        """更新邻居列表，如果需要的话。"""
         if self.need_refresh():
             self.build(self.cell)
 
@@ -499,9 +489,7 @@ class NeighborList:
         return self.neighbor_list[atom_index]
 
     def debug_neighbor_distribution(self):
-        """
-        分析和打印邻居分布情况
-        """
+        """分析和打印邻居分布情况"""
         logger = logging.getLogger(__name__)
 
         if self.neighbor_list is None:

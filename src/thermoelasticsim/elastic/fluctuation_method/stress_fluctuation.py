@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 ThermoElasticSim - 应力涨落法模块
 
 .. moduleauthor:: Gilbert Young

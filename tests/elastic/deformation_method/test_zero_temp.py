@@ -93,7 +93,7 @@ class TestDeformationResult:
 
         assert np.allclose(result.strain_voigt, strain)
         assert np.allclose(result.stress_voigt, stress)
-        assert result.converged == True
+        assert result.converged
         assert np.allclose(result.deformation_matrix, F)
 
     def test_data_types(self):
@@ -157,7 +157,7 @@ class TestStructureRelaxer:
         converged = relaxer.full_relax(sample_cell, mock_potential)
 
         # 验证结果
-        assert converged == True
+        assert converged
 
         # 验证优化器被正确调用
         mock_optimizer_class.assert_called_once()
@@ -177,7 +177,7 @@ class TestStructureRelaxer:
         converged = relaxer.internal_relax(sample_cell, mock_potential)
 
         # 验证结果
-        assert converged == True
+        assert converged
 
         # 验证优化器被正确调用（relax_cell=False）
         mock_optimizer.optimize.assert_called_once_with(
@@ -198,7 +198,7 @@ class TestStructureRelaxer:
         converged = relaxer.full_relax(sample_cell, mock_potential)
 
         # 验证未收敛被正确处理
-        assert converged == False
+        assert not converged
 
 
 class TestElasticConstantsSolver:
