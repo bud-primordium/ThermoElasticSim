@@ -1,6 +1,6 @@
 name: Test
 
-on: 
+on:
   push:
     branches: [ main, refactor/v4.0 ]
   pull_request:
@@ -9,32 +9,32 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
-    
+        python-version: '3.11'
+
     - name: Install uv
       uses: astral-sh/setup-uv@v4
       with:
         enable-cache: true
         cache-dependency-glob: "**/pyproject.toml"
-    
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y g++ cmake
-    
+
     - name: Set up virtual environment and install project
       run: |
         uv venv
         uv pip install -e .
         uv pip install pytest
-    
+
     - name: Run tests
       run: |
         uv run pytest tests/ -v
