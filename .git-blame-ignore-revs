@@ -25,3 +25,6 @@
 
 # Fix all remaining ruff linting issues
 2c6b9a8 fix: resolve all remaining ruff linting issues
+
+# Fix formatting in test_zero_temp.py
+227d12b style: fix formatting in test_zero_temp.py
