@@ -898,5 +898,5 @@ class Cell:
         # 重新计算晶格逆矩阵
         try:
             self.lattice_inv = np.linalg.inv(self.lattice_vectors.T)
-        except np.linalg.LinAlgError:
-            raise ValueError("晶格矢量矩阵不可逆，可能存在线性相关的矢量")
+        except np.linalg.LinAlgError as e:
+            raise ValueError("晶格矢量矩阵不可逆，可能存在线性相关的矢量") from e

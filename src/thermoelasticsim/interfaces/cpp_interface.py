@@ -864,4 +864,4 @@ class CppInterface:
                     W,
                 )
         except Exception as e:
-            raise RuntimeError(f"Error in C++ parrinello_rahman_hoover: {e}")
+            raise RuntimeError(f"Error in C++ parrinello_rahman_hoover: {e}") from e

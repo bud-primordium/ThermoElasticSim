@@ -16,9 +16,12 @@ import builtins
 import contextlib
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from ..elastic.elastic_visualizer import ElasticVisualizer
 from ..elastic.trajectory_recorder import (

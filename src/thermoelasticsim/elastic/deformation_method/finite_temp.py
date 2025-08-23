@@ -75,7 +75,7 @@ class FiniteTempElasticityWorkflow:
         npt_equilibration_steps=10000,
         nvt_sampling_steps=500000,
         time_step=1,
-        save_path=f"./output/finite_temp_elasticity_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        save_path=None,
     ):
         self.cell = cell
         self.potential = potential
@@ -90,6 +90,8 @@ class FiniteTempElasticityWorkflow:
         self.dt = time_step
 
         # 设置保存路径
+        if save_path is None:
+            save_path = f"./output/finite_temp_elasticity_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.save_path = save_path
         os.makedirs(self.save_path, exist_ok=True)
 

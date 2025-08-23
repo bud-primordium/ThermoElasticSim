@@ -543,5 +543,5 @@ def get_atomic_mass(symbol: str) -> float:
     }
     try:
         return atomic_masses[symbol]
-    except KeyError:
-        raise KeyError(f"Atomic mass for symbol '{symbol}' not found.")
+    except KeyError as e:
+        raise KeyError(f"Atomic mass for symbol '{symbol}' not found.") from e
