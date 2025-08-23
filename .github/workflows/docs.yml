@@ -13,35 +13,65 @@ on:
       - 'docs/**'
       - 'src/**/*.py'
 
+# GitHub Pages部署权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 确保同时只有一个部署任务运行
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build-docs:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-    
+
     - name: Install uv
       uses: astral-sh/setup-uv@v4
-    
+      with:
+        enable-cache: true
+        cache-dependency-glob: "**/pyproject.toml"
+
     - name: Install dependencies
       run: |
         uv venv
         uv pip install -e .
         uv pip install sphinx sphinx-rtd-theme numpydoc
-    
+
     - name: Build documentation
       run: |
-        cd docs && uv run make html || echo "Docs not set up yet"
-    
-    # 可选：部署到GitHub Pages
-    # - name: Deploy to GitHub Pages
-    #   uses: peaceiris/actions-gh-pages@v3
-    #   if: github.ref == 'refs/heads/main'
-    #   with:
-    #     github_token: ${{ secrets.GITHUB_TOKEN }}
-    #     publish_dir: ./docs/_build/html
+        cd docs && uv run sphinx-build -b html source build/html
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v5
+      if: github.ref == 'refs/heads/main'
+
+    - name: Upload Pages artifact
+      uses: actions/upload-pages-artifact@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        path: ./docs/build/html
+
+  # 部署到GitHub Pages（仅在main分支推送时）
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-docs
+
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
