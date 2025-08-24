@@ -32,15 +32,18 @@ jobs:
     - name: Set up virtual environment and install project
       run: |
         uv venv
-        # 强制重新构建C++扩展，避免缓存问题
-        uv pip install --no-cache-dir -e . --force-reinstall
+        # 清理本地构建缓存，确保 C++ 扩展完整重建
+        rm -rf build
+        # 强制重新构建 C++ 扩展，避免缓存/旧轮子
+        uv pip install --no-cache-dir --force-reinstall -e .
         uv pip install pytest
 
     - name: Debug - Check available C++ functions
       run: |
-        uv run python -c "
+        ./.venv/bin/python -c "
         try:
             import thermoelasticsim._cpp_core as cpp
+            print('cpp module file:', cpp.__file__)
             eam_funcs = [attr for attr in dir(cpp) if 'eam' in attr.lower()]
             print('Available EAM functions:', eam_funcs)
             print('Has Cu1 energy:', hasattr(cpp, 'calculate_eam_cu1_energy'))
@@ -51,7 +54,7 @@ jobs:
 
     - name: Debug - Test Al1 vs Cu1 energy difference
       run: |
-        uv run python -c "
+        ./.venv/bin/python -c "
         from thermoelasticsim.potentials.eam import EAMAl1Potential, EAMCu1Potential
         from thermoelasticsim.core.structure import Atom, Cell
         import numpy as np
@@ -83,5 +86,8 @@ jobs:
         "
 
     - name: Run tests
+      env:
+        # 禁止 uv 在运行时替换依赖映射，确保使用刚安装的可编辑构建
+        UV_NO_SYNC: "1"
       run: |
-        uv run pytest tests/ -v
+        ./.venv/bin/python -m pytest -v tests/
