@@ -2,6 +2,8 @@
 
 **语言版本**: 中文 | [English](README_en.md)
 
+**文档（完善中）**: https://bud-primordium.github.io/ThermoElasticSim/
+
 ## 项目简介
 
 **ThermoElasticSim** 是一个专门用于计算金属铝（Al）在零温和有限温度下弹性常数的分子动力学模拟工具。该项目基于 EAM (Embedded Atom Method) 势函数，结合了 Python 的易用性和 C++ 的高性能计算能力，通过结构优化和分子动力学（MD）模拟，采用显式变形法和应力涨落法，精确计算材料的弹性性质。
@@ -47,7 +49,7 @@
 **EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006**
 
 - **OpenKIM数据库收录**：[MO_106969701023_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006)
-- **理论基础**：Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. doi:10.1080/14786430802206482
+- **理论基础**：Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. [doi:10.1080/14786430802206482](https://doi.org/10.1080/14786430802206482)
 - **适用范围**：晶体和液体铝的结构和动力学性质
 - **验证精度**：零温弹性常数与文献值误差小于1%，有限温与实验值吻合较好。
 
@@ -79,42 +81,66 @@ ThermoElasticSim/
 
 - **Python 3.9+**
 - **C++ 编译器**（支持 C++11）
-- **uv**（推荐）或 pip
+- **[uv](https://github.com/astral-sh/uv)**（推荐）或 pip
 
-### 快速安装
+### 使用 [uv](https://github.com/astral-sh/uv)（推荐）
 
 ```bash
-# 1. 克隆仓库
+# 0) 安装 uv（任选其一）
+# macOS（Homebrew）
+brew install uv
+# macOS/Linux（通用脚本）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows（PowerShell）
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# 1) 克隆仓库
 git clone https://github.com/bud-primordium/ThermoElasticSim.git
 cd ThermoElasticSim
 
-# 2. 清理旧的构建产物（如果有）
-rm -rf .venv build .cmake src/thermoelasticsim/_cpp_core*.so
+# 2) 创建并激活虚拟环境
+uv venv && source .venv/bin/activate
 
-# 3. 创建虚拟环境
-uv venv
-
-# 4. 安装项目（editable 模式）
+# 3) 可编辑安装项目（自动构建 C++ 扩展）
 uv pip install -e .
 
-# 5. 安装测试依赖（如需运行测试）
-uv pip install pytest
-
-# 6. 验证安装
-uv run python -c "import thermoelasticsim._cpp_core; print('✓ 安装成功')"
+# 4) 验证 C++ 扩展
+python -c "import thermoelasticsim._cpp_core as m; print('✓', m.__file__)"
 ```
 
 ### 运行测试
 
 ```bash
-uv run pytest
+# 开发者：先安装测试依赖
+uv pip install -e ".[dev]"
+
+# 运行测试（推荐用模块方式，避免 PATH 混淆）
+python -m pytest
+# 或：uv run --no-sync python -m pytest
+
+# 可选：若坚持直接调用 pytest，请确保指向 venv：
+.venv/bin/pytest
 ```
+
+提示：如果你启用了 Conda 的 base 环境，可能存在 `pytest` 命令来自 base 的情况，
+从而绕过当前 venv。使用 `python -m pytest` 可确保使用 venv 里的解释器与依赖。
 
 ### 安装说明
 
-- **自动化构建**：使用 `scikit-build-core` + `pybind11` 自动编译 C++ 扩展
-- **已知问题**：由于 scikit-build-core 与 uv 的兼容性问题，目前只支持 editable 安装（`-e`）
-- **重要提示**：运行任何命令都需要加 `uv run` 前缀，确保使用正确的 Python 环境
+- 自动化构建：`scikit-build-core` + `pybind11`。
+- 可编辑模式：`redirect`，.so 在 `site-packages`；源码从 `src/` 导入；构建产物在 `build/{wheel_tag}`。
+- uv 提示：优先用 venv 内的 `python/pytest`；若用 `uv run` 跑测试，请加 `--no-sync`。
+
+### 常见问题（FAQ）
+
+- ImportError: “pybind11 module _cpp_core is not available …”
+  - 原因：尚未构建/安装 C++ 扩展，或被 `uv run` 的同步覆盖。
+  - 解决：`uv pip install -e ".[dev]"` 后用 `pytest`（或 `uv run --no-sync pytest`）。
+
+- NumPy 导入失败（缺少 C 扩展）
+  - 项目依赖已升级到新版本栈：`numpy>=2.0`、`numba>=0.60`、`scipy>=1.11`。
+  - 若镜像提供源码包导致装到 sdist，可强制轮子安装：
+    `uv pip install -U --only-binary=:all: "numpy>=2" "numba>=0.60" "scipy>=1.11"`。
 
 ## 使用说明
 
@@ -130,19 +156,6 @@ uv run python examples/zero_temp_al_benchmark.py
 uv run python examples/finite_temp_al_benchmark.py
 ```
 
-### 运行测试
-
-```bash
-# 运行所有测试
-uv run pytest
-
-# 运行特定测试
-uv run pytest tests/potentials/
-
-# 显示详细输出
-uv run pytest -v
-```
-
 ## 配置文件
 
 项目使用 `YAML` 格式的配置文件 `tests/config.yaml` 来管理参数。以下是一个示例配置（**尚在测试中**）：
@@ -151,7 +164,7 @@ uv run pytest -v
 # config.yaml
 
 unit_cell:
-  lattice_vectors: 
+  lattice_vectors:
     - [3.615, 0.0, 0.0]
     - [0.0, 3.615, 0.0]
     - [0.0, 0.0, 3.615]

@@ -2,6 +2,8 @@
 
 **Languages**: [中文](README.md) | English
 
+**Documentation (in progress)**: https://bud-primordium.github.io/ThermoElasticSim/
+
 ## Project Overview
 
 **ThermoElasticSim** is a molecular dynamics simulation tool specifically designed for calculating elastic constants of aluminum (Al) at zero and finite temperatures. Based on the EAM (Embedded Atom Method) potential, this project combines Python's ease of use with C++'s high-performance computing capabilities, employing explicit deformation and stress fluctuation methods to accurately calculate elastic properties of materials through structural optimization and molecular dynamics (MD) simulations.
@@ -47,7 +49,7 @@ The project employs a validated EAM (Embedded Atom Method) potential for aluminu
 **EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006**
 
 - **OpenKIM Database**: [MO_106969701023_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006)
-- **Theoretical Basis**: Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. doi:10.1080/14786430802206482
+- **Theoretical Basis**: Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. [doi:10.1080/14786430802206482](https://doi.org/10.1080/14786430802206482)
 - **Applicable Range**: Structural and dynamic properties of crystalline and liquid aluminum
 - **Validation Accuracy**: Zero-temperature elastic constants error < 1% compared to literature values, good agreement with experimental values at finite temperatures
 
@@ -79,42 +81,67 @@ ThermoElasticSim/
 
 - **Python 3.9+**
 - **C++ compiler** (supporting C++11)
-- **uv** (recommended) or pip
+- **[uv](https://github.com/astral-sh/uv)** (recommended) or pip
 
-### Quick Installation
+### Install with [uv](https://github.com/astral-sh/uv) (recommended)
 
 ```bash
-# 1. Clone repository
+# 0) Install uv (pick one)
+# macOS (Homebrew)
+brew install uv
+# macOS/Linux (generic script)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# 1) Clone repository
 git clone https://github.com/bud-primordium/ThermoElasticSim.git
 cd ThermoElasticSim
 
-# 2. Clean old build artifacts (if any)
-rm -rf .venv build .cmake src/thermoelasticsim/_cpp_core*.so
+# 2) Create and activate a virtual environment
+uv venv && source .venv/bin/activate
 
-# 3. Create virtual environment
-uv venv
-
-# 4. Install project (editable mode)
+# 3) Install the project in editable mode (builds C++ extension)
 uv pip install -e .
 
-# 5. Install test dependencies (if running tests)
-uv pip install pytest
-
-# 6. Verify installation
-uv run python -c "import thermoelasticsim._cpp_core; print('✓ Installation successful')"
+# 4) Verify the C++ extension
+python -c "import thermoelasticsim._cpp_core as m; print('✓', m.__file__)"
 ```
 
 ### Running Tests
 
 ```bash
-uv run pytest
+# Developers: install test dependencies first
+uv pip install -e ".[dev]"
+
+# Run tests (prefer module form to avoid PATH issues)
+python -m pytest
+# Or: uv run --no-sync python -m pytest
+
+# Optional: if you insist on calling pytest directly, ensure venv binary
+.venv/bin/pytest
 ```
+
+Tip: If Conda base is active, the `pytest` command may resolve to the base
+environment, bypassing your venv. Using `python -m pytest` guarantees the
+venv's interpreter and dependencies are used.
 
 ### Installation Notes
 
-- **Automated Build**: Uses `scikit-build-core` + `pybind11` for automatic C++ extension compilation
-- **Known Issue**: Due to scikit-build-core compatibility issues with uv, currently only editable installation (`-e`) is supported
-- **Important**: All commands must be prefixed with `uv run` to ensure correct Python environment usage
+- Automated build: `scikit-build-core` + `pybind11`.
+- Editable mode: `redirect` – the `.so` lives in `site-packages/thermoelasticsim/`, sources import from `src/`, build artifacts go to `build/{wheel_tag}`.
+- uv tip: Prefer venv's `python/pytest`; if you use `uv run` for tests, add `--no-sync`.
+
+### FAQ
+
+- ImportError: “pybind11 module _cpp_core is not available …”
+  - Cause: The C++ extension has not been built/installed yet, or the editable mapping was replaced during `uv run`'s dependency sync.
+  - Fix: `uv pip install -e ".[dev]"` then use `pytest` (or `uv run --no-sync pytest`).
+
+- NumPy import failure (missing C extensions)
+  - The project dependencies are upgraded to the new stack: `numpy>=2.0`, `numba>=0.60`, `scipy>=1.11`.
+  - If your mirror provides sdists and you end up without wheels, force wheel install:
+    `uv pip install -U --only-binary=:all: "numpy>=2" "numba>=0.60" "scipy>=1.11"`.
 
 ## Usage Instructions
 
@@ -130,19 +157,6 @@ uv run python examples/zero_temp_al_benchmark.py
 uv run python examples/finite_temp_al_benchmark.py
 ```
 
-### Running Tests
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run specific tests
-uv run pytest tests/potentials/
-
-# Show detailed output
-uv run pytest -v
-```
-
 ## Configuration Files
 
 The project uses YAML format configuration files `tests/config.yaml` for parameter management. Here's an example configuration (**currently under testing**):
@@ -151,7 +165,7 @@ The project uses YAML format configuration files `tests/config.yaml` for paramet
 # config.yaml
 
 unit_cell:
-  lattice_vectors: 
+  lattice_vectors:
     - [3.615, 0.0, 0.0]
     - [0.0, 3.615, 0.0]
     - [0.0, 0.0, 3.615]
