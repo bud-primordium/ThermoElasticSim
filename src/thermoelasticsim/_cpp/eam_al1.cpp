@@ -37,7 +37,7 @@ extern "C"
      * @param r 原子间距
      * @return 对势能量
      */
-    inline double phi(double r)
+    static inline double phi(double r)
     {
         double phi_val = 0.0;
 
@@ -100,7 +100,7 @@ extern "C"
      * @param r 原子间距
      * @return 电子密度贡献
      */
-    inline double psi(double r)
+    static inline double psi(double r)
     {
         double psi_val = 0.0;
 
@@ -133,7 +133,7 @@ extern "C"
      * @param rho 局域电子密度
      * @return 嵌入能
      */
-    inline double Phi(double rho)
+    static inline double Phi(double rho)
     {
         double F = -sqrt(rho); // 对所有 ρ 的基本项
 
@@ -157,7 +157,7 @@ extern "C"
     /**
      * @brief 对势函数的导数 dφ/dr
      */
-    inline double phi_grad(double r)
+    static inline double phi_grad(double r)
     {
         double dphi = 0.0;
 
@@ -214,7 +214,7 @@ extern "C"
     /**
      * @brief 电子密度 ψ(r) 的导数 dψ/dr
      */
-    inline double psi_grad(double r)
+    static inline double psi_grad(double r)
     {
         double dpsi = 0.0;
 
@@ -241,7 +241,7 @@ extern "C"
     /**
      * @brief 嵌入能函数的导数 dF/dρ
      */
-    inline double Phi_grad(double rho)
+    static inline double Phi_grad(double rho)
     {
         double dF = -0.5 / sqrt(rho); // 对所有 ρ 的基本项
 
