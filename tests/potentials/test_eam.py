@@ -3,23 +3,22 @@
 对 EAM 势进行严格的集成测试 (累加逻辑版本)
 """
 
-import ctypes
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from thermoelasticsim.core.structure import Atom, Cell
-from thermoelasticsim.potentials.eam import EAMAl1Potential
+from thermoelasticsim.potentials.eam import EAMAl1Potential, EAMCu1Potential
 
 # 检查 pybind11 模块是否可用
 try:
     import thermoelasticsim._cpp_core as _cpp_core
 
     HAS_PYBIND = hasattr(_cpp_core, "calculate_eam_al1_energy")
+    HAS_PYBIND_CU1 = hasattr(_cpp_core, "calculate_eam_cu1_energy")
 except Exception:
     HAS_PYBIND = False
+    HAS_PYBIND_CU1 = False
 
 # --- 1. 从 eam_al1.cpp 精确复现势函数及其导数 (累加逻辑) ---
 
@@ -202,10 +201,24 @@ def eam_potential():
     return EAMAl1Potential(cutoff=6.5)
 
 
+@pytest.fixture
+def eam_cu1_potential():
+    """提供一个EAMCu1Potential实例"""
+    return EAMCu1Potential(cutoff=6.0)
+
+
 def create_two_atom_cell(dist):
     """根据给定距离创建双原子晶胞的辅助函数"""
     atom1 = Atom(id=1, symbol="Al", mass_amu=26.98, position=np.array([0, 0, 0]))
     atom2 = Atom(id=2, symbol="Al", mass_amu=26.98, position=np.array([dist, 0, 0]))
+    cell_vectors = np.diag([20, 20, 20])
+    return Cell(cell_vectors, [atom1, atom2])
+
+
+def create_two_atom_cu_cell(dist):
+    """根据给定距离创建双铜原子晶胞的辅助函数"""
+    atom1 = Atom(id=1, symbol="Cu", mass_amu=63.546, position=np.array([0, 0, 0]))
+    atom2 = Atom(id=2, symbol="Cu", mass_amu=63.546, position=np.array([dist, 0, 0]))
     cell_vectors = np.diag([20, 20, 20])
     return Cell(cell_vectors, [atom1, atom2])
 
@@ -246,158 +259,150 @@ def test_eam_potential_shape(eam_potential):
 
 def test_generate_cumulative_potential_plot():
     """
-    生成EAM势能曲线图(累加逻辑)并保存为文件，以便直观验证。
+    生成EAM势能曲线图(累加逻辑)用于可视化验证，但不写入文件。
+    仅检查绘图流程是否能正常执行。
     """
     distances = np.linspace(1.5, 6.5, 200)
     energies = [cpp_phi_cumulative(r) + 2 * cpp_F(cpp_psi(r)) for r in distances]
-    plt.figure(figsize=(10, 6))
-    plt.plot(distances, energies, label="Cumulative EAM Potential")
-    plt.title("Cumulative EAM Potential for Al (Mendelev 2008)")
-    plt.xlabel("Interatomic Distance (Å)")
-    plt.ylabel("Potential Energy (eV)")
-    plt.grid(True)
-    plt.axhline(0, color="black", linestyle="--", linewidth=0.7)
-    plt.legend()
-    plot_filename = "eam_potential_cumulative.png"
-    plt.savefig(plot_filename)
-    plt.close()
-    print(f"\n[INFO] 累加势能曲线图已保存至: {os.path.abspath(plot_filename)}")
-    assert os.path.exists(plot_filename)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    (line,) = ax.plot(distances, energies, label="Cumulative EAM Potential")
+    ax.set_title("Cumulative EAM Potential for Al (Mendelev 2008)")
+    ax.set_xlabel("Interatomic Distance (Å)")
+    ax.set_ylabel("Potential Energy (eV)")
+    ax.grid(True)
+    ax.axhline(0, color="black", linestyle="--", linewidth=0.7)
+    ax.legend()
+    # 不保存图像，避免污染仓库根目录
+    plt.close(fig)
+    # 基本断言：绘制了曲线且数据长度一致
+    assert line.get_xdata().size == distances.size
 
 
-# --- 迁移一致性测试 ---
-@pytest.mark.migration
-def test_eam_pybind_ctypes_energy_consistency():
-    """若旧 ctypes 库与新 pybind11 模块均可用，则对比能量一致性"""
-    if not HAS_PYBIND:
-        pytest.skip("pybind11 module _cpp_core not available")
-
-    # 尝试定位旧 ctypes 库
-    here = os.path.dirname(os.path.abspath(__file__))
-    cur = here
-    project_root = None
-    while cur != os.path.dirname(cur):
-        if os.path.exists(os.path.join(cur, "pyproject.toml")):
-            project_root = cur
-            break
-        cur = os.path.dirname(cur)
-
-    if not project_root:
-        pytest.skip("Cannot locate project root to find ctypes library")
-
-    ctypes_lib_path = os.path.join(
-        project_root, "src", "thermoelasticsim", "lib", "libeam_al1.so"
-    )
-    if not os.path.exists(ctypes_lib_path):
-        # macOS 使用 .dylib
-        ctypes_lib_path = ctypes_lib_path.replace(".so", ".dylib")
-
-    if not os.path.exists(ctypes_lib_path):
-        pytest.skip(f"ctypes library not found: {ctypes_lib_path}")
-
-    # 加载 ctypes 库
-    ctypes_lib = ctypes.CDLL(ctypes_lib_path)
-    ctypes_lib.calculate_eam_al1_energy.argtypes = [
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_double),
-        ctypes.POINTER(ctypes.c_double),  # box_lengths
-        ctypes.POINTER(ctypes.c_double),  # energy (output)
-    ]
-    ctypes_lib.calculate_eam_al1_energy.restype = ctypes.c_void_p
-
-    # 创建测试数据
-    r = 3.0
-    cell = create_two_atom_cell(r)
-
-    # 准备 ctypes 调用的数据
-    n_atoms = len(cell.atoms)
-    positions = np.array(
-        [atom.position for atom in cell.atoms], dtype=np.float64
-    ).flatten()
-    positions_ptr = positions.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    box_lengths = np.array([20.0, 20.0, 20.0], dtype=np.float64)  # 从cell_vectors获取
-    box_lengths_ptr = box_lengths.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    energy_ctypes = ctypes.c_double(0.0)
-
-    # 调用 ctypes
-    ctypes_lib.calculate_eam_al1_energy(
-        n_atoms, positions_ptr, box_lengths_ptr, ctypes.byref(energy_ctypes)
-    )
-
-    # 调用 pybind11
-    import thermoelasticsim._cpp_core as _cpp_core
-
-    energy_pybind = _cpp_core.calculate_eam_al1_energy(n_atoms, positions, box_lengths)
-
-    # 比较结果
-    assert energy_pybind == pytest.approx(energy_ctypes.value, abs=1e-12)
+# --- EAM Cu1 测试 ---
 
 
-@pytest.mark.migration
-def test_eam_pybind_ctypes_forces_consistency():
-    """若旧 ctypes 库与新 pybind11 模块均可用，则对比力计算一致性"""
-    if not HAS_PYBIND:
-        pytest.skip("pybind11 module _cpp_core not available")
+def test_eam_cu1_initialization(eam_cu1_potential):
+    """测试EAM Cu1势是否正确初始化"""
+    assert eam_cu1_potential.parameters["cutoff"] == 6.0
+    assert eam_cu1_potential.parameters["type"] == "Cu1"
+    assert eam_cu1_potential.cutoff == 6.0
 
-    # 定位 ctypes 库
-    here = os.path.dirname(os.path.abspath(__file__))
-    cur = here
-    project_root = None
-    while cur != os.path.dirname(cur):
-        if os.path.exists(os.path.join(cur, "pyproject.toml")):
-            project_root = cur
-            break
-        cur = os.path.dirname(cur)
 
-    if not project_root:
-        pytest.skip("Cannot locate project root to find ctypes library")
+def test_eam_cu1_energy_calculation(eam_cu1_potential):
+    """测试EAM Cu1势能计算的基本功能"""
+    if not HAS_PYBIND_CU1:
+        pytest.skip("pybind11 EAM Cu1 module not available")
 
-    ctypes_lib_path = os.path.join(
-        project_root, "src", "thermoelasticsim", "lib", "libeam_al1.so"
-    )
-    if not os.path.exists(ctypes_lib_path):
-        ctypes_lib_path = ctypes_lib_path.replace(".so", ".dylib")
+    # 测试距离为2.5Å的双铜原子
+    r = 2.5
+    cell = create_two_atom_cu_cell(r)
 
-    if not os.path.exists(ctypes_lib_path):
-        pytest.skip(f"ctypes library not found: {ctypes_lib_path}")
+    energy = eam_cu1_potential.calculate_energy(cell)
 
-    # 加载 ctypes 库
-    ctypes_lib = ctypes.CDLL(ctypes_lib_path)
-    ctypes_lib.calculate_eam_al1_forces.argtypes = [
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_double),
-        ctypes.POINTER(ctypes.c_double),  # box_lengths
-        ctypes.POINTER(ctypes.c_double),  # forces (output)
-    ]
-    ctypes_lib.calculate_eam_al1_forces.restype = ctypes.c_void_p
+    # Cu1势在2.5Å距离应该有合理的能量值
+    assert isinstance(energy, float)
+    assert not np.isnan(energy)
+    assert not np.isinf(energy)
 
-    # 创建测试数据
-    r = 3.0
-    cell = create_two_atom_cell(r)
+    print(f"Cu1 EAM energy at r={r} Å: {energy:.6f} eV")
 
-    # 准备数据
-    n_atoms = len(cell.atoms)
-    positions = np.array(
-        [atom.position for atom in cell.atoms], dtype=np.float64
-    ).flatten()
-    positions_ptr = positions.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    box_lengths = np.array([20.0, 20.0, 20.0], dtype=np.float64)
-    box_lengths_ptr = box_lengths.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    forces_ctypes = np.zeros(n_atoms * 3, dtype=np.float64)
-    forces_ptr = forces_ctypes.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 
-    # 调用 ctypes
-    ctypes_lib.calculate_eam_al1_forces(
-        n_atoms, positions_ptr, box_lengths_ptr, forces_ptr
+def test_eam_cu1_force_calculation(eam_cu1_potential):
+    """测试EAM Cu1势力计算的基本功能"""
+    if not HAS_PYBIND_CU1:
+        pytest.skip("pybind11 EAM Cu1 module not available")
+
+    r = 2.5
+    cell = create_two_atom_cu_cell(r)
+
+    # 计算力
+    eam_cu1_potential.calculate_forces(cell)
+
+    # 检查力的基本性质
+    force1 = cell.atoms[0].force
+    force2 = cell.atoms[1].force
+
+    assert force1 is not None
+    assert force2 is not None
+    assert len(force1) == 3
+    assert len(force2) == 3
+
+    # 验证牛顿第三定律：F1 = -F2
+    assert np.allclose(force1, -force2, atol=1e-12)
+
+    # 力主要应该沿x方向（原子沿x轴排列）
+    assert abs(force1[0]) > abs(force1[1])
+    assert abs(force1[0]) > abs(force1[2])
+
+    print(f"Cu1 EAM forces at r={r} Å: atom1={force1}, atom2={force2}")
+
+
+def test_eam_cu1_cutoff_behavior(eam_cu1_potential):
+    """测试EAM Cu1势的截断行为"""
+    if not HAS_PYBIND_CU1:
+        pytest.skip("pybind11 EAM Cu1 module not available")
+
+    # 测试超过截断距离的情况
+    r_beyond_cutoff = 7.0  # 超过6.0 Å截断
+    cell = create_two_atom_cu_cell(r_beyond_cutoff)
+
+    energy = eam_cu1_potential.calculate_energy(cell)
+    eam_cu1_potential.calculate_forces(cell)
+
+    # 超过截断距离，能量应该很小或为零
+    assert abs(energy) < 1e-6, f"Beyond cutoff energy should be near zero, got {energy}"
+
+    # 超过截断距离，力应该很小或为零
+    force_magnitude = np.linalg.norm(cell.atoms[0].force)
+    assert force_magnitude < 1e-6, (
+        f"Beyond cutoff force should be near zero, got {force_magnitude}"
     )
 
-    # 调用 pybind11
-    import thermoelasticsim._cpp_core as _cpp_core
 
-    forces_pybind_array = np.zeros(n_atoms * 3, dtype=np.float64)
-    _cpp_core.calculate_eam_al1_forces(
-        n_atoms, positions, box_lengths, forces_pybind_array
+def test_eam_cu1_distance_series():
+    """测试Cu1势在不同距离下的行为"""
+    if not HAS_PYBIND_CU1:
+        pytest.skip("pybind11 EAM Cu1 module not available")
+
+    cu1_potential = EAMCu1Potential(cutoff=6.0)
+    distances = [1.8, 2.0, 2.2, 2.5, 3.0, 3.5, 4.0, 5.0]
+    energies = []
+
+    for r in distances:
+        cell = create_two_atom_cu_cell(r)
+        energy = cu1_potential.calculate_energy(cell)
+        energies.append(energy)
+        print(f"Cu1 EAM: r={r:.1f} Å, E={energy:.6f} eV")
+
+    # 验证能量序列的合理性
+    # 在平衡距离附近应该有最小值
+    assert len(energies) == len(distances)
+    assert all(not np.isnan(e) and not np.isinf(e) for e in energies)
+
+
+def test_eam_cu1_vs_al1_comparison():
+    """比较Cu1和Al1势的基本差异"""
+    if not HAS_PYBIND_CU1 or not HAS_PYBIND:
+        pytest.skip("pybind11 modules not available")
+
+    al1_potential = EAMAl1Potential(cutoff=6.5)
+    cu1_potential = EAMCu1Potential(cutoff=6.0)
+
+    r = 2.5  # 使用相同的测试距离
+
+    # 创建相同几何结构但不同元素的晶胞
+    al_cell = create_two_atom_cell(r)
+    cu_cell = create_two_atom_cu_cell(r)
+
+    # 计算能量
+    al_energy = al1_potential.calculate_energy(al_cell)
+    cu_energy = cu1_potential.calculate_energy(cu_cell)
+
+    print(f"At r={r} Å:")
+    print(f"  Al1 EAM energy: {al_energy:.6f} eV")
+    print(f"  Cu1 EAM energy: {cu_energy:.6f} eV")
+
+    # 验证两个势给出不同的结果（因为参数不同）
+    assert abs(al_energy - cu_energy) > 1e-6, (
+        "Al1 and Cu1 should give different energies"
     )
-
-    # 比较结果
-    assert np.allclose(forces_pybind_array, forces_ctypes, atol=1e-12)

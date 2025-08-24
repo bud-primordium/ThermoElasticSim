@@ -1,85 +1,30 @@
 # 文件名: cpp_interface.py
 # 作者: Gilbert Young
-# 修改日期: 2025-08-12
+# 修改日期: 2025-08-24
 # 文件描述: 用于在 Python 中调用 C++ 实现的接口类。
 
 """
 接口模块。
 
-该模块定义了 `CppInterface` 类，用于通过 ctypes 调用外部 C++ 函数库。
+该模块定义了 `CppInterface` 类，用于通过 pybind11 调用外部 C++ 函数库。
 """
 
-import ctypes
 import logging
-import os
-import sys
 
 import numpy as np
-from numpy.ctypeslib import ndpointer
 
 logger = logging.getLogger(__name__)
 
 try:
-    # 优先尝试导入 pybind11 扩展模块
+    # 导入 pybind11 扩展模块
     import thermoelasticsim._cpp_core as _cpp_core  # type: ignore
-except Exception:  # pragma: no cover - 环境未构建扩展时忽略
-    # 尝试自动构建扩展模块
-    import subprocess
-    import sys
-    from pathlib import Path
-
-    # 查找项目根目录
-    module_dir = Path(__file__).parent.parent
-    project_root = module_dir.parent.parent
-
-    # 检查是否存在CMakeLists.txt
-    if (project_root / "CMakeLists.txt").exists():
-        try:
-            # 创建构建目录
-            build_dir = project_root / "build"
-            build_dir.mkdir(exist_ok=True)
-
-            # 尝试自动构建
-            logger.info("自动构建pybind11扩展模块...")
-
-            # 获取pybind11路径
-            import pybind11
-
-            pybind11_dir = pybind11.get_cmake_dir()
-
-            # 配置CMake
-            subprocess.check_call(
-                [
-                    "cmake",
-                    str(project_root),
-                    f"-Dpybind11_DIR={pybind11_dir}",
-                    f"-DPYTHON_EXECUTABLE={sys.executable}",
-                ],
-                cwd=build_dir,
-            )
-
-            # 构建
-            subprocess.check_call(["cmake", "--build", "."], cwd=build_dir)
-
-            # 查找并复制扩展模块
-            import glob
-
-            for so_file in glob.glob(str(build_dir / "*_cpp_core*.so")):
-                import shutil
-
-                target = module_dir / Path(so_file).name
-                shutil.copy2(so_file, target)
-                logger.info(f"已复制扩展模块到 {target}")
-
-            # 再次尝试导入
-            import thermoelasticsim._cpp_core as _cpp_core
-
-            logger.info("pybind11扩展模块构建成功")
-        except Exception as e:
-            logger.debug(f"自动构建失败: {e}")
-            _cpp_core = None
-    else:
-        _cpp_core = None
+except ImportError:
+    logger.error(
+        "Failed to import pybind11 module _cpp_core. Please build the C++ extensions."
+    )
+    raise ImportError(
+        "pybind11 module _cpp_core is not available. Run 'uv pip install -e .' to build."
+    ) from None
 
 
 class CppInterface:
@@ -91,223 +36,61 @@ class CppInterface:
     Parameters
     ----------
     lib_name : str
-        库的名称，不包括前缀和扩展名。
+        库的名称，用于确定可用的函数集合。
     """
 
     def __init__(self, lib_name):
-        self._use_pybind = False
         self._lib_name = lib_name
-        self._cpp = None
+        self._cpp = _cpp_core
 
-        # 优先尝试 pybind11 路径（如果可用）
-        if _cpp_core is not None:
-            self._cpp = _cpp_core
-            # 检查当前lib_name在pybind11中是否有对应函数
-            if lib_name == "lennard_jones":
-                if hasattr(_cpp_core, "calculate_lj_energy") and hasattr(
-                    _cpp_core, "calculate_lj_forces"
-                ):
-                    self._use_pybind = True
-                    logger.debug("Using pybind11 backend for Lennard-Jones")
-                    return
-            elif lib_name == "eam_al1":
-                if hasattr(_cpp_core, "calculate_eam_al1_energy") and hasattr(
-                    _cpp_core, "calculate_eam_al1_forces"
-                ):
-                    self._use_pybind = True
-                    logger.debug("Using pybind11 backend for EAM Al1")
-                    return
-            elif lib_name == "stress_calculator":
-                if hasattr(_cpp_core, "compute_stress"):
-                    self._use_pybind = True
-                    logger.debug("Using pybind11 backend for Stress Calculator")
-                    return
-            elif lib_name == "nose_hoover":
-                if hasattr(_cpp_core, "nose_hoover"):
-                    self._use_pybind = True
-                    logger.debug("Using pybind11 backend for Nose-Hoover")
-                    return
-            elif lib_name == "nose_hoover_chain":
-                if hasattr(_cpp_core, "nose_hoover_chain"):
-                    self._use_pybind = True
-                    logger.debug("Using pybind11 backend for Nose-Hoover Chain")
-                    return
-            elif lib_name == "parrinello_rahman_hoover" and hasattr(
-                _cpp_core, "parrinello_rahman_hoover"
+        # 检查当前lib_name在pybind11中是否有对应函数
+        if lib_name == "lennard_jones":
+            if not (
+                hasattr(_cpp_core, "calculate_lj_energy")
+                and hasattr(_cpp_core, "calculate_lj_forces")
             ):
-                self._use_pybind = True
-                logger.debug("Using pybind11 backend for Parrinello-Rahman-Hoover")
-                return
-
-        # Fallback到ctypes实现
-        logger.debug(f"Using ctypes backend for {lib_name}")
-        if os.name == "nt":  # Windows
-            lib_extension = ".dll"
-            lib_prefix = ""
-
-            # 判断是否使用 MinGW 环境
-            if "GCC" in sys.version:
-                lib_prefix = "lib"  # MinGW 使用 'lib' 前缀
-        elif sys.platform == "darwin":  # macOS
-            lib_extension = ".dylib"
-            lib_prefix = "lib"
-        else:  # Unix/Linux
-            lib_extension = ".so"
-            lib_prefix = "lib"
-
-        # --- 健壮的路径查找 ---
-        # 从当前文件位置开始，向上查找项目根目录（以 pyproject.toml 为标志）
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = None
-        while current_dir != os.path.dirname(current_dir):  # 循环直到文件系统的根目录
-            if "pyproject.toml" in os.listdir(current_dir):
-                project_root = current_dir
-                break
-            current_dir = os.path.dirname(current_dir)
-
-        if project_root is None:
-            raise FileNotFoundError("无法定位项目根目录 (未找到 pyproject.toml)。")
-
-        # 从项目根目录构建库文件的绝对路径
-        lib_path = os.path.join(
-            project_root,
-            "src",
-            "thermoelasticsim",
-            "lib",
-            lib_prefix + lib_name + lib_extension,
-        )
-
-        if not os.path.exists(lib_path):
-            raise FileNotFoundError(f"无法找到库文件: {lib_path}")
-
-        self.lib = ctypes.CDLL(lib_path)
-
-        # 配置不同库的函数签名
-        if lib_name == "stress_calculator":
-            self.lib.compute_stress.argtypes = [
-                ctypes.c_int,  # num_atoms
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # positions (3*num_atoms)
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # velocities (3*num_atoms)
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # forces (3*num_atoms)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (num_atoms)
-                ctypes.c_double,  # volume
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths (3,)
-                ndpointer(ctypes.c_double, flags="WRITEABLE"),  # stress_tensor (9,)
-            ]
-            self.lib.compute_stress.restype = None
-
-        elif lib_name == "lennard_jones":
-            self.lib.calculate_lj_forces.argtypes = [
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ctypes.c_double,  # epsilon
-                ctypes.c_double,  # sigma
-                ctypes.c_double,  # cutoff
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
-                ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"),  # neighbor_pairs
-                ctypes.c_int,  # num_pairs
-            ]
-            self.lib.calculate_lj_forces.restype = None
-
-            self.lib.calculate_lj_energy.argtypes = [
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
-                ctypes.c_double,  # epsilon
-                ctypes.c_double,  # sigma
-                ctypes.c_double,  # cutoff
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # box_lengths
-                ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"),  # neighbor_pairs
-                ctypes.c_int,  # num_pairs
-            ]
-            self.lib.calculate_lj_energy.restype = ctypes.c_double
-
+                raise RuntimeError(
+                    "Lennard-Jones functions not available in pybind11 module"
+                )
+            logger.debug("Using pybind11 backend for Lennard-Jones")
         elif lib_name == "eam_al1":
-            self.lib.calculate_eam_al1_forces.argtypes = [
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # lattice_vectors (9, row-major)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-            ]
-            self.lib.calculate_eam_al1_forces.restype = None
-
-            self.lib.calculate_eam_al1_energy.argtypes = [
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # positions
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # lattice_vectors (9, row-major)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # energy (output)
-            ]
-            self.lib.calculate_eam_al1_energy.restype = None
-
-            # 可选：维里计算（如果提供C接口）
-            if hasattr(self.lib, "calculate_eam_al1_virial"):
-                self.lib.calculate_eam_al1_virial.argtypes = [
-                    ctypes.c_int,
-                    ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
-                    ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
-                    ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
-                ]
-                self.lib.calculate_eam_al1_virial.restype = None
-
+            if not (
+                hasattr(_cpp_core, "calculate_eam_al1_energy")
+                and hasattr(_cpp_core, "calculate_eam_al1_forces")
+            ):
+                raise RuntimeError("EAM Al1 functions not available in pybind11 module")
+            logger.debug("Using pybind11 backend for EAM Al1")
+        elif lib_name == "eam_cu1":
+            if not (
+                hasattr(_cpp_core, "calculate_eam_cu1_energy")
+                and hasattr(_cpp_core, "calculate_eam_cu1_forces")
+            ):
+                raise RuntimeError("EAM Cu1 functions not available in pybind11 module")
+            logger.debug("Using pybind11 backend for EAM Cu1")
+        elif lib_name == "stress_calculator":
+            if not hasattr(_cpp_core, "compute_stress"):
+                raise RuntimeError(
+                    "Stress calculator functions not available in pybind11 module"
+                )
+            logger.debug("Using pybind11 backend for Stress Calculator")
         elif lib_name == "nose_hoover":
-            self.lib.nose_hoover.argtypes = [
-                ctypes.c_double,  # dt
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # xi_array (修改为 ndpointer)
-                ctypes.c_double,  # Q
-                ctypes.c_double,  # target_temperature
-            ]
-            self.lib.nose_hoover.restype = None
-
+            if not hasattr(_cpp_core, "nose_hoover"):
+                raise RuntimeError(
+                    "Nose-Hoover functions not available in pybind11 module"
+                )
+            logger.debug("Using pybind11 backend for Nose-Hoover")
         elif lib_name == "nose_hoover_chain":
-            self.lib.nose_hoover_chain.argtypes = [
-                ctypes.c_double,  # dt
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # velocities
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # forces
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi_chain
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q
-                ctypes.c_int,  # chain_length
-                ctypes.c_double,  # target_temperature
-            ]
-            self.lib.nose_hoover_chain.restype = None
-
+            if not hasattr(_cpp_core, "nose_hoover_chain"):
+                raise RuntimeError(
+                    "Nose-Hoover Chain functions not available in pybind11 module"
+                )
+            logger.debug("Using pybind11 backend for Nose-Hoover Chain")
         elif lib_name == "parrinello_rahman_hoover":
-            self.lib.parrinello_rahman_hoover.argtypes = [
-                ctypes.c_double,  # dt
-                ctypes.c_int,  # num_atoms
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # masses (num_atoms)
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # velocities (3*num_atoms)
-                ndpointer(
-                    ctypes.c_double, flags="C_CONTIGUOUS"
-                ),  # forces (3*num_atoms)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # lattice_vectors (9)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # xi (9)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # Q (9)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # total_stress (9)
-                ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),  # target_pressure (9)
-                ctypes.c_double,  # W
-            ]
-            self.lib.parrinello_rahman_hoover.restype = None
-
+            if not hasattr(_cpp_core, "parrinello_rahman_hoover"):
+                raise RuntimeError(
+                    "Parrinello-Rahman-Hoover functions not available in pybind11 module"
+                )
+            logger.debug("Using pybind11 backend for Parrinello-Rahman-Hoover")
         else:
             raise ValueError(f"未知的库名称: {lib_name}")
 
@@ -395,30 +178,17 @@ class CppInterface:
         box_lengths = np.ascontiguousarray(box_lengths, dtype=np.float64)
         stress_tensor_view = np.ascontiguousarray(stress_tensor_view, dtype=np.float64)
 
-        if self._use_pybind:
-            # 使用 pybind11 路径
-            self._cpp.compute_stress(
-                num_atoms,
-                positions,
-                velocities,
-                forces,
-                masses,
-                volume,
-                box_lengths,
-                stress_tensor_view,
-            )
-        else:
-            # 使用 ctypes 路径
-            self.lib.compute_stress(
-                num_atoms,
-                positions,
-                velocities,
-                forces,
-                masses,
-                volume,
-                box_lengths,
-                stress_tensor_view,
-            )
+        # 使用 pybind11 路径
+        self._cpp.compute_stress(
+            num_atoms,
+            positions,
+            velocities,
+            forces,
+            masses,
+            volume,
+            box_lengths,
+            stress_tensor_view,
+        )
 
         # 若stress_tensor为(3,3)，数据已经更新，因为view共享内存
         stress_tensor[:] = stress_tensor_view.reshape(stress_tensor.shape)
@@ -463,31 +233,18 @@ class CppInterface:
         -------
         None
         """
-        if self._use_pybind:
-            # 直接调用 pybind11 模块
-            self._cpp.calculate_lj_forces(
-                num_atoms,
-                np.ascontiguousarray(positions, dtype=np.float64),
-                np.ascontiguousarray(forces, dtype=np.float64),
-                float(epsilon),
-                float(sigma),
-                float(cutoff),
-                np.ascontiguousarray(box_lengths, dtype=np.float64),
-                np.ascontiguousarray(neighbor_pairs, dtype=np.int32),
-                int(num_pairs),
-            )
-        else:
-            self.lib.calculate_lj_forces(
-                num_atoms,
-                positions,
-                forces,
-                epsilon,
-                sigma,
-                cutoff,
-                box_lengths,
-                neighbor_pairs,
-                num_pairs,
-            )
+        # 直接调用 pybind11 模块
+        self._cpp.calculate_lj_forces(
+            num_atoms,
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+            float(epsilon),
+            float(sigma),
+            float(cutoff),
+            np.ascontiguousarray(box_lengths, dtype=np.float64),
+            np.ascontiguousarray(neighbor_pairs, dtype=np.int32),
+            int(num_pairs),
+        )
 
     def calculate_lj_energy(
         self,
@@ -527,31 +284,18 @@ class CppInterface:
         float
             总势能，单位 eV。
         """
-        if self._use_pybind:
-            return float(
-                self._cpp.calculate_lj_energy(
-                    num_atoms,
-                    np.ascontiguousarray(positions, dtype=np.float64),
-                    float(epsilon),
-                    float(sigma),
-                    float(cutoff),
-                    np.ascontiguousarray(box_lengths, dtype=np.float64),
-                    np.ascontiguousarray(neighbor_pairs, dtype=np.int32),
-                    int(num_pairs),
-                )
-            )
-        else:
-            energy = self.lib.calculate_lj_energy(
+        return float(
+            self._cpp.calculate_lj_energy(
                 num_atoms,
-                positions,
-                epsilon,
-                sigma,
-                cutoff,
-                box_lengths,
-                neighbor_pairs,
-                num_pairs,
+                np.ascontiguousarray(positions, dtype=np.float64),
+                float(epsilon),
+                float(sigma),
+                float(cutoff),
+                np.ascontiguousarray(box_lengths, dtype=np.float64),
+                np.ascontiguousarray(neighbor_pairs, dtype=np.int32),
+                int(num_pairs),
             )
-            return energy
+        )
 
     def calculate_eam_al1_forces(
         self,
@@ -569,8 +313,8 @@ class CppInterface:
             原子数量
         positions : numpy.ndarray
             原子位置数组，形状为(num_atoms, 3)
-        box_lengths : numpy.ndarray
-            模拟盒子的长度，形状为(3,)
+        lattice_vectors : numpy.ndarray
+            晶格向量数组，形状为(3, 3)或(9,)
         forces : numpy.ndarray
             输出的力数组，形状为(num_atoms, 3)，将被更新
 
@@ -578,22 +322,13 @@ class CppInterface:
         -------
         None
         """
-        if self._use_pybind:
-            # pybind11路径
-            self._cpp.calculate_eam_al1_forces(
-                num_atoms,
-                np.ascontiguousarray(positions, dtype=np.float64),
-                np.ascontiguousarray(lattice_vectors, dtype=np.float64),
-                np.ascontiguousarray(forces, dtype=np.float64),
-            )
-        else:
-            # ctypes路径
-            self.lib.calculate_eam_al1_forces(
-                num_atoms,
-                np.ascontiguousarray(positions, dtype=np.float64),
-                np.ascontiguousarray(lattice_vectors, dtype=np.float64),
-                np.ascontiguousarray(forces, dtype=np.float64),
-            )
+        # pybind11路径
+        self._cpp.calculate_eam_al1_forces(
+            num_atoms,
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+        )
 
     def calculate_eam_al1_energy(
         self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray
@@ -607,33 +342,22 @@ class CppInterface:
             原子数量
         positions : numpy.ndarray
             原子位置数组，形状为(num_atoms, 3)
-        box_lengths : numpy.ndarray
-            模拟盒子的长度，形状为(3,)
+        lattice_vectors : numpy.ndarray
+            晶格向量数组，形状为(3, 3)或(9,)
 
         Returns
         -------
         float
             系统的总能量，单位为eV
         """
-        if self._use_pybind:
-            # pybind11路径
-            return float(
-                self._cpp.calculate_eam_al1_energy(
-                    num_atoms,
-                    np.ascontiguousarray(positions, dtype=np.float64),
-                    np.ascontiguousarray(lattice_vectors, dtype=np.float64),
-                )
-            )
-        else:
-            # ctypes路径
-            energy = np.zeros(1, dtype=np.float64)
-            self.lib.calculate_eam_al1_energy(
+        # pybind11路径
+        return float(
+            self._cpp.calculate_eam_al1_energy(
                 num_atoms,
                 np.ascontiguousarray(positions, dtype=np.float64),
                 np.ascontiguousarray(lattice_vectors, dtype=np.float64),
-                energy,
             )
-            return energy[0]
+        )
 
     def calculate_eam_al1_virial(
         self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray
@@ -646,16 +370,91 @@ class CppInterface:
         if lat.shape != (9,):
             lat = lat.reshape(9)
 
-        if self._use_pybind and hasattr(self._cpp, "calculate_eam_al1_virial"):
+        if hasattr(self._cpp, "calculate_eam_al1_virial"):
             vir = self._cpp.calculate_eam_al1_virial(num_atoms, pos, lat)
             vir = np.ascontiguousarray(vir, dtype=np.float64)
         else:
-            if not hasattr(self, "lib") or not hasattr(
-                self.lib, "calculate_eam_al1_virial"
-            ):
-                raise RuntimeError("C++ backend for EAM virial not available")
-            vir = np.zeros(9, dtype=np.float64)
-            self.lib.calculate_eam_al1_virial(num_atoms, pos, lat, vir)
+            raise RuntimeError("C++ backend for EAM Al1 virial not available")
+        return vir.reshape(3, 3)
+
+    def calculate_eam_cu1_forces(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        forces: np.ndarray,
+    ) -> None:
+        """
+        计算EAM Cu1势的原子力。
+
+        Parameters
+        ----------
+        num_atoms : int
+            原子数量
+        positions : numpy.ndarray
+            原子位置数组，形状为(num_atoms, 3)
+        lattice_vectors : numpy.ndarray
+            晶格向量数组，形状为(3, 3)或(9,)
+        forces : numpy.ndarray
+            输出的力数组，形状为(num_atoms, 3)，将被更新
+
+        Returns
+        -------
+        None
+        """
+        # pybind11路径
+        self._cpp.calculate_eam_cu1_forces(
+            num_atoms,
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+        )
+
+    def calculate_eam_cu1_energy(
+        self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray
+    ) -> float:
+        """
+        计算EAM Cu1势的总能量。
+
+        Parameters
+        ----------
+        num_atoms : int
+            原子数量
+        positions : numpy.ndarray
+            原子位置数组，形状为(num_atoms, 3)
+        lattice_vectors : numpy.ndarray
+            晶格向量数组，形状为(3, 3)或(9,)
+
+        Returns
+        -------
+        float
+            系统的总能量，单位为eV
+        """
+        # pybind11路径
+        return float(
+            self._cpp.calculate_eam_cu1_energy(
+                num_atoms,
+                np.ascontiguousarray(positions, dtype=np.float64),
+                np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            )
+        )
+
+    def calculate_eam_cu1_virial(
+        self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray
+    ) -> np.ndarray:
+        """计算EAM Cu1的维里张量（未除以体积）。返回形状(3,3)。"""
+        pos = np.ascontiguousarray(positions, dtype=np.float64)
+        if pos.ndim == 2 and pos.shape[1] == 3:
+            pos = pos.reshape(-1)
+        lat = np.ascontiguousarray(lattice_vectors, dtype=np.float64)
+        if lat.shape != (9,):
+            lat = lat.reshape(9)
+
+        if hasattr(self._cpp, "calculate_eam_cu1_virial"):
+            vir = self._cpp.calculate_eam_cu1_virial(num_atoms, pos, lat)
+            vir = np.ascontiguousarray(vir, dtype=np.float64)
+        else:
+            raise RuntimeError("C++ backend for EAM Cu1 virial not available")
         return vir.reshape(3, 3)
 
     def nose_hoover(
@@ -691,30 +490,17 @@ class CppInterface:
         if not isinstance(xi_array, np.ndarray) or xi_array.size != 1:
             raise ValueError("xi must be a numpy array with one element.")
 
-        if self._use_pybind:
-            # pybind11路径
-            self._cpp.nose_hoover(
-                float(dt),
-                int(num_atoms),
-                np.ascontiguousarray(masses, dtype=np.float64),
-                np.ascontiguousarray(velocities, dtype=np.float64),
-                np.ascontiguousarray(forces, dtype=np.float64),
-                np.ascontiguousarray(xi_array, dtype=np.float64),
-                float(Q),
-                float(target_temperature),
-            )
-        else:
-            # ctypes路径
-            self.lib.nose_hoover(
-                dt,
-                num_atoms,
-                masses,
-                velocities,
-                forces,
-                xi_array,
-                Q,
-                target_temperature,
-            )
+        # pybind11路径
+        self._cpp.nose_hoover(
+            float(dt),
+            int(num_atoms),
+            np.ascontiguousarray(masses, dtype=np.float64),
+            np.ascontiguousarray(velocities, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+            np.ascontiguousarray(xi_array, dtype=np.float64),
+            float(Q),
+            float(target_temperature),
+        )
         return xi_array[0]
 
     def nose_hoover_chain(
@@ -753,32 +539,18 @@ class CppInterface:
         target_temperature : float
             目标温度。
         """
-        if self._use_pybind:
-            # pybind11路径
-            self._cpp.nose_hoover_chain(
-                float(dt),
-                int(num_atoms),
-                np.ascontiguousarray(masses, dtype=np.float64),
-                np.ascontiguousarray(velocities, dtype=np.float64),
-                np.ascontiguousarray(forces, dtype=np.float64),
-                np.ascontiguousarray(xi_chain, dtype=np.float64),
-                np.ascontiguousarray(Q, dtype=np.float64),
-                int(chain_length),
-                float(target_temperature),
-            )
-        else:
-            # ctypes路径
-            self.lib.nose_hoover_chain(
-                dt,
-                num_atoms,
-                masses,
-                velocities,
-                forces,
-                xi_chain,
-                Q,
-                chain_length,
-                target_temperature,
-            )
+        # pybind11路径
+        self._cpp.nose_hoover_chain(
+            float(dt),
+            int(num_atoms),
+            np.ascontiguousarray(masses, dtype=np.float64),
+            np.ascontiguousarray(velocities, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+            np.ascontiguousarray(xi_chain, dtype=np.float64),
+            np.ascontiguousarray(Q, dtype=np.float64),
+            int(chain_length),
+            float(target_temperature),
+        )
 
     def parrinello_rahman_hoover(
         self,
@@ -836,35 +608,19 @@ class CppInterface:
         target_pressure = np.ascontiguousarray(target_pressure, dtype=np.float64)
 
         try:
-            if self._use_pybind:
-                # pybind11路径
-                self._cpp.parrinello_rahman_hoover(
-                    float(dt),
-                    int(num_atoms),
-                    masses,
-                    velocities,
-                    forces,
-                    lattice_vectors,
-                    xi,
-                    Q,
-                    total_stress,
-                    target_pressure,
-                    float(W),
-                )
-            else:
-                # ctypes路径
-                self.lib.parrinello_rahman_hoover(
-                    dt,
-                    num_atoms,
-                    masses,
-                    velocities,
-                    forces,
-                    lattice_vectors,
-                    xi,
-                    Q,
-                    total_stress,
-                    target_pressure,
-                    W,
-                )
+            # pybind11路径
+            self._cpp.parrinello_rahman_hoover(
+                float(dt),
+                int(num_atoms),
+                masses,
+                velocities,
+                forces,
+                lattice_vectors,
+                xi,
+                Q,
+                total_stress,
+                target_pressure,
+                float(W),
+            )
         except Exception as e:
             raise RuntimeError(f"Error in C++ parrinello_rahman_hoover: {e}") from e

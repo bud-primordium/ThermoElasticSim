@@ -3,8 +3,6 @@
 对比 EAM 和 Lennard-Jones 势能曲线
 """
 
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -111,8 +109,8 @@ def eam_potential_total(r):
 
 def test_plot_potential_comparison():
     """
-    生成 EAM 和 LJ 势能的对比图。
-    这个“测试”主要用于生成工件，总是会通过。
+    生成 EAM 和 LJ 势能的对比图，但不写入文件，
+    仅验证绘图流程是否正常执行。
     """
     # LJ 参数 (来自CHARMM力场)
     lj_epsilon_al = 0.1743  # eV
@@ -126,15 +124,15 @@ def test_plot_potential_comparison():
     lj_energies = [lj_potential(r, lj_epsilon_al, lj_sigma_al) for r in distances]
 
     # 绘图
-    plt.figure(figsize=(12, 7))
-    plt.plot(
+    fig, ax = plt.subplots(figsize=(12, 7))
+    (line_eam,) = ax.plot(
         distances,
         eam_energies,
         label="EAM Potential (Cumulative)",
         color="blue",
         linewidth=2,
     )
-    plt.plot(
+    (line_lj,) = ax.plot(
         distances,
         lj_energies,
         label=f"L-J Potential (Al, ε={lj_epsilon_al:.4f}, σ={lj_sigma_al:.4f})",
@@ -143,21 +141,20 @@ def test_plot_potential_comparison():
         linewidth=2,
     )
 
-    plt.title("Comparison of EAM and Lennard-Jones Potentials for Al")
-    plt.xlabel("Interatomic Distance (Å)")
-    plt.ylabel("Potential Energy (eV)")
-    plt.grid(True)
-    plt.axhline(0, color="black", linestyle="-", linewidth=0.8)
-    plt.legend()
+    ax.set_title("Comparison of EAM and Lennard-Jones Potentials for Al")
+    ax.set_xlabel("Interatomic Distance (Å)")
+    ax.set_ylabel("Potential Energy (eV)")
+    ax.grid(True)
+    ax.axhline(0, color="black", linestyle="-", linewidth=0.8)
+    ax.legend()
 
     # 自动调整y轴范围
     min_energy = min(min(eam_energies), min(lj_energies))
     max_energy = max(max(eam_energies), max(lj_energies))
-    plt.ylim(min_energy - 0.1 * abs(min_energy), max_energy + 0.1 * abs(max_energy))
+    ax.set_ylim(min_energy - 0.1 * abs(min_energy), max_energy + 0.1 * abs(max_energy))
 
-    plot_filename = "eam_vs_lj_potential_comparison.png"
-    plt.savefig(plot_filename)
-    plt.close()
-
-    print(f"\n[INFO] 势能对比图已保存至: {os.path.abspath(plot_filename)}")
-    assert os.path.exists(plot_filename)
+    # 不保存图像，避免污染仓库根目录
+    plt.close(fig)
+    # 基本断言：两条曲线均已绘制
+    assert line_eam.get_xdata().size == distances.size
+    assert line_lj.get_xdata().size == distances.size
