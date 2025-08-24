@@ -33,7 +33,12 @@ class ResponsePlotter:
     >>> plotter.plot_shear_response(c44_data, 'shear_output.png')
     """
 
-    def __init__(self, dpi: int = 300, figsize_scale: float = 1.0):
+    def __init__(
+        self,
+        dpi: int = 300,
+        figsize_scale: float = 1.0,
+        literature_values: dict[str, float] | None = None,
+    ):
         """
         初始化绘图器
 
@@ -58,14 +63,17 @@ class ResponsePlotter:
 
         self.markers = {"C11": "o", "C12": "s", "C44": "o", "C55": "s", "C66": "^"}
 
-        # 文献值 (GPa)
-        self.literature_values = {
+        # 文献值 (GPa) - 默认采用铝，允许外部覆盖
+        default_lit = {
             "C11": 110.0,
             "C12": 61.0,
             "C44": 33.0,
             "C55": 33.0,
             "C66": 33.0,
         }
+        if literature_values:
+            default_lit.update(literature_values)
+        self.literature_values = default_lit
 
     def plot_c11_c12_combined_response(
         self,
@@ -73,6 +81,10 @@ class ResponsePlotter:
         c12_data: list[dict],
         supercell_size: tuple[int, int, int],
         output_path: str,
+        slope_override_c11: float | None = None,
+        slope_override_c12: float | None = None,
+        subtitle_c11: str | None = None,
+        subtitle_c12: str | None = None,
     ) -> str:
         """
         生成C11/C12联合应力-应变响应关系图
@@ -122,7 +134,8 @@ class ResponsePlotter:
             self.literature_values["C11"],
             "εxx",
             "σxx",
-            "C11: xx应变→xx应力",
+            subtitle_c11 or "C11: xx应变→xx应力",
+            override_slope=slope_override_c11,
         )
 
         # C12图
@@ -135,7 +148,8 @@ class ResponsePlotter:
             self.literature_values["C12"],
             "εxx",
             "σyy",
-            "C12: xx应变→yy应力",
+            subtitle_c12 or "C12: xx应变→yy应力",
+            override_slope=slope_override_c12,
         )
 
         # C11/C12对比图
@@ -146,6 +160,7 @@ class ResponsePlotter:
             c11_converged_states,
             "C11",
             self.literature_values["C11"],
+            override_value=slope_override_c11,
         )
 
         self._plot_elastic_constant_bar(
@@ -155,6 +170,7 @@ class ResponsePlotter:
             c12_converged_states,
             "C12",
             self.literature_values["C12"],
+            override_value=slope_override_c12,
         )
 
         plt.suptitle(
@@ -277,6 +293,7 @@ class ResponsePlotter:
         strain_label: str,
         stress_label: str,
         title: str,
+        override_slope: float | None = None,
     ) -> float:
         """绘制应力-应变散点图和拟合线"""
         # 分别绘制收敛和不收敛的点
@@ -323,8 +340,17 @@ class ResponsePlotter:
                 linewidth=2,
             )
 
-        # 添加文献值理论斜率参考线
-        strain_range = np.linspace(-0.003, 0.003, 100)
+        # 添加文献值理论斜率参考线（自适应范围）
+        if converged_strains:
+            xmin, xmax = float(min(converged_strains)), float(max(converged_strains))
+            pad = 0.2 * (xmax - xmin if xmax > xmin else (abs(xmax) + 1e-12))
+            strain_range = np.linspace(xmin - pad, xmax + pad, 100)
+        elif strains:
+            xmin, xmax = float(min(strains)), float(max(strains))
+            pad = 0.2 * (xmax - xmin if xmax > xmin else (abs(xmax) + 1e-12))
+            strain_range = np.linspace(xmin - pad, xmax + pad, 100)
+        else:
+            strain_range = np.linspace(-0.003, 0.003, 100)
         theory_stress = literature_value * strain_range
         ax.plot(
             strain_range,
@@ -336,8 +362,9 @@ class ResponsePlotter:
         )
 
         # 线性拟合（只用收敛点；包含零应变点，保持与旧版一致）
+        # 为避免“仅两个点”导致的误导，这里要求至少3个点才绘制拟合线
         fitted_constant = 0.0
-        if len(converged_strains) >= 2:
+        if len(converged_strains) >= 3:
             xs = np.array(converged_strains, dtype=float)
             ys = np.array(converged_stresses, dtype=float)
 
@@ -369,6 +396,21 @@ class ResponsePlotter:
                 transform=ax.transAxes,
                 fontsize=10,
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+            )
+
+        # 覆盖斜率：绘制“常数”参考线（通过原点）
+        if override_slope is not None and converged_strains:
+            xs = np.array(converged_strains, dtype=float)
+            xspan = np.linspace(float(xs.min()), float(xs.max()), 100)
+            yspan = override_slope * xspan
+            ax.plot(
+                xspan,
+                yspan,
+                ":",
+                color="tab:purple",
+                alpha=0.9,
+                linewidth=2,
+                label=f"常数 ({override_slope:.1f} GPa)",
             )
 
         ax.set_xlabel(strain_label, fontsize=12)
@@ -504,6 +546,7 @@ class ResponsePlotter:
         converged_states: list[bool],
         constant_name: str,
         literature_value: float,
+        override_value: float | None = None,
     ) -> float:
         """绘制单个弹性常数对比柱状图"""
         # 计算拟合值
@@ -523,9 +566,10 @@ class ResponsePlotter:
 
         color = self.colors[constant_name]
 
+        display_value = fitted_value if override_value is None else override_value
         bar = ax.bar(
             [constant_name],
-            [fitted_value],
+            [display_value],
             color=color,
             alpha=0.3 + 0.7 * convergence_rate,
             edgecolor="black",
@@ -544,12 +588,12 @@ class ResponsePlotter:
         )
 
         # 数值标签
-        if fitted_value > 0:
+        if display_value > 0:
             height = bar[0].get_height()
             ax.text(
                 bar[0].get_x() + bar[0].get_width() / 2.0,
                 height + max(height * 0.02, 2),
-                f"{fitted_value:.1f}",
+                f"{display_value:.1f}",
                 ha="center",
                 va="bottom",
                 fontsize=14,
@@ -557,7 +601,7 @@ class ResponsePlotter:
             )
 
             # 误差
-            error = (fitted_value - literature_value) / literature_value * 100
+            error = (display_value - literature_value) / literature_value * 100
             ax.text(
                 bar[0].get_x() + bar[0].get_width() / 2.0,
                 height + max(height * 0.08, 8),
@@ -585,10 +629,10 @@ class ResponsePlotter:
         ax.grid(True, alpha=0.3, axis="y")
         ax.legend(fontsize=10)
         ax.set_ylim(
-            0, max(fitted_value if fitted_value > 0 else 0, literature_value) * 1.3
+            0, max(display_value if display_value > 0 else 0, literature_value) * 1.3
         )
 
-        return fitted_value
+        return display_value
 
     def _plot_elastic_constants_summary(
         self,

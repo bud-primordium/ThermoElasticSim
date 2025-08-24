@@ -449,9 +449,9 @@ class StructureRelaxer:
         def objective_function(scale_factor):
             """目标函数：计算缩放因子对应的能量"""
             try:
-                # 等比例缩放晶格矢量
+                # 等比例缩放晶格矢量（使用setter以同步volume/lattice_inv）
                 scaled_lattice = original_lattice * scale_factor[0]
-                cell.lattice_vectors = scaled_lattice
+                cell.set_lattice_vectors(scaled_lattice)
 
                 # 原子保持相同的分数坐标，笛卡尔坐标随晶格缩放
                 cell.set_fractional_coordinates(original_fractional_coords)
@@ -819,11 +819,10 @@ class ZeroTempDeformationCalculator:
         logger.info("弛豫后状态:")
         logger.info(f"  最终总能量: {final_energy:.8f} eV")
         logger.info(f"  每原子能量: {final_energy / self.cell.num_atoms:.8f} eV/atom")
-        logger.info(f"  能量变化: {energy_change:.8f} eV")
+        logger.info(f"  能量变化: {energy_change:.3e} eV")
         logger.info(f"  弛豫后等效单胞晶格常数: a = {final_a:.6f} Å")
-        logger.info(
-            f"  晶格常数变化: Δa = {final_a - initial_a:.6f} Å ({(final_a - initial_a) / initial_a * 100:.3f}%)"
-        )
+        rel_da = (final_a - initial_a) / max(abs(initial_a), 1e-30) * 100.0
+        logger.info(f"  晶格常数变化: Δa = {final_a - initial_a:.6f} Å ({rel_da:.3e}%)")
         logger.info(f"  最终体积: {self.cell.volume:.6f} Å³")
 
         # 与EAM Al1文献值比较

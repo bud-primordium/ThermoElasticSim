@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -68,16 +69,51 @@ class BenchmarkConfig:
     # 优化器
     optimizer_type: str = "L-BFGS"
     optimizer_params: dict[str, Any] = None  # type: ignore
+    # 精度模式：用于极小应变（1e-6量级）下的线性拟合
+    precision_mode: bool = False
+    # 精度模式下的C11/C12应变点（线性极小幅，提升SNR到1e-5级）
+    small_linear_strains: tuple[float, ...] = (
+        -2e-5,
+        -1e-5,
+        0.0,
+        1e-5,
+        2e-5,
+    )
+    # 基态残余应力目标（GPa）与最大尝试次数（用于基态强化弛豫）
+    base_stress_tol_gpa: float = 1e-5
+    base_relax_max_passes: int = 3
+    # 精度模式下的剪切应变点（仍保持在1e-4~1e-3量级以确保数值可测）
+    small_shear_strains: tuple[float, ...] = (
+        -0.0015,
+        -0.001,
+        -0.0005,
+        0.0,
+        0.0005,
+        0.001,
+        0.0015,
+    )
 
     def build_relaxer(self) -> StructureRelaxer:
         """构建结构弛豫器"""
+        # 默认或用户参数
+        params = (
+            {"ftol": 1e-7, "gtol": 1e-8, "maxiter": 5000, "maxls": 100}
+            if self.optimizer_params is None
+            else self.optimizer_params
+        )
+        # 精度模式：更严格的阈值
+        if self.precision_mode:
+            # 折中：在速度与精度间取中值（此前更严导致耗时过长）
+            params = {
+                **params,
+                "ftol": 1e-15,
+                "gtol": 1e-16,
+                "maxiter": max(60000, params.get("maxiter", 0)),
+            }
+
         return StructureRelaxer(
             optimizer_type=self.optimizer_type,
-            optimizer_params=(
-                {"ftol": 1e-7, "gtol": 1e-8, "maxiter": 5000, "maxls": 100}
-                if self.optimizer_params is None
-                else self.optimizer_params
-            ),
+            optimizer_params=params,
             supercell_dims=self.supercell_size,
         )
 
@@ -88,6 +124,7 @@ def _generate_uniaxial_joint(
     relaxer: StructureRelaxer,
     strain_points: list[float] | np.ndarray,
     axis: int = 0,
+    do_internal_relax: bool = True,
 ) -> tuple[list[dict], list[dict]]:
     """单次xx单轴应变，联合提取C11(σxx)与C12(σyy)两组数据。"""
     c11_rows: list[dict] = []
@@ -109,7 +146,10 @@ def _generate_uniaxial_joint(
             F[axis, axis] += e
             cell_e = base.copy()
             cell_e.apply_deformation(F)
-            converged = relaxer.internal_relax(cell_e, potential)
+            if do_internal_relax:
+                converged = relaxer.internal_relax(cell_e, potential)
+            else:
+                converged = True
             stress = cell_e.calculate_stress_tensor(potential) * EV_TO_GPA
 
         # C11: σxx vs εxx
@@ -140,6 +180,7 @@ def calculate_c11_c12_traditional(
     relaxer: StructureRelaxer,
     material_params: MaterialParameters,
     strain_points: list[float] | np.ndarray | None = None,
+    do_internal_relax: bool = True,
 ) -> dict:
     """使用单轴应变法计算 C11/C12，测试点与示例保持一致。"""
     # 若未提供，则采用示例风格：对称多点，含0点（与示例一致）
@@ -163,6 +204,7 @@ def calculate_c11_c12_traditional(
         relaxer=relaxer,
         strain_points=strain_points,
         axis=0,
+        do_internal_relax=do_internal_relax,
     )
 
     # 仅用收敛点拟合斜率
@@ -232,35 +274,422 @@ def calculate_c44_lammps_shear(
     }
 
 
-def run_aluminum_benchmark(
+def _fit_slope(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    """线性拟合 y = a x + b，返回 a 与 R²。"""
+    coeffs = np.polyfit(x, y, 1)
+    ypred = np.polyval(coeffs, x)
+    ss_res = np.sum((y - ypred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    r2 = 1 - ss_res / ss_tot if ss_tot != 0 else 1.0
+    return float(coeffs[0]), float(r2)
+
+
+def calculate_c11_c12_robust(
+    cell,
+    potential,
+    relaxer: StructureRelaxer,
+    material_params: MaterialParameters,
+    strain_points: list[float] | np.ndarray | None = None,
+    do_internal_relax: bool = True,
+) -> dict:
+    """
+    稳健法计算 C11/C12：正交应变(δ,-δ,0) + 等压应变(η,η,η)。
+
+    - 正交：σxx = (C11 - C12)·δ, σyy = -(C11 - C12)·δ
+    - 等压：σxx = (C11 + 2C12)·η = 3K·η
+
+    通过两次一维拟合解出 C11、C12，通常比单轴法对势细节更鲁棒。
+    """
+    # 默认点集（含0点，双边对称）
+    if strain_points is None:
+        strain_points = [
+            -0.003,
+            -0.002,
+            -0.001,
+            -0.0005,
+            0.0,
+            0.0005,
+            0.001,
+            0.002,
+            0.003,
+        ]
+
+    # 基态制备
+    base = cell.copy()
+    ok = relaxer.uniform_lattice_relax(base, potential)
+    if not ok:
+        relaxer.full_relax(base, potential)
+
+    # --- 正交应变：F = diag(1+δ, 1-δ, 1)
+    ortho_rows_xx: list[dict] = []
+    ortho_rows_yy: list[dict] = []
+    for d in strain_points:
+        if abs(d) < 1e-15:
+            stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+            converged = True
+        else:
+            F = np.eye(3)
+            F[0, 0] += d
+            F[1, 1] -= d
+            cell_d = base.copy()
+            cell_d.apply_deformation(F)
+            if do_internal_relax:
+                converged = relaxer.internal_relax(cell_d, potential)
+            else:
+                converged = True
+            stress = cell_d.calculate_stress_tensor(potential) * EV_TO_GPA
+
+        ortho_rows_xx.append(
+            {
+                "applied_strain": float(d),
+                "measured_stress_GPa": float(stress[0, 0]),
+                "optimization_converged": bool(converged),
+                "is_base": abs(d) < 1e-15,
+            }
+        )
+        ortho_rows_yy.append(
+            {
+                "applied_strain": float(d),
+                "measured_stress_GPa": float(stress[1, 1]),
+                "optimization_converged": bool(converged),
+                "is_base": abs(d) < 1e-15,
+            }
+        )
+
+    # 仅用收敛点拟合 (σxx vs δ) 得到 Δ = C11 - C12
+    arr_xx = [
+        (r["applied_strain"], r["measured_stress_GPa"])
+        for r in ortho_rows_xx
+        if r["optimization_converged"]
+    ]
+    if len(arr_xx) < 2:
+        delta_c = 0.0
+        r2_ortho = 0.0
+    else:
+        x = np.array([a for a, _ in arr_xx])
+        y = np.array([b for _, b in arr_xx])
+        delta_c, r2_ortho = _fit_slope(x, y)
+
+    # --- 等压应变：F = diag(1+η, 1+η, 1+η)
+    hydro_rows_xx: list[dict] = []
+    for eta in strain_points:
+        if abs(eta) < 1e-15:
+            stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+            converged = True
+        else:
+            F = np.eye(3) * (1.0 + eta)
+            cell_h = base.copy()
+            cell_h.apply_deformation(F)
+            if do_internal_relax:
+                converged = relaxer.internal_relax(cell_h, potential)
+            else:
+                converged = True
+            stress = cell_h.calculate_stress_tensor(potential) * EV_TO_GPA
+
+        hydro_rows_xx.append(
+            {
+                "applied_strain": float(eta),
+                "measured_stress_GPa": float(stress[0, 0]),
+                "optimization_converged": bool(converged),
+                "is_base": abs(eta) < 1e-15,
+            }
+        )
+
+    arr_hx = [
+        (r["applied_strain"], r["measured_stress_GPa"])
+        for r in hydro_rows_xx
+        if r["optimization_converged"]
+    ]
+    if len(arr_hx) < 2:
+        slope_h = 0.0
+        r2_hydro = 0.0
+    else:
+        xh = np.array([a for a, _ in arr_hx])
+        yh = np.array([b for _, b in arr_hx])
+        slope_h, r2_hydro = _fit_slope(xh, yh)  # slope_h = C11 + 2 C12 = 3K
+
+    # 解出 C11, C12
+    K = slope_h / 3.0
+    C11 = K + (2.0 / 3.0) * delta_c
+    C12 = K - (1.0 / 3.0) * delta_c
+
+    lit_C11 = material_params.literature_elastic_constants["C11"]
+    lit_C12 = material_params.literature_elastic_constants["C12"]
+
+    return {
+        "C11": float(C11),
+        "C12": float(C12),
+        "C11_error_percent": abs(C11 - lit_C11) / lit_C11 * 100,
+        "C12_error_percent": abs(C12 - lit_C12) / lit_C12 * 100,
+        "r2_score": float(0.5 * (r2_ortho + r2_hydro)),
+        "literature_C11": lit_C11,
+        "literature_C12": lit_C12,
+        "method": "orthorhombic_plus_hydrostatic",
+        "c11_data": ortho_rows_xx,  # 用于绘图：视为C11曲线
+        "c12_data": ortho_rows_yy,  # 用于绘图：视为C12曲线（符号相反）
+        "details": {
+            "delta_c": float(delta_c),
+            "K": float(K),
+            "slope_hydro": float(slope_h),
+            "r2_ortho": float(r2_ortho),
+            "r2_hydro": float(r2_hydro),
+        },
+    }
+
+
+def calculate_c11_c12_biaxial_orthorhombic(
+    cell,
+    potential,
+    relaxer: StructureRelaxer,
+    material_params: MaterialParameters,
+    strain_points: list[float] | np.ndarray | None = None,
+    do_internal_relax: bool = True,
+) -> dict:
+    """
+    通过两种无体积拟合获取 C11/C12：
+
+    - 正交: F = diag(1+δ, 1-δ, 1) → 斜率 Δ = C11 - C12
+    - 双轴: F = diag(1+ε, 1+ε, 1) → 斜率 Σ = C11 + C12
+    最终：C11 = (Σ+Δ)/2, C12 = (Σ-Δ)/2
+    避免直接使用等压路径对体积敏感的数值漂移。
+    """
+    if strain_points is None:
+        strain_points = [-0.003, -0.002, -0.001, 0.0, 0.001, 0.002, 0.003]
+
+    base = cell.copy()
+    ok = relaxer.uniform_lattice_relax(base, potential)
+    if not ok:
+        relaxer.full_relax(base, potential)
+
+    # 正交
+    ortho_rows_xx: list[dict] = []
+    for d in strain_points:
+        if abs(d) < 1e-15:
+            stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+            converged = True
+        else:
+            F = np.diag([1.0 + d, 1.0 - d, 1.0])
+            c = base.copy()
+            c.apply_deformation(F)
+            if do_internal_relax:
+                converged = relaxer.internal_relax(c, potential)
+            else:
+                converged = True
+            stress = c.calculate_stress_tensor(potential) * EV_TO_GPA
+        ortho_rows_xx.append(
+            {
+                "applied_strain": float(d),
+                "measured_stress_GPa": float(stress[0, 0]),
+                "optimization_converged": bool(converged),
+                "is_base": abs(d) < 1e-15,
+            }
+        )
+
+    arr_o = [
+        (r["applied_strain"], r["measured_stress_GPa"])
+        for r in ortho_rows_xx
+        if r["optimization_converged"]
+    ]
+    # 若有效点过少，回退到无内部弛豫以补足点数
+    if len(arr_o) < 3 and do_internal_relax:
+        ortho_rows_xx.clear()
+        for d in strain_points:
+            if abs(d) < 1e-15:
+                stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+                converged = True
+            else:
+                F = np.diag([1.0 + d, 1.0 - d, 1.0])
+                c = base.copy()
+                c.apply_deformation(F)
+                converged = True
+                stress = c.calculate_stress_tensor(potential) * EV_TO_GPA
+            ortho_rows_xx.append(
+                {
+                    "applied_strain": float(d),
+                    "measured_stress_GPa": float(stress[0, 0]),
+                    "optimization_converged": True,
+                    "is_base": abs(d) < 1e-15,
+                }
+            )
+        arr_o = [
+            (r["applied_strain"], r["measured_stress_GPa"])
+            for r in ortho_rows_xx
+            if r["optimization_converged"]
+        ]
+    if len(arr_o) < 2:
+        delta_c, r2_o = 0.0, 0.0
+    else:
+        x = np.array([a for a, _ in arr_o])
+        y = np.array([b for _, b in arr_o])
+        delta_c, r2_o = _fit_slope(x, y)
+
+    # 双轴
+    biax_rows_xx: list[dict] = []
+    for e in strain_points:
+        if abs(e) < 1e-15:
+            stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+            converged = True
+        else:
+            F = np.diag([1.0 + e, 1.0 + e, 1.0])
+            c = base.copy()
+            c.apply_deformation(F)
+            if do_internal_relax:
+                converged = relaxer.internal_relax(c, potential)
+            else:
+                converged = True
+            stress = c.calculate_stress_tensor(potential) * EV_TO_GPA
+        biax_rows_xx.append(
+            {
+                "applied_strain": float(e),
+                "measured_stress_GPa": float(stress[0, 0]),
+                "optimization_converged": bool(converged),
+                "is_base": abs(e) < 1e-15,
+            }
+        )
+
+    arr_b = [
+        (r["applied_strain"], r["measured_stress_GPa"])
+        for r in biax_rows_xx
+        if r["optimization_converged"]
+    ]
+    if len(arr_b) < 3 and do_internal_relax:
+        biax_rows_xx.clear()
+        for e in strain_points:
+            if abs(e) < 1e-15:
+                stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+                converged = True
+            else:
+                F = np.diag([1.0 + e, 1.0 + e, 1.0])
+                c = base.copy()
+                c.apply_deformation(F)
+                converged = True
+                stress = c.calculate_stress_tensor(potential) * EV_TO_GPA
+            biax_rows_xx.append(
+                {
+                    "applied_strain": float(e),
+                    "measured_stress_GPa": float(stress[0, 0]),
+                    "optimization_converged": True,
+                    "is_base": abs(e) < 1e-15,
+                }
+            )
+        arr_b = [
+            (r["applied_strain"], r["measured_stress_GPa"])
+            for r in biax_rows_xx
+            if r["optimization_converged"]
+        ]
+    if len(arr_b) < 2:
+        sigma_c, r2_b = 0.0, 0.0
+    else:
+        xb = np.array([a for a, _ in arr_b])
+        yb = np.array([b for _, b in arr_b])
+        sigma_c, r2_b = _fit_slope(xb, yb)
+
+    C11 = 0.5 * (sigma_c + delta_c)
+    C12 = 0.5 * (sigma_c - delta_c)
+
+    lit_C11 = material_params.literature_elastic_constants["C11"]
+    lit_C12 = material_params.literature_elastic_constants["C12"]
+
+    return {
+        "C11": float(C11),
+        "C12": float(C12),
+        "C11_error_percent": abs(C11 - lit_C11) / lit_C11 * 100,
+        "C12_error_percent": abs(C12 - lit_C12) / lit_C12 * 100,
+        "r2_score": float(0.5 * (r2_o + r2_b)),
+        "literature_C11": lit_C11,
+        "literature_C12": lit_C12,
+        "method": "biaxial_plus_orthorhombic",
+        "c11_data": ortho_rows_xx,
+        "c12_data": biax_rows_xx,
+        "details": {
+            "delta_c": float(delta_c),
+            "sigma_c": float(sigma_c),
+            "r2_orthorhombic": float(r2_o),
+            "r2_biaxial": float(r2_b),
+        },
+    }
+
+
+def run_zero_temp_benchmark(
+    material_params: MaterialParameters,
+    potential,
     supercell_size: tuple[int, int, int] = (3, 3, 3),
     output_dir: str | None = None,
     save_json: bool = True,
+    precision: bool = False,
 ) -> dict:
-    """运行完整的铝零温弹性基准（C11/C12/C44）。"""
-    mat = ALUMINUM_FCC
-    nx, ny, nz = supercell_size
-    total_atoms = 4 * nx * ny * nz
+    """运行通用零温弹性基准（FCC材料）。
 
-    logger.info(f"开始铝弹性常数基准：超胞={supercell_size}（原子数={total_atoms}）")
+    参数化运行流程，支持传入任意FCC材料参数与势函数，实现最大代码复用。
+    与原 run_aluminum_benchmark 输出结构保持一致。
+    """
+    mat = material_params
+    nx, ny, nz = supercell_size
 
     # 结构与势
     builder = CrystallineStructureBuilder()
     cell = builder.create_fcc(mat.symbol, mat.lattice_constant, supercell_size)
-    potential = EAMAl1Potential()
+    total_atoms = cell.num_atoms
 
-    # 弛豫器
-    cfg = BenchmarkConfig(supercell_size=supercell_size)
-    relaxer = cfg.build_relaxer()
-
-    # 计算C11/C12
-    c11_c12 = calculate_c11_c12_traditional(
-        cell, potential, relaxer, mat, strain_points=None
+    logger.info(
+        f"开始{mat.symbol}弹性常数基准：超胞={supercell_size}（原子数={total_atoms}）"
     )
 
+    # 弛豫器
+    cfg = BenchmarkConfig(supercell_size=supercell_size, precision_mode=precision)
+    relaxer = cfg.build_relaxer()
+
+    # 不做额外基态强化弛豫：遵循默认流程，避免多余耗时与日志噪声
+
+    # 计算C11/C12：对Cu默认采用稳健法；其他材料维持传统法（可按需切换）
+    libname = getattr(getattr(potential, "cpp_interface", object()), "_lib_name", "")
+    # 尺寸-截断检查（避免最小镜像违规）
+    try:
+        cutoff = float(getattr(potential, "cutoff", 0.0) or 0.0)
+        lengths = cell.get_box_lengths()
+        min_half = float(np.min(lengths) / 2.0)
+        if cutoff > 0.0 and min_half <= cutoff:
+            logger.warning(
+                "超胞过小: 最小半盒长 %.3f Å <= 截断半径 %.3f Å。建议增大尺寸以减少体积相关误差。",
+                min_half,
+                cutoff,
+            )
+    except Exception:
+        pass
+    if libname == "eam_cu1":
+        # 为避免图意义混淆，Cu 统一采用传统单轴法（斜率即为 C11/C12）
+        if precision:
+            c11_c12 = calculate_c11_c12_traditional(
+                cell,
+                potential,
+                relaxer,
+                mat,
+                strain_points=list(cfg.small_linear_strains),
+                do_internal_relax=True,
+            )
+        else:
+            c11_c12 = calculate_c11_c12_traditional(
+                cell, potential, relaxer, mat, strain_points=None
+            )
+    else:
+        if precision:
+            c11_c12 = calculate_c11_c12_traditional(
+                cell,
+                potential,
+                relaxer,
+                mat,
+                strain_points=list(cfg.small_linear_strains),
+                do_internal_relax=True,
+            )
+        else:
+            c11_c12 = calculate_c11_c12_traditional(
+                cell, potential, relaxer, mat, strain_points=None
+            )
+
     # 计算C44
+    c44_strains = cfg.small_shear_strains if precision else cfg.shear_strains
     c44 = calculate_c44_lammps_shear(
-        cell, potential, relaxer, mat, strain_points=cfg.shear_strains
+        cell, potential, relaxer, mat, strain_points=c44_strains
     )
 
     # 汇总
@@ -314,8 +743,20 @@ def run_aluminum_benchmark(
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-        # C44剪切响应图
-        plotter = ResponsePlotter()
+        # C44剪切响应图（传入材料文献值以绘制正确参考线）
+        plotter = ResponsePlotter(
+            literature_values={
+                "C11": mat.literature_elastic_constants.get("C11", 0.0),
+                "C12": mat.literature_elastic_constants.get("C12", 0.0),
+                "C44": mat.literature_elastic_constants.get("C44", 0.0),
+                "C55": mat.literature_elastic_constants.get(
+                    "C55", mat.literature_elastic_constants.get("C44", 0.0)
+                ),
+                "C66": mat.literature_elastic_constants.get(
+                    "C66", mat.literature_elastic_constants.get("C44", 0.0)
+                ),
+            }
+        )
         shear_png = os.path.join(
             output_dir,
             f"c44_c55_c66_shear_response_{nx}x{ny}x{nz}.png",
@@ -359,6 +800,7 @@ def run_aluminum_benchmark(
             output_dir,
             f"c11_c12_combined_response_{nx}x{ny}x{nz}.png",
         )
+        # 传统单轴法下，斜率即为常数，直接绘制原始散点与拟合线
         plotter.plot_c11_c12_combined_response(
             c11_data=c11_c12["c11_data"],
             c12_data=c11_c12["c12_data"],
@@ -432,22 +874,54 @@ def run_aluminum_benchmark(
     return results
 
 
+def run_aluminum_benchmark(
+    supercell_size: tuple[int, int, int] = (3, 3, 3),
+    output_dir: str | None = None,
+    save_json: bool = True,
+) -> dict:
+    """保持向后兼容：调用通用零温基准，材料=Al，势=EAMAl1。"""
+    potential = EAMAl1Potential()
+    return run_zero_temp_benchmark(
+        material_params=ALUMINUM_FCC,
+        potential=potential,
+        supercell_size=supercell_size,
+        output_dir=output_dir,
+        save_json=save_json,
+    )
+
+
 def run_size_sweep(
     sizes: list[tuple[int, int, int]] | None = None,
     output_root: str | None = None,
+    material_params: MaterialParameters | None = None,
+    potential_factory: Callable[[], Any] | None = None,
+    precision: bool = False,
 ) -> list[dict]:
-    """依次运行 2x2x2、3x3x3、4x4x4 超胞的有限尺寸效应基准。"""
+    """依次运行 2x2x2、3x3x3、4x4x4 超胞的有限尺寸效应基准。
+
+    - 默认材料为铝（ALUMINUM_FCC），默认势为 EAMAl1Potential。
+    - 可通过传入 material_params 与 potential_factory 进行泛化。
+    """
     if sizes is None:
         sizes = [(2, 2, 2), (3, 3, 3), (4, 4, 4)]
     logger = logging.getLogger(__name__)
+
+    mat = material_params or ALUMINUM_FCC
+    pot_factory = potential_factory or EAMAl1Potential
+
     results = []
     for s in sizes:
         outdir = None
         if output_root:
             outdir = os.path.join(output_root, f"{s[0]}x{s[1]}x{s[2]}")
         t0 = time.time()
-        res = run_aluminum_benchmark(
-            supercell_size=s, output_dir=outdir, save_json=True
+        res = run_zero_temp_benchmark(
+            material_params=mat,
+            potential=pot_factory(),
+            supercell_size=s,
+            output_dir=outdir,
+            save_json=True,
+            precision=precision,
         )
         dt = time.time() - t0
         res["duration_sec"] = dt
@@ -459,10 +933,13 @@ def run_size_sweep(
         e11 = res["errors"]["C11_error_percent"]
         e12 = res["errors"]["C12_error_percent"]
         e44 = res["errors"]["C44_error_percent"]
+        r2_c = res["quality_metrics"].get("c11_c12_r2", 0.0)
+        r2_s = res["quality_metrics"].get("c44_r2", 0.0)
         nx, ny, nz = res["supercell_size"]
         logger.info(
             f"尺寸 {nx}×{ny}×{nz}: C11={C11:.2f} GPa (误差 {e11:.2f}%), "
-            f"C12={C12:.2f} GPa (误差 {e12:.2f}%), C44={C44:.2f} GPa (误差 {e44:.2f}%), 用时 {dt:.2f}s"
+            f"C12={C12:.2f} GPa (误差 {e12:.2f}%), C44={C44:.2f} GPa (误差 {e44:.2f}%), "
+            f"R²(C11/C12)={r2_c:.3f}, R²(C44)={r2_s:.3f}, 用时 {dt:.2f}s"
         )
     # 合并尺寸结果CSV
     if output_root:
@@ -470,7 +947,6 @@ def run_size_sweep(
         rows: list[dict[str, Any]] = []
         for r in results:
             nx, ny, nz = r["supercell_size"]
-            mat = ALUMINUM_FCC
             C11 = r["elastic_constants"]["C11"]
             C12 = r["elastic_constants"]["C12"]
             C44 = r["elastic_constants"]["C44"]

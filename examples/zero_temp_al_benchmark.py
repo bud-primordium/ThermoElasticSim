@@ -94,12 +94,10 @@ def run_aluminum_benchmark_local(
         包含所有计算结果的字典
     """
     logger = logging.getLogger(__name__)
-    nx, ny, nz = supercell_size
-    total_atoms = 4 * nx * ny * nz
-
     logger.info("=" * 80)
     logger.info("铝弹性常数基准测试 - 新组件版本")
-    logger.info(f"超胞尺寸: {nx}×{ny}×{nz} ({total_atoms}原子)")
+    nx, ny, nz = supercell_size
+    logger.info(f"超胞尺寸: {nx}×{ny}×{nz}")
     logger.info("=" * 80)
 
     # 使用库内统一工作流运行，保持示例脚本轻量化
@@ -114,6 +112,7 @@ def run_aluminum_benchmark_local(
     logger.info("=" * 60)
     mat = ALUMINUM_FCC
     logger.info("弹性常数 (GPa):")
+    logger.info(f"  实际原子数: {results['total_atoms']}")
     logger.info(
         f"  C11: {results['elastic_constants']['C11']:.2f} (文献: {mat.literature_elastic_constants['C11']:.2f})"
     )
@@ -187,10 +186,13 @@ def main():
             e11 = res["errors"]["C11_error_percent"]
             e12 = res["errors"]["C12_error_percent"]
             e44 = res["errors"]["C44_error_percent"]
+            r2c = res["quality_metrics"].get("c11_c12_r2", 0.0)
+            r2s = res["quality_metrics"].get("c44_r2", 0.0)
             dur = res.get("duration_sec", 0.0)
             logger.info(
                 f"尺寸 {nx}×{ny}×{nz}: C11={C11:.2f} GPa (误差 {e11:.2f}%), "
-                f"C12={C12:.2f} GPa (误差 {e12:.2f}%), C44={C44:.2f} GPa (误差 {e44:.2f}%), 用时 {dur:.2f}s"
+                f"C12={C12:.2f} GPa (误差 {e12:.2f}%), C44={C44:.2f} GPa (误差 {e44:.2f}%), "
+                f"R²(C11/C12)={r2c:.3f}, R²(C44)={r2s:.3f}, 用时 {dur:.2f}s"
             )
 
         logger.info("\n尺寸扫描完成！")

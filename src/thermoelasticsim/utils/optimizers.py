@@ -697,11 +697,11 @@ class LBFGSOptimizer(Optimizer):
                     if self.supercell_dims is not None:
                         equiv_a = current_a / self.supercell_dims[0]
                         logger.info(
-                            f"  优化进度: 第{self.niter}步, 能量={energy:.6f} eV (总Δ={energy_change_total:+.6f}), a={equiv_a:.6f} Å"
+                            f"  优化进度: 第{self.niter}步, 能量={energy:.6f} eV (总Δ={energy_change_total:+.3e}), a={equiv_a:.6f} Å"
                         )
                     else:
                         logger.info(
-                            f"  优化进度: 第{self.niter}步, 能量={energy:.6f} eV (Δ={energy_change_step:+.6f})"
+                            f"  优化进度: 第{self.niter}步, 能量={energy:.6f} eV (Δ={energy_change_step:+.3e})"
                         )
 
                 self.prev_energy = energy
@@ -736,9 +736,13 @@ class LBFGSOptimizer(Optimizer):
             logger.info("L-BFGS (完全数值梯度) 优化收敛。")
             logger.info(f"晶格常数变化: {initial_a:.6f} → {final_a:.6f} Å")
             logger.info(f"体积变化: {initial_volume:.6f} → {final_volume:.6f} Å³")
-            logger.info(
-                f"相对变化: Δa/a = {(final_a - initial_a) / initial_a * 100:.3f}%, ΔV/V = {(final_volume - initial_volume) / initial_volume * 100:.3f}%"
+            rel_da = (final_a - initial_a) / max(abs(initial_a), 1e-30) * 100.0
+            rel_dv = (
+                (final_volume - initial_volume)
+                / max(abs(initial_volume), 1e-30)
+                * 100.0
             )
+            logger.info(f"相对变化: Δa/a = {rel_da:.3e}%, ΔV/V = {rel_dv:.3e}%")
         else:
             logger.warning(f"L-BFGS (完全数值梯度) 优化未收敛: {result.message}")
 

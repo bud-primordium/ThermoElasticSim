@@ -14,7 +14,8 @@
 
 ### 已实现功能
 
-1. **零温弹性常数计算（FCC铝）**
+1. **零温弹性常数计算（FCC金属）**
+   - 支持铝（Al）和铜（Cu）材料
    - 确定平衡晶格构型
    - 施加独立应变，计算应力响应
    - 求解弹性常数（C11、C12、C44）
@@ -44,14 +45,23 @@
 
 ## 势函数模型
 
-项目采用经过验证的EAM (Embedded Atom Method) 势函数进行铝材料的分子动力学模拟：
+项目采用经过验证的EAM (Embedded Atom Method) 势函数进行FCC金属的分子动力学模拟：
 
+### 铝（Al）势函数
 **EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006**
 
 - **OpenKIM数据库收录**：[MO_106969701023_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006)
 - **理论基础**：Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. [doi:10.1080/14786430802206482](https://doi.org/10.1080/14786430802206482)
 - **适用范围**：晶体和液体铝的结构和动力学性质
-- **验证精度**：零温弹性常数与文献值误差小于1%，有限温与实验值吻合较好。
+- **验证精度**：零温弹性常数与文献值误差小于1.3%，有限温与实验值吻合较好
+
+### 铜（Cu）势函数
+**EAM_Dynamo_MendelevKramerBecker_2008_Cu__MO_945691923444_006**
+
+- **OpenKIM数据库收录**：[MO_945691923444_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Cu__MO_945691923444_006)
+- **理论基础**：同上文献，Mendelev等人2008年工作
+- **适用范围**：晶体和液体铜的结构和动力学性质
+- **验证精度**：零温C44误差0.23%，单轴弹性常数偏高，正在进一步完善中
 
 ## 目录结构
 

@@ -6,6 +6,7 @@ from .benchmark import (
     calculate_c44_lammps_shear,
     run_aluminum_benchmark,
     run_size_sweep,
+    run_zero_temp_benchmark,
 )
 from .deformation import Deformer
 from .deformation_method import (
@@ -45,6 +46,7 @@ __all__ = [
     "BenchmarkConfig",
     "calculate_c11_c12_traditional",
     "calculate_c44_lammps_shear",
+    "run_zero_temp_benchmark",
     "run_aluminum_benchmark",
     "run_size_sweep",
 ]

@@ -100,10 +100,8 @@ class StressCalculator:
             # 优先使用C++的EAM维里实现（若可用）
             virial_tensor = None
             try:
-                if (
-                    hasattr(potential, "cpp_interface")
-                    and getattr(potential.cpp_interface, "_lib_name", None) == "eam_al1"
-                ):
+                if hasattr(potential, "cpp_interface"):
+                    libname = getattr(potential.cpp_interface, "_lib_name", None)
                     num_atoms = len(cell.atoms)
                     positions = np.ascontiguousarray(
                         cell.get_positions(), dtype=np.float64
@@ -111,18 +109,30 @@ class StressCalculator:
                     lattice = np.ascontiguousarray(
                         cell.lattice_vectors, dtype=np.float64
                     )
-                    virial_tensor = potential.cpp_interface.calculate_eam_al1_virial(
-                        num_atoms,
-                        positions,
-                        lattice.flatten(),
-                    )
+                    if libname == "eam_al1" and hasattr(
+                        potential.cpp_interface, "calculate_eam_al1_virial"
+                    ):
+                        virial_tensor = (
+                            potential.cpp_interface.calculate_eam_al1_virial(
+                                num_atoms, positions, lattice.flatten()
+                            )
+                        )
+                    elif libname == "eam_cu1" and hasattr(
+                        potential.cpp_interface, "calculate_eam_cu1_virial"
+                    ):
+                        virial_tensor = (
+                            potential.cpp_interface.calculate_eam_cu1_virial(
+                                num_atoms, positions, lattice.flatten()
+                            )
+                        )
             except Exception as e_cpp:
                 logger.debug(
                     f"C++ EAM virial not available, fallback to Python: {e_cpp}"
                 )
 
             if virial_tensor is None:
-                # 回退到Python实现（较慢）
+                # 回退到Python实现（较慢）。注意：当前Python实现只实现了Al1参数。
+                # 对非Al1势（如Cu1）应优先启用C++后端；否则结果将不可靠。
                 virial_tensor = self._calculate_eam_virial_contribution(cell, potential)
 
             virial_stress = virial_tensor / volume
