@@ -16,6 +16,7 @@ __all__ = [
     "Potential",
     "LennardJonesPotential",
     "EAMAl1Potential",
+    "EAMCu1Potential",
     "TersoffPotential",
     "MLPotential",
 ]
@@ -35,6 +36,10 @@ def __getattr__(name):
         from .eam import EAMAl1Potential
 
         return EAMAl1Potential
+    elif name == "EAMCu1Potential":
+        from .eam import EAMCu1Potential
+
+        return EAMCu1Potential
     elif name == "TersoffPotential":
         from .tersoff import TersoffPotential
 

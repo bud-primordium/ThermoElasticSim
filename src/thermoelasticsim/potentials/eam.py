@@ -40,6 +40,7 @@ EAM势将系统的总能量表示为对势项和嵌入能的总和。每个原�
 
 Classes:
     EAMAl1Potential: 铝的EAM势能实现。
+    EAMCu1Potential: 铜的EAM势能实现。
 """
 
 import logging
@@ -122,5 +123,76 @@ class EAMAl1Potential(Potential):
             num_atoms, positions, lattice_vectors
         )
         # logger.debug(f"Calculated EAM potential energy: {energy} eV.")  # 暂时关闭以减少输出
+
+        return energy
+
+
+class EAMCu1Potential(Potential):
+    """
+    铜的嵌入式原子方法 (EAM) 势的实现。
+
+    基于 Mendelev et al. (2008) 的参数化。
+
+    Args:
+        cutoff (float, optional): 截断距离，单位为 Å。默认为 6.0。
+    """
+
+    def __init__(self, cutoff: float = 6.0):
+        parameters = {"cutoff": cutoff, "type": "Cu1"}
+        super().__init__(parameters=parameters, cutoff=cutoff)
+        self.cpp_interface = CppInterface("eam_cu1")
+        logger.debug(f"EAM Cu1 Potential initialized with cutoff={cutoff}.")
+
+    def calculate_forces(self, cell: Cell, neighbor_list: NeighborList = None) -> None:
+        """
+        使用EAM Cu1势计算系统中所有原子的作用力。
+
+        Args:
+            cell (Cell): 包含原子信息的晶胞对象。
+            neighbor_list (NeighborList, optional): 在此实现中未使用，但为保持接口一致性而保留。
+        """
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
+        lattice_vectors = np.ascontiguousarray(
+            cell.lattice_vectors, dtype=np.float64
+        ).flatten()
+
+        forces = np.zeros_like(positions, dtype=np.float64)
+
+        self.cpp_interface.calculate_eam_cu1_forces(
+            num_atoms, positions, lattice_vectors, forces
+        )
+
+        forces = forces.reshape((num_atoms, 3))
+        # 统一力的方向与能量梯度约定，确保 F = -∇E
+        for i, atom in enumerate(cell.atoms):
+            atom.force = -forces[i]
+
+    def calculate_energy(self, cell: Cell, neighbor_list: NeighborList = None) -> float:
+        """
+        使用EAM Cu1势计算系统的总势能。
+
+        Args:
+            cell (Cell): 包含原子信息的晶胞对象。
+            neighbor_list (NeighborList, optional): 在此实现中未使用，但为保持接口一致性而保留。
+
+        Returns
+        -------
+            float: 系统的总势能，单位为 eV。
+        """
+        num_atoms = cell.num_atoms
+        positions = np.ascontiguousarray(
+            cell.get_positions(), dtype=np.float64
+        ).flatten()
+        lattice_vectors = np.ascontiguousarray(
+            cell.lattice_vectors, dtype=np.float64
+        ).flatten()
+
+        energy = self.cpp_interface.calculate_eam_cu1_energy(
+            num_atoms, positions, lattice_vectors
+        )
+        # logger.debug(f"Calculated EAM Cu1 potential energy: {energy} eV.")  # 暂时关闭以减少输出
 
         return energy
