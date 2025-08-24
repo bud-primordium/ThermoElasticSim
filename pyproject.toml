@@ -25,13 +25,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
-    "numpy>=1.24.0",
-    "scipy>=1.10.0",
+    "numpy>=2.0",
+    "scipy>=1.11",
     "matplotlib>=3.7.0",
     "pyyaml>=6.0",
     "h5py>=3.8.0",
-    "numba>=0.57.0",
-    "scikit-learn>=1.3.0",
+    "numba>=0.60",
+    "scikit-learn>=1.5.0",
     "setuptools>=61.0",
 ]
 requires-python = ">=3.9"
@@ -58,11 +58,9 @@ wheel.packages = ["src/thermoelasticsim"]
 install.components = ["python"]
 cmake.build-type = "Release"
 build-dir = "build/{wheel_tag}"
-# 使用 inplace 模式，直接构建到源目录
-editable.mode = "inplace"
-# 启用实验性功能以支持更好的 editable 安装
-experimental = true
-# inplace 模式不支持自动重建，设置为 false
+# 使用 redirect 模式，避免源目录污染
+editable.mode = "redirect"
+# 可编辑安装不自动重建，按需手动重建
 editable.rebuild = false
 editable.verbose = true
 
@@ -146,4 +144,3 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 # 行结束符：自动检测（LF或CRLF）
 line-ending = "auto"
-
