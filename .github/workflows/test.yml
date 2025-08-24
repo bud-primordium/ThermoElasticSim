@@ -32,8 +32,55 @@ jobs:
     - name: Set up virtual environment and install project
       run: |
         uv venv
-        uv pip install -e .
+        # 强制重新构建C++扩展，避免缓存问题
+        uv pip install --no-cache-dir -e . --force-reinstall
         uv pip install pytest
+
+    - name: Debug - Check available C++ functions
+      run: |
+        uv run python -c "
+        try:
+            import thermoelasticsim._cpp_core as cpp
+            eam_funcs = [attr for attr in dir(cpp) if 'eam' in attr.lower()]
+            print('Available EAM functions:', eam_funcs)
+            print('Has Cu1 energy:', hasattr(cpp, 'calculate_eam_cu1_energy'))
+            print('Has Cu1 forces:', hasattr(cpp, 'calculate_eam_cu1_forces'))
+        except ImportError as e:
+            print('Failed to import _cpp_core:', e)
+        "
+
+    - name: Debug - Test Al1 vs Cu1 energy difference
+      run: |
+        uv run python -c "
+        from thermoelasticsim.potentials.eam import EAMAl1Potential, EAMCu1Potential
+        from thermoelasticsim.core.structure import Atom, Cell
+        import numpy as np
+
+        def create_al_cell(dist):
+            atom1 = Atom(id=1, symbol='Al', mass_amu=26.9815, position=np.array([0, 0, 0]))
+            atom2 = Atom(id=2, symbol='Al', mass_amu=26.9815, position=np.array([dist, 0, 0]))
+            return Cell(np.diag([20, 20, 20]), [atom1, atom2])
+
+        def create_cu_cell(dist):
+            atom1 = Atom(id=1, symbol='Cu', mass_amu=63.546, position=np.array([0, 0, 0]))
+            atom2 = Atom(id=2, symbol='Cu', mass_amu=63.546, position=np.array([dist, 0, 0]))
+            return Cell(np.diag([20, 20, 20]), [atom1, atom2])
+
+        al1_potential = EAMAl1Potential(cutoff=6.5)
+        cu1_potential = EAMCu1Potential(cutoff=6.0)
+        r = 2.5
+
+        al_cell = create_al_cell(r)
+        cu_cell = create_cu_cell(r)
+
+        al_energy = al1_potential.calculate_energy(al_cell)
+        cu_energy = cu1_potential.calculate_energy(cu_cell)
+
+        print(f'DEBUG - Al1 energy: {al_energy:.10f} eV')
+        print(f'DEBUG - Cu1 energy: {cu_energy:.10f} eV')
+        print(f'DEBUG - Difference: {abs(al_energy - cu_energy):.10e}')
+        print(f'DEBUG - Test should pass: {abs(al_energy - cu_energy) > 1e-6}')
+        "
 
     - name: Run tests
       run: |
