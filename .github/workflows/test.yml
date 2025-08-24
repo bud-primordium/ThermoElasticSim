@@ -18,9 +18,28 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies and run tests
+    - name: Verify source files exist
+      run: |
+        echo "Checking source files..."
+        ls -la src/thermoelasticsim/_cpp/eam_*.cpp
+        echo "Checking CMakeLists.txt includes Cu1..."
+        grep -n "eam_cu1" CMakeLists.txt
+
+    - name: Install with verbose output
       run: |
         python -m pip install --upgrade pip
-        pip install -e .
+        # Verbose安装，查看编译过程
+        pip install -e . -v 2>&1 | grep -E "(eam_cu1|eam_al1|Compiling)" | head -50
         pip install pytest
+
+    - name: Check compiled symbols
+      run: |
+        # 找到编译后的so文件
+        SO_FILE=$(python -c "import thermoelasticsim._cpp_core as m; print(m.__file__)")
+        echo "Compiled module: $SO_FILE"
+        # 检查符号表
+        strings "$SO_FILE" | grep -E "eam_(al1|cu1)" | sort | uniq
+
+    - name: Run tests
+      run: |
         pytest tests/ -v
