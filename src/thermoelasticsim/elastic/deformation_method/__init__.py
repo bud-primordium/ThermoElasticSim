@@ -14,6 +14,7 @@
 from .zero_temp import (
     DeformationResult,
     ElasticConstantsSolver,
+    ShearDeformationMethod,
     StructureRelaxer,
     ZeroTempDeformationCalculator,
     calculate_zero_temp_elastic_constants,
@@ -39,6 +40,7 @@ __all__ = [
     "StructureRelaxer",
     "ZeroTempDeformationCalculator",
     "ElasticConstantsSolver",
+    "ShearDeformationMethod",
     "DeformationResult",
     "calculate_zero_temp_elastic_constants",
     # 向后兼容

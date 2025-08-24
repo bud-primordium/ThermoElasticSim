@@ -533,7 +533,7 @@ class LBFGSOptimizer(Optimizer):
 
                 # 每10步或前几步显示进度
                 if self.niter <= 3 or self.niter % 10 == 0:
-                    logger.info(
+                    logger.debug(
                         f"  内部弛豫进度: 第{self.niter}步, 能量={energy:.6f} eV"
                     )
 
@@ -562,7 +562,7 @@ class LBFGSOptimizer(Optimizer):
         self.converged = result.success
         if self.converged:
             cell.set_positions(result.x.reshape(-1, 3))
-            logger.info("L-BFGS (仅原子) 优化收敛。")
+            logger.debug("L-BFGS (仅原子) 优化收敛。")
         else:
             # 原始信息，不加工
             logger.warning("L-BFGS (仅原子) 优化未收敛")

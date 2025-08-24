@@ -423,12 +423,12 @@ class TestZeroTempDeformationCalculator:
         assert max_strain > 0
         assert min_strain < 0
 
-    @patch.object(StructureRelaxer, "full_relax")
+    @patch.object(StructureRelaxer, "uniform_lattice_relax")
     def test_prepare_reference_state(
-        self, mock_full_relax, sample_cell, mock_potential
+        self, mock_uniform_relax, sample_cell, mock_potential
     ):
         """测试基态制备功能"""
-        mock_full_relax.return_value = True  # 收敛成功
+        mock_uniform_relax.return_value = True  # 收敛成功
 
         # Mock应力计算
         with patch.object(sample_cell, "calculate_stress_tensor") as mock_stress:
@@ -437,8 +437,8 @@ class TestZeroTempDeformationCalculator:
             calculator = ZeroTempDeformationCalculator(sample_cell, mock_potential)
             calculator._prepare_reference_state()
 
-            # 验证完全弛豫被调用
-            mock_full_relax.assert_called_once_with(sample_cell, mock_potential)
+            # 验证等比例弛豫被调用
+            mock_uniform_relax.assert_called_once_with(sample_cell, mock_potential)
 
             # 验证参考应力被设置
             assert calculator.reference_stress is not None

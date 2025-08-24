@@ -96,7 +96,10 @@ class ResponsePlotter:
             生成的图像文件名
         """
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(
-            2, 2, figsize=(16 * self.figsize_scale, 12 * self.figsize_scale)
+            2,
+            2,
+            figsize=(16 * self.figsize_scale, 12 * self.figsize_scale),
+            constrained_layout=True,
         )
 
         # 准备C11数据
@@ -159,8 +162,6 @@ class ResponsePlotter:
             fontsize=16 * self.figsize_scale,
             weight="bold",
         )
-        plt.tight_layout()
-
         # 保存图片
         filepath = Path(output_path)
         plt.savefig(filepath, dpi=self.dpi, bbox_inches="tight")
@@ -193,7 +194,10 @@ class ResponsePlotter:
         str
             生成的图像文件名
         """
-        fig = plt.figure(figsize=(18 * self.figsize_scale, 12 * self.figsize_scale))
+        fig = plt.figure(
+            figsize=(18 * self.figsize_scale, 12 * self.figsize_scale),
+            constrained_layout=True,
+        )
 
         # 创建2行2列子图布局
         gs = fig.add_gridspec(2, 3, hspace=0.4, wspace=0.3, height_ratios=[3, 2])
@@ -216,7 +220,10 @@ class ResponsePlotter:
 
         for i, result in enumerate(detailed_results):
             ax = ax_shear[i]
-            direction = result["direction"]
+            # 优先使用人类可读名称（如 "yz(C44)"），兼容整数方向码
+            direction = result.get("name") or result.get("direction") or directions[i]
+            if isinstance(direction, int):
+                direction = directions[i]
             color = colors[i]
             marker = markers[i]
             lit_value = literature_values[i]
@@ -251,8 +258,6 @@ class ResponsePlotter:
             literature_values[0],
             supercell_size,
         )
-
-        plt.tight_layout()
 
         # 保存图片
         filepath = Path(output_path)
@@ -330,13 +335,14 @@ class ResponsePlotter:
             label=f"理论斜率 ({literature_value} GPa)",
         )
 
-        # 线性拟合（只用收敛点）
+        # 线性拟合（只用收敛点；包含零应变点，保持与旧版一致）
         fitted_constant = 0.0
         if len(converged_strains) >= 2:
-            coeffs = np.polyfit(converged_strains, converged_stresses, 1)
-            fit_strains = np.linspace(
-                min(converged_strains), max(converged_strains), 100
-            )
+            xs = np.array(converged_strains, dtype=float)
+            ys = np.array(converged_stresses, dtype=float)
+
+            coeffs = np.polyfit(xs, ys, 1)
+            fit_strains = np.linspace(float(xs.min()), float(xs.max()), 100)
             fit_stresses = np.polyval(coeffs, fit_strains)
             ax.plot(
                 fit_strains,
@@ -350,9 +356,9 @@ class ResponsePlotter:
             fitted_constant = coeffs[0]
 
             # 计算R²
-            y_pred = np.polyval(coeffs, converged_strains)
-            ss_res = np.sum((converged_stresses - y_pred) ** 2)
-            ss_tot = np.sum((converged_stresses - np.mean(converged_stresses)) ** 2)
+            y_pred = np.polyval(coeffs, xs)
+            ss_res = np.sum((ys - y_pred) ** 2)
+            ss_tot = np.sum((ys - np.mean(ys)) ** 2)
             r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 1.0
 
             # 在图上显示拟合质量
@@ -428,7 +434,9 @@ class ResponsePlotter:
             )
 
         # 添加文献值理论斜率参考线
-        if strains:
+        if (hasattr(strains, "__len__") and len(strains) > 0) or (
+            not hasattr(strains, "__len__") and bool(strains)
+        ):
             strain_range = np.linspace(min(strains) * 1.2, max(strains) * 1.2, 100)
             theory_stress = lit_value * strain_range
             ax.plot(
@@ -476,7 +484,10 @@ class ResponsePlotter:
             )
 
         # 设置子图属性
-        shear_component = direction.split("(")[0]  # yz, xz, xy
+        # 兼容 direction 为纯标签或包含括号注释
+        shear_component = (
+            direction.split("(")[0] if isinstance(direction, str) else str(direction)
+        )
         ax.set_xlabel(f"{shear_component}剪切应变", fontsize=12)
         ax.set_ylabel(f"{shear_component}剪切应力 (GPa)", fontsize=12)
         ax.set_title(f"{direction}", fontsize=14, weight="bold")

@@ -34,7 +34,7 @@ from typing import Any
 
 import numpy as np
 
-from thermoelasticsim.core.structure import Cell
+from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.potentials import Potential
 from thermoelasticsim.utils.optimizers import (
     BFGSOptimizer,
@@ -353,7 +353,7 @@ class StructureRelaxer:
                     maxiter=self.optimizer_params.get("maxiter", 10000),
                 )
             )
-            logger.info(
+            logger.debug(
                 "内部弛豫尝试优化器: %s (%d/%d)", opt_type, idx + 1, len(sequence)
             )
             if opt_type == "L-BFGS":
@@ -600,6 +600,7 @@ class ZeroTempDeformationCalculator:
         num_steps: int = 5,
         relaxer_params: dict[str, Any] | None = None,
         supercell_dims: tuple[int, int, int] | None = None,
+        base_relax_mode: str = "uniform",
     ):
         """
         初始化零温形变计算器
@@ -636,6 +637,10 @@ class ZeroTempDeformationCalculator:
         self.delta = delta
         self.num_steps = num_steps
         self.supercell_dims = supercell_dims
+        # 基态弛豫模式："uniform"（等比例缩放）或 "full"（变胞+位置）
+        if base_relax_mode not in ("uniform", "full"):
+            raise ValueError("base_relax_mode 必须为 'uniform' 或 'full'")
+        self.base_relax_mode = base_relax_mode
 
         # 创建结构弛豫器
         if relaxer_params:
@@ -794,9 +799,16 @@ class ZeroTempDeformationCalculator:
         logger.info(f"  初始等效单胞晶格常数: a = {initial_a:.6f} Å")
         logger.info(f"  初始体积: {self.cell.volume:.6f} Å³")
 
-        # 执行完全弛豫
-        logger.info("开始完全弛豫...")
-        converged = self.relaxer.full_relax(self.cell, self.potential)
+        # 执行基态弛豫：默认使用等比例晶格弛豫（示例脚本策略）
+        if self.base_relax_mode == "uniform":
+            logger.info("开始等比例晶格弛豫（优先）...")
+            converged = self.relaxer.uniform_lattice_relax(self.cell, self.potential)
+            if not converged:
+                logger.warning("等比例弛豫未收敛，回退到完全弛豫（变胞+位置）")
+                converged = self.relaxer.full_relax(self.cell, self.potential)
+        else:
+            logger.info("开始完全弛豫（变胞+位置）...")
+            converged = self.relaxer.full_relax(self.cell, self.potential)
 
         # 检查弛豫结果
         final_energy = self.potential.calculate_energy(self.cell)
@@ -1613,6 +1625,429 @@ class ElasticConstantsSolver:
             logger.warning(f"弹性常数矩阵条件数过大: {condition_number:.2e}")
 
         logger.debug("弹性常数矩阵验证完成")
+
+
+class ShearDeformationMethod:
+    r"""
+    LAMMPS风格剪切形变方法
+
+    实现经过验证的LAMMPS风格剪切形变算法，用于计算剪切弹性常数(C44, C55, C66)。
+    该方法通过晶胞剪切和原子位置调整来施加纯剪切应变，避免了传统形变矩阵方法
+    在剪切计算中的数值问题。
+
+    Methods
+    -------
+    apply_shear_deformation(cell, direction, strain_magnitude)
+        对晶胞施加LAMMPS风格剪切形变
+    calculate_c44_response(cell, potential, strain_amplitudes, relaxer)
+        计算C44剪切响应
+
+    Notes
+    -----
+    LAMMPS剪切形变的核心原理：
+
+    1. **晶胞剪切**：直接修改晶格矢量的非对角分量
+    2. **原子位置调整**：按照仿射变换调整所有原子位置
+    3. **应变-应力关系**：通过virial应力张量计算剪切应力
+
+    支持的剪切方向：
+    - direction=4: yz剪切 (σ23, C44)
+    - direction=5: xz剪切 (σ13, C55)
+    - direction=6: xy剪切 (σ12, C66)
+
+    剪切应变定义：
+
+    .. math::
+        \\gamma_{ij} = \\frac{\\partial u_i}{\\partial x_j} + \\frac{\\partial u_j}{\\partial x_i}
+
+    其中γ是工程剪切应变，与张量剪切应变的关系为 :math:`\\gamma = 2\\varepsilon`
+
+    Examples
+    --------
+    >>> shear_method = ShearDeformationMethod()
+    >>>
+    >>> # 施加xy剪切形变
+    >>> deformed_cell = shear_method.apply_shear_deformation(
+    ...     cell, direction=6, strain_magnitude=0.005
+    ... )
+    >>>
+    >>> # 计算C44响应
+    >>> strains = np.linspace(-0.004, 0.004, 9)
+    >>> c44_data = shear_method.calculate_c44_response(
+    ...     cell, potential, strains, relaxer
+    ... )
+    """
+
+    def __init__(self):
+        """初始化剪切形变方法"""
+        self.supported_directions = {
+            4: "yz剪切(C44)",
+            5: "xz剪切(C55)",
+            6: "xy剪切(C66)",
+        }
+
+        # Voigt记号映射：direction -> (应力分量i, j)
+        self.direction_to_stress_indices = {
+            4: (1, 2),  # yz剪切 -> σ23
+            5: (0, 2),  # xz剪切 -> σ13
+            6: (0, 1),  # xy剪切 -> σ12
+        }
+
+        logger.debug("初始化ShearDeformationMethod")
+
+    def apply_shear_deformation(
+        self, cell: Cell, direction: int, strain_magnitude: float
+    ) -> Cell:
+        r"""
+        对晶胞施加LAMMPS风格剪切形变
+
+        该方法实现了LAMMPS中的剪切形变算法，通过同时修改晶胞参数和原子位置
+        来施加纯剪切应变。这种方法保持了晶胞的周期性边界条件，并确保
+        剪切形变的一致性。
+
+        Parameters
+        ----------
+        cell : Cell
+            待形变的原始晶胞
+        direction : int
+            剪切方向代码：4(yz), 5(xz), 6(xy)
+        strain_magnitude : float
+            剪切应变幅度（工程剪切应变γ）
+
+        Returns
+        -------
+        Cell
+            施加剪切形变后的新晶胞对象
+
+        Raises
+        ------
+        ValueError
+            如果指定了不支持的剪切方向
+
+        Notes
+        -----
+        LAMMPS剪切形变算法：
+
+        1. **yz剪切** (direction=4)：
+
+           .. math::
+               h_{zy} \\leftarrow h_{zy} + \\gamma \\cdot h_{zz}
+
+               y_i \\leftarrow y_i + \\gamma \\cdot z_i
+
+        2. **xz剪切** (direction=5)：
+
+           .. math::
+               h_{zx} \\leftarrow h_{zx} + \\gamma \\cdot h_{zz}
+
+               x_i \\leftarrow x_i + \\gamma \\cdot z_i
+
+        3. **xy剪切** (direction=6)：
+
+           .. math::
+               h_{yx} \\leftarrow h_{yx} + \\gamma \\cdot h_{yy}
+
+               x_i \\leftarrow x_i + \\gamma \\cdot y_i
+
+        其中：
+        - h是晶格矢量矩阵
+        - γ是工程剪切应变
+        - (x_i, y_i, z_i)是第i个原子的位置
+
+        Examples
+        --------
+        >>> method = ShearDeformationMethod()
+        >>>
+        >>> # 施加0.5%的xy剪切
+        >>> deformed = method.apply_shear_deformation(cell, 6, 0.005)
+        >>>
+        >>> # 验证剪切应变
+        >>> original_pos = cell.get_positions()
+        >>> deformed_pos = deformed.get_positions()
+        >>> shear_strain = np.mean(deformed_pos[:, 0] - original_pos[:, 0]) / np.mean(original_pos[:, 1])
+        >>> print(f"实际剪切应变: {shear_strain:.6f}")
+        """
+        if direction not in self.supported_directions:
+            raise ValueError(
+                f"不支持的剪切方向: {direction}. "
+                f"支持的方向: {list(self.supported_directions.keys())}"
+            )
+
+        # 复制原始数据避免修改输入
+        lattice = cell.lattice_vectors.copy()
+        positions = cell.get_positions().copy()
+
+        logger.debug(
+            f"施加{self.supported_directions[direction]}，应变幅度: {strain_magnitude:.6f}"
+        )
+
+        # 根据方向施加相应的剪切形变
+        if direction == 4:  # yz剪切 → σ23
+            # 晶格剪切：h[z,y] += γ * h[z,z]
+            lattice[2, 1] += strain_magnitude * lattice[2, 2]
+            # 原子位置调整：y_i += γ * z_i
+            for i in range(len(positions)):
+                positions[i, 1] += strain_magnitude * positions[i, 2]
+
+        elif direction == 5:  # xz剪切 → σ13
+            # 晶格剪切：h[z,x] += γ * h[z,z]
+            lattice[2, 0] += strain_magnitude * lattice[2, 2]
+            # 原子位置调整：x_i += γ * z_i
+            for i in range(len(positions)):
+                positions[i, 0] += strain_magnitude * positions[i, 2]
+
+        elif direction == 6:  # xy剪切 → σ12
+            # 晶格剪切：h[y,x] += γ * h[y,y]
+            lattice[1, 0] += strain_magnitude * lattice[1, 1]
+            # 原子位置调整：x_i += γ * y_i
+            for i in range(len(positions)):
+                positions[i, 0] += strain_magnitude * positions[i, 1]
+
+        # 创建新的原子对象（保持原有属性）
+        new_atoms = []
+        for i, atom in enumerate(cell.atoms):
+            new_atom = Atom(
+                id=atom.id,
+                symbol=atom.symbol,
+                mass_amu=atom.mass_amu,
+                position=positions[i],
+            )
+            new_atoms.append(new_atom)
+
+        # 创建形变后的晶胞
+        deformed_cell = Cell(
+            lattice_vectors=lattice, atoms=new_atoms, pbc_enabled=cell.pbc_enabled
+        )
+
+        logger.debug(
+            f"剪切形变完成，晶胞体积变化: {deformed_cell.volume / cell.volume:.6f}"
+        )
+
+        return deformed_cell
+
+    def calculate_c44_response(
+        self,
+        cell: Cell,
+        potential: Potential,
+        strain_amplitudes: np.ndarray,
+        relaxer: StructureRelaxer,
+        include_base_state: bool = True,
+    ) -> dict[str, Any]:
+        r"""
+        计算C44剪切响应
+
+        使用LAMMPS风格剪切方法计算三个剪切弹性常数(C44, C55, C66)的应力响应。
+        该方法对每个剪切方向施加一系列应变，通过内部弛豫消除原子间力，
+        然后测量相应的剪切应力。
+
+        Parameters
+        ----------
+        cell : Cell
+            基态晶胞对象
+        potential : Potential
+            势能函数
+        strain_amplitudes : numpy.ndarray
+            应变幅度数组，建议范围[-0.005, 0.005]
+        relaxer : StructureRelaxer
+            结构弛豫器实例
+        include_base_state : bool, optional
+            是否包含零应变基态点，默认True
+
+        Returns
+        -------
+        dict
+            包含以下键的计算结果：
+            - 'directions': 剪切方向信息
+            - 'detailed_results': 每个方向的详细数据
+            - 'summary': 拟合结果汇总
+
+        Notes
+        -----
+        计算流程：
+
+        1. **基态制备**：确保从无应力基态开始
+        2. **多方向扫描**：对三个剪切方向分别计算
+        3. **应变序列**：对每个方向施加应变序列
+        4. **内部弛豫**：固定晶胞形状，优化原子位置
+        5. **应力测量**：计算剪切分量应力响应
+        6. **线性拟合**：通过最小二乘法求解弹性常数
+
+        立方晶系的剪切弹性常数：
+
+        .. math::
+            C_{44} = C_{55} = C_{66} = \\frac{\\partial\\sigma_{ij}}{\\partial\\gamma_{ij}}
+
+        其中σ是剪切应力，γ是工程剪切应变。
+
+        Examples
+        --------
+        >>> shear_method = ShearDeformationMethod()
+        >>> strain_points = np.linspace(-0.004, 0.004, 9)
+        >>>
+        >>> results = shear_method.calculate_c44_response(
+        ...     base_cell, potential, strain_points, relaxer
+        ... )
+        >>>
+        >>> # 查看结果
+        >>> print(f"C44 = {results['summary']['C44']:.2f} GPa")
+        >>> print(f"拟合优度 R² = {results['summary']['r2_score']:.6f}")
+        """
+        logger.info("开始C44剪切响应计算")
+
+        # 准备基态（确保无应力）
+        base_cell = cell.copy()
+        logger.info("制备无应力基态（优先等比例晶格弛豫）...")
+        base_converged = relaxer.uniform_lattice_relax(base_cell, potential)
+        if not base_converged:
+            logger.warning("等比例晶格弛豫未收敛，回退到完全弛豫（变胞+位置）")
+            base_converged = relaxer.full_relax(base_cell, potential)
+        if not base_converged:
+            logger.warning("基态弛豫未完全收敛")
+
+        # 计算基态应力作为参考
+        base_stress = base_cell.calculate_stress_tensor(potential)
+        logger.debug(f"基态应力张量范数: {np.linalg.norm(base_stress):.6f} eV/Å³")
+
+        # 准备计算数据
+        detailed_results = []
+        all_strains = []
+        all_stresses = []
+
+        # 对三个剪切方向分别计算
+        for direction in [4, 5, 6]:
+            direction_name = self.supported_directions[direction]
+            stress_i, stress_j = self.direction_to_stress_indices[direction]
+
+            logger.info(f"计算{direction_name}响应...")
+
+            strains = []
+            stresses = []
+            converged_states = []
+
+            # 构建应变序列（包含零点或不包含）
+            strain_sequence = strain_amplitudes.copy()
+            if include_base_state and 0.0 not in strain_sequence:
+                strain_sequence = np.append(strain_sequence, 0.0)
+            strain_sequence = np.sort(strain_sequence)
+
+            for strain_amp in strain_sequence:
+                logger.debug(f"  应变 {strain_amp:+.6f}...")
+
+                if abs(strain_amp) < 1e-12:
+                    # 基态零应变点
+                    stress_value = base_stress[stress_i, stress_j] * EV_TO_GPA
+                    converged = True
+                    logger.debug(f"    基态应力: {stress_value:.6f} GPa")
+                else:
+                    # 施加剪切形变
+                    deformed_cell = self.apply_shear_deformation(
+                        base_cell, direction, strain_amp
+                    )
+
+                    # 内部弛豫
+                    converged = relaxer.internal_relax(deformed_cell, potential)
+
+                    # 计算应力响应
+                    stress_tensor = deformed_cell.calculate_stress_tensor(potential)
+                    # 与示例脚本保持一致：不做基态差分，直接使用总应力分量
+                    stress_value = stress_tensor[stress_i, stress_j] * EV_TO_GPA
+
+                    logger.debug(
+                        f"    相对应力: {stress_value:.6f} GPa, 收敛: {converged}"
+                    )
+
+                strains.append(strain_amp)
+                stresses.append(stress_value)
+                converged_states.append(converged)
+
+            # 线性拟合求解该方向的弹性常数
+            strains_array = np.array(strains)
+            stresses_array = np.array(stresses)
+
+            # 最小二乘拟合: σ = C * ε
+            if len(strains_array) > 1:
+                coeffs = np.polyfit(strains_array, stresses_array, 1)
+                elastic_constant = coeffs[0]  # 斜率即为弹性常数
+
+                # 计算拟合优度
+                predicted = np.polyval(coeffs, strains_array)
+                ss_res = np.sum((stresses_array - predicted) ** 2)
+                ss_tot = np.sum((stresses_array - np.mean(stresses_array)) ** 2)
+                r2_score = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+            else:
+                elastic_constant = 0.0
+                r2_score = 0.0
+
+            # 收敛率统计
+            converged_count = sum(converged_states)
+            total_count = len(converged_states)
+            converged_ratio = converged_count / total_count if total_count > 0 else 0.0
+
+            # 保存该方向的详细结果
+            direction_result = {
+                "direction": direction,
+                "name": direction_name,
+                "strains": strains_array,
+                "stresses": stresses_array,
+                "converged_states": converged_states,
+                "elastic_constant": elastic_constant,
+                "r2_score": r2_score,
+                "converged_count": converged_count,
+                "total_count": total_count,
+                "converged_ratio": converged_ratio,
+            }
+            detailed_results.append(direction_result)
+
+            # 累积到全局数据
+            all_strains.extend(strains)
+            all_stresses.extend(stresses)
+
+            logger.info(
+                f"  {direction_name}: {elastic_constant:.2f} GPa (R²={r2_score:.6f}, 收敛率={converged_ratio:.1%})"
+            )
+
+        # 计算平均C44值（立方晶系中C44=C55=C66）
+        elastic_constants = [result["elastic_constant"] for result in detailed_results]
+        average_c44 = np.mean(elastic_constants)
+        std_c44 = np.std(elastic_constants)
+
+        # 全局收敛统计
+        total_converged = sum(result["converged_count"] for result in detailed_results)
+        total_points = sum(result["total_count"] for result in detailed_results)
+        overall_converged_ratio = (
+            total_converged / total_points if total_points > 0 else 0.0
+        )
+
+        # 组装结果
+        summary = {
+            "C44": average_c44,
+            "C55": detailed_results[1]["elastic_constant"],  # xz方向
+            "C66": detailed_results[2]["elastic_constant"],  # xy方向
+            "average_c44": average_c44,
+            "std_c44": std_c44,
+            "individual_r2_scores": [result["r2_score"] for result in detailed_results],
+            "average_r2_score": np.mean(
+                [result["r2_score"] for result in detailed_results]
+            ),
+            "converged_ratio": overall_converged_ratio,
+            "total_converged": total_converged,
+            "total_points": total_points,
+        }
+
+        logger.info("C44剪切响应计算完成")
+        logger.info(f"  平均C44: {average_c44:.2f} ± {std_c44:.2f} GPa")
+        logger.info(f"  平均拟合优度: {summary['average_r2_score']:.6f}")
+        logger.info(
+            f"  总收敛率: {overall_converged_ratio:.1%} ({total_converged}/{total_points})"
+        )
+
+        return {
+            "directions": list(self.supported_directions.keys()),
+            "detailed_results": detailed_results,
+            "summary": summary,
+            "base_stress": base_stress,
+            "method": "LAMMPS_shear",
+        }
 
 
 def calculate_zero_temp_elastic_constants(

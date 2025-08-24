@@ -1,6 +1,6 @@
 """核心模块 - 基础数据结构和配置管理"""
 
-__all__ = ["Atom", "Cell", "ConfigManager"]
+__all__ = ["Atom", "Cell", "ConfigManager", "CrystallineStructureBuilder"]
 
 
 # 延迟导入避免循环依赖
@@ -17,5 +17,9 @@ def __getattr__(name):
         from .config import ConfigManager
 
         return ConfigManager
+    elif name == "CrystallineStructureBuilder":
+        from .crystalline_structures import CrystallineStructureBuilder
+
+        return CrystallineStructureBuilder
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
