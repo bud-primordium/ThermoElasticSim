@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v4
@@ -18,76 +18,9 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        enable-cache: true
-        cache-dependency-glob: "**/pyproject.toml"
-
-    - name: Install system dependencies
+    - name: Install dependencies and run tests
       run: |
-        sudo apt-get update
-        sudo apt-get install -y g++ cmake
-
-    - name: Set up virtual environment and install project
-      run: |
-        uv venv
-        # 清理本地构建缓存，确保 C++ 扩展完整重建
-        rm -rf build
-        # 强制重新构建 C++ 扩展，避免缓存/旧轮子
-        uv pip install --no-cache-dir --force-reinstall -e .
-        uv pip install pytest
-
-    - name: Debug - Check available C++ functions
-      run: |
-        ./.venv/bin/python -c "
-        try:
-            import thermoelasticsim._cpp_core as cpp
-            print('cpp module file:', cpp.__file__)
-            eam_funcs = [attr for attr in dir(cpp) if 'eam' in attr.lower()]
-            print('Available EAM functions:', eam_funcs)
-            print('Has Cu1 energy:', hasattr(cpp, 'calculate_eam_cu1_energy'))
-            print('Has Cu1 forces:', hasattr(cpp, 'calculate_eam_cu1_forces'))
-        except ImportError as e:
-            print('Failed to import _cpp_core:', e)
-        "
-
-    - name: Debug - Test Al1 vs Cu1 energy difference
-      run: |
-        ./.venv/bin/python -c "
-        from thermoelasticsim.potentials.eam import EAMAl1Potential, EAMCu1Potential
-        from thermoelasticsim.core.structure import Atom, Cell
-        import numpy as np
-
-        def create_al_cell(dist):
-            atom1 = Atom(id=1, symbol='Al', mass_amu=26.9815, position=np.array([0, 0, 0]))
-            atom2 = Atom(id=2, symbol='Al', mass_amu=26.9815, position=np.array([dist, 0, 0]))
-            return Cell(np.diag([20, 20, 20]), [atom1, atom2])
-
-        def create_cu_cell(dist):
-            atom1 = Atom(id=1, symbol='Cu', mass_amu=63.546, position=np.array([0, 0, 0]))
-            atom2 = Atom(id=2, symbol='Cu', mass_amu=63.546, position=np.array([dist, 0, 0]))
-            return Cell(np.diag([20, 20, 20]), [atom1, atom2])
-
-        al1_potential = EAMAl1Potential(cutoff=6.5)
-        cu1_potential = EAMCu1Potential(cutoff=6.0)
-        r = 2.5
-
-        al_cell = create_al_cell(r)
-        cu_cell = create_cu_cell(r)
-
-        al_energy = al1_potential.calculate_energy(al_cell)
-        cu_energy = cu1_potential.calculate_energy(cu_cell)
-
-        print(f'DEBUG - Al1 energy: {al_energy:.10f} eV')
-        print(f'DEBUG - Cu1 energy: {cu_energy:.10f} eV')
-        print(f'DEBUG - Difference: {abs(al_energy - cu_energy):.10e}')
-        print(f'DEBUG - Test should pass: {abs(al_energy - cu_energy) > 1e-6}')
-        "
-
-    - name: Run tests
-      env:
-        # 禁止 uv 在运行时替换依赖映射，确保使用刚安装的可编辑构建
-        UV_NO_SYNC: "1"
-      run: |
-        ./.venv/bin/python -m pytest -v tests/
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest
+        pytest tests/ -v
