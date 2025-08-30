@@ -2,30 +2,51 @@
 r"""
 零温显式形变法弹性常数计算模块
 
-该模块实现零温条件下通过显式形变法计算弹性常数。采用三层架构：
-底层结构弛豫 → 中层工作流管理 → 高层数据求解
+该模块在零温条件下，通过显式形变与应力响应拟合，求解材料的弹性常数。
 
-基本原理：
+分层设计
+--------
+底层
+    结构弛豫
+
+中层
+    工作流管理
+
+高层
+    数据求解
+
+基本原理
+--------
 1. 制备无应力基态
 2. 施加微小形变
-3. 优化原子位置
+3. 内部弛豫（固定胞形，优化原子位置）
 4. 测量应力响应
 5. 线性拟合求解弹性常数
 
-数学基础：
-胡克定律的张量形式：:math:`\\sigma = C : \\varepsilon`
+数学基础
+--------
+胡克定律的张量形式：
 
-在Voigt记号下：:math:`\\sigma = C \\cdot \\varepsilon`
+.. math::
+   \boldsymbol{\sigma} = \mathsf{C} : \boldsymbol{\varepsilon}
+
+在 Voigt 记号下：
+
+.. math::
+   \boldsymbol{\sigma} = \mathsf{C} \cdot \boldsymbol{\varepsilon}
 
 其中：
-- :math:`\\sigma`：应力向量 (6×1)
-- :math:`C`：弹性常数矩阵 (6×6)
-- :math:`\\varepsilon`：应变向量 (6×1)
+
+:math:`\boldsymbol{\sigma}`
+    应力向量 (6×1)
+
+:math:`\mathsf{C}`
+    弹性常数矩阵 (6×6)
+
+:math:`\boldsymbol{\varepsilon}`
+    应变向量 (6×1)
 
 .. moduleauthor:: Gilbert Young
-.. created:: 2024-10-20
-.. modified:: 2025-07-11
-.. version:: 4.0.0
 """
 
 import logging
@@ -93,8 +114,11 @@ class StructureRelaxer:
     -----
     两种弛豫模式的区别：
 
-    - **完全弛豫**：同时优化原子位置和晶胞参数，用于制备无应力基态
-    - **内部弛豫**：仅优化原子位置，保持晶胞形状固定，用于形变后的平衡
+    完全弛豫
+        同时优化原子位置和晶胞参数，用于制备无应力基态。
+
+    内部弛豫
+        仅优化原子位置，保持晶胞形状固定，用于形变后的平衡。
 
     Examples
     --------
@@ -186,13 +210,20 @@ class StructureRelaxer:
         数学表述：
 
         .. math::
-            \\min_{r,h} E(r,h) \\quad \\text{s.t.} \\quad \\sigma = 0
+            \min_{r,h} E(r,h) \quad \text{s.t.} \quad \sigma = 0
 
         其中：
-        - :math:`r`：原子位置
-        - :math:`h`：晶胞参数
-        - :math:`E`：总能量
-        - :math:`\\sigma`：应力张量
+        :math:`r`
+            原子位置
+
+        :math:`h`
+            晶胞参数
+
+        :math:`E`
+            总能量
+
+        :math:`\sigma`
+            应力张量
 
         Examples
         --------
@@ -274,12 +305,17 @@ class StructureRelaxer:
         数学表述：
 
         .. math::
-            \\min_{r} E(r,h_{\\text{fixed}}) \\quad \\text{s.t.} \\quad h = \\text{const}
+            \min_{r} E(r,h_{\text{fixed}}) \quad \text{s.t.} \quad h = \text{const}
 
         其中：
-        - :math:`r`：原子位置（优化变量）
-        - :math:`h_{\\text{fixed}}`：固定的晶胞参数
-        - :math:`E`：总能量
+        :math:`r`
+            原子位置（优化变量）
+
+        :math:`h_{\text{fixed}}`
+            固定的晶胞参数
+
+        :math:`E`
+            总能量
 
         Examples
         --------
@@ -415,19 +451,26 @@ class StructureRelaxer:
         数学表述：
 
         .. math::
-            \\min_{s} E(r_{\\text{scaled}}, s \\cdot L) \\quad \\text{其中} \\quad r_{\\text{scaled}} = s \\cdot r_{\\text{frac}} \\cdot L
+            \min_{s} E(r_{\text{scaled}}, s \cdot L) \quad \text{其中} \quad r_{\text{scaled}} = s \cdot r_{\text{frac}} \cdot L
 
         其中：
-        - :math:`s`：等比例缩放因子（唯一优化变量）
-        - :math:`r_{\\text{frac}}`：固定的分数坐标
-        - :math:`L`：原始晶格矢量矩阵
-        - :math:`E`：总能量
+        :math:`s`
+            等比例缩放因子（唯一优化变量）
+
+        :math:`r_{\text{frac}}`
+            固定的分数坐标
+
+        :math:`L`
+            原始晶格矢量矩阵
+
+        :math:`E`
+            总能量
 
         优势：
-        - 自由度仅为1，计算极快
-        - 保持晶体结构完美对称性
-        - 避免原子位置数值噪声
-        - 适合各种晶系（不限于FCC）
+        1. 自由度仅为 1，计算极快
+        2. 保持晶体结构完美对称性
+        3. 避免原子位置数值噪声
+        4. 适合各种晶系（不限于 FCC）
 
         Examples
         --------
@@ -580,9 +623,14 @@ class ZeroTempDeformationCalculator:
     5. **线性拟合**：通过最小二乘法求解弹性常数矩阵
 
     应变生成策略：
-    - 对称应变：:math:`\\varepsilon_{11}, \\varepsilon_{22}, \\varepsilon_{33}`
-    - 剪切应变：:math:`\\varepsilon_{23}, \\varepsilon_{13}, \\varepsilon_{12}`
-    - 应变范围：:math:`[-\\delta, +\\delta]`，均匀分布
+    对称应变
+        :math:`\varepsilon_{11}, \varepsilon_{22}, \varepsilon_{33}`
+
+    剪切应变
+        :math:`\varepsilon_{23}, \varepsilon_{13}, \varepsilon_{12}`
+
+    应变范围
+        :math:`[-\delta, +\delta]`，均匀分布
 
     Examples
     --------
@@ -700,9 +748,14 @@ class ZeroTempDeformationCalculator:
         5. 线性拟合求解弹性常数
 
         拟合质量评估：
-        - R² > 0.999：优秀
-        - R² > 0.99：良好
-        - R² < 0.99：需改进
+        R² > 0.999
+            优秀
+
+        R² > 0.99
+            良好
+
+        R² < 0.99
+            需改进
 
         Examples
         --------
@@ -875,17 +928,28 @@ class ZeroTempDeformationCalculator:
         -----
         Voigt应变分量对应关系：
 
-        - ε₁ = ε₁₁：x方向正应变
-        - ε₂ = ε₂₂：y方向正应变
-        - ε₃ = ε₃₃：z方向正应变
-        - ε₄ = 2ε₂₃：yz平面剪切应变
-        - ε₅ = 2ε₁₃：xz平面剪切应变
-        - ε₆ = 2ε₁₂：xy平面剪切应变
+        ε₁ = ε₁₁
+            x 方向正应变
+
+        ε₂ = ε₂₂
+            y 方向正应变
+
+        ε₃ = ε₃₃
+            z 方向正应变
+
+        ε₄ = 2ε₂₃
+            yz 平面剪切应变
+
+        ε₅ = 2ε₁₃
+            xz 平面剪切应变
+
+        ε₆ = 2ε₁₂
+            xy 平面剪切应变
 
         形变矩阵构造：
 
         .. math::
-            F = I + \\varepsilon
+        F = I + \varepsilon
 
         其中I是单位矩阵，ε是应变张量。
         """
@@ -971,7 +1035,7 @@ class ZeroTempDeformationCalculator:
         应变张量计算：
 
         .. math::
-            \\varepsilon = \\frac{1}{2}(F + F^T) - I
+            \varepsilon = \frac{1}{2}(F + F^T) - I
 
         其中F是形变矩阵，I是单位矩阵。
         """
@@ -1140,12 +1204,18 @@ class ZeroTempDeformationCalculator:
         应力张量通过virial公式计算：
 
         .. math::
-            \\sigma_{\\alpha\\beta} = \\frac{1}{V} \\sum_i r_{i\\alpha} f_{i\\beta}
+            \sigma_{\alpha\beta} = \frac{1}{V} \sum_i r_{i\alpha} f_{i\beta}
 
         其中：
-        - :math:`V`：晶胞体积
-        - :math:`r_{i\\alpha}`：第i个原子在α方向的位置
-        - :math:`f_{i\\beta}`：第i个原子在β方向受到的力
+
+        :math:`V`
+            晶胞体积
+
+        :math:`r_{i\alpha}`
+            第 i 个原子在 \(\alpha\) 方向的位置
+
+        :math:`f_{i\beta}`
+            第 i 个原子在 \(\beta\) 方向受到的力
 
         应力张量必须是对称的，任何非对称性都被平均处理。
         """
@@ -1174,22 +1244,28 @@ class ElasticConstantsSolver:
     -----
     数学原理：
 
-    根据胡克定律：:math:`\\sigma = C \\cdot \\varepsilon`
+    根据胡克定律：:math:`\sigma = C \cdot \varepsilon`
 
     其中：
-    - :math:`\\sigma`：应力向量 (N×6)
-    - :math:`C`：弹性常数矩阵 (6×6)
-    - :math:`\\varepsilon`：应变向量 (N×6)
+
+    :math:`\sigma`
+        应力向量 (N×6)
+
+    :math:`C`
+        弹性常数矩阵 (6×6)
+
+    :math:`\varepsilon`
+        应变向量 (N×6)
 
     最小二乘求解：
 
     .. math::
-        \\min_C ||\\sigma - C \\cdot \\varepsilon||^2
+        \min_C ||\sigma - C \cdot \varepsilon||^2
 
     解析解：
 
     .. math::
-        C = (\\varepsilon^T \\varepsilon)^{-1} \\varepsilon^T \\sigma
+        C = (\varepsilon^T \varepsilon)^{-1} \varepsilon^T \sigma
 
     Examples
     --------
@@ -1247,11 +1323,15 @@ class ElasticConstantsSolver:
         拟合优度R²计算：
 
         .. math::
-            R^2 = 1 - \\frac{SS_{res}}{SS_{tot}}
+            R^2 = 1 - \frac{SS_{res}}{SS_{tot}}
 
         其中：
-        - :math:`SS_{res} = \\sum(y_i - \\hat{y}_i)^2`：残差平方和
-        - :math:`SS_{tot} = \\sum(y_i - \\bar{y})^2`：总平方和
+
+        :math:`SS_{res} = \sum (y_i - \hat{y}_i)^2`
+            残差平方和
+
+        :math:`SS_{tot} = \sum (y_i - \bar{y})^2`
+            总平方和
 
         Examples
         --------
@@ -1307,8 +1387,8 @@ class ElasticConstantsSolver:
     ) -> tuple[np.ndarray, float]:
         """逐列稳健求解 C
 
-        - 对第 k 个 Voigt 分量，仅用该分量非零且其余分量近零的样本行，拟合 C[:, k]
-        - 适用于我们"单分量逐一施加形变"的数据结构，可显著降低全局拟合的病态和串扰
+        1. 对第 k 个 Voigt 分量，仅用该分量非零且其余分量近零的样本行，拟合 C[:, k]
+        2. 适用于“单分量逐一施加形变”的数据结构，可降低全局拟合的病态与串扰
         """
         num_modes = 6
         C = np.zeros((num_modes, num_modes), dtype=np.float64)
@@ -1352,10 +1432,11 @@ class ElasticConstantsSolver:
     ) -> tuple[np.ndarray, float]:
         """在立方晶系假设下拟合：仅 C11, C12, C44。
 
-        使用"单分量形变"的行，分别以稳健统计（中位数斜率）估计：
-        - C11: 使用 ε11 行的 σ11/ε11、ε22 行的 σ22/ε22、ε33 行的 σ33/ε33 的中位数
-        - C12: 使用 ε11 行的 σ22/ε11、σ33/ε11 等跨分量比值的中位数（再与其它轴对换求中位数）
-        - C44: 使用 γ23 行的 σ23/γ23、γ13 行的 σ13/γ13、γ12 行的 σ12/γ12 的中位数
+        使用“单分量形变”的行，分别以稳健统计（中位数斜率）估计：
+
+        1. C11：用 ε11 行的 σ11/ε11、ε22 行的 σ22/ε22、ε33 行的 σ33/ε33 的中位数
+        2. C12：用 ε11 行的 σ22/ε11、σ33/ε11 等跨分量比值的中位数（再与其它轴对换求中位数）
+        3. C44：用 γ23 行的 σ23/γ23、γ13 行的 σ13/γ13、γ12 行的 σ12/γ12 的中位数
         """
 
         def median_slope(x: np.ndarray, y: np.ndarray, eps: float = 1e-15) -> float:
@@ -1485,7 +1566,7 @@ class ElasticConstantsSolver:
         求解线性方程组：
 
         .. math::
-            \\varepsilon \\cdot C = \\sigma
+            \varepsilon \cdot C = \sigma
 
         使用numpy.linalg.lstsq求解，该函数使用SVD分解处理病态矩阵。
         """
@@ -1543,17 +1624,18 @@ class ElasticConstantsSolver:
         岭回归目标函数：
 
         .. math::
-            \\min_C ||\\sigma - C \\cdot \\varepsilon||^2 + \\alpha ||C||^2
+            \min_C ||\sigma - C \cdot \varepsilon||^2 + \alpha ||C||^2
 
         解析解：
 
         .. math::
-            C = (\\varepsilon^T \\varepsilon + \\alpha I)^{-1} \\varepsilon^T \\sigma
+            C = (\varepsilon^T \varepsilon + \alpha I)^{-1} \varepsilon^T \sigma
 
-        正则化参数α控制平滑程度：
-        - α = 0：退化为最小二乘法
-        - α较大：更平滑但可能欠拟合
-        - α较小：接近最小二乘法但改善条件数
+        正则化参数 α 控制平滑程度：
+
+        1. α = 0：退化为最小二乘法
+        2. α 较大：更平滑但可能欠拟合
+        3. α 较小：接近最小二乘法但改善条件数
         """
         logger.debug(f"使用岭回归求解，正则化参数: {alpha}")
 
@@ -1650,16 +1732,16 @@ class ShearDeformationMethod:
     3. **应变-应力关系**：通过virial应力张量计算剪切应力
 
     支持的剪切方向：
-    - direction=4: yz剪切 (σ23, C44)
-    - direction=5: xz剪切 (σ13, C55)
-    - direction=6: xy剪切 (σ12, C66)
+    1. direction=4：yz 剪切 (σ23, C44)
+    2. direction=5：xz 剪切 (σ13, C55)
+    3. direction=6：xy 剪切 (σ12, C66)
 
     剪切应变定义：
 
     .. math::
-        \\gamma_{ij} = \\frac{\\partial u_i}{\\partial x_j} + \\frac{\\partial u_j}{\\partial x_i}
+        \gamma_{ij} = \frac{\partial u_i}{\partial x_j} + \frac{\partial u_j}{\partial x_i}
 
-    其中γ是工程剪切应变，与张量剪切应变的关系为 :math:`\\gamma = 2\\varepsilon`
+    其中γ是工程剪切应变，与张量剪切应变的关系为 :math:`\gamma = 2\varepsilon`
 
     Examples
     --------
@@ -1730,28 +1812,34 @@ class ShearDeformationMethod:
         1. **yz剪切** (direction=4)：
 
            .. math::
-               h_{zy} \\leftarrow h_{zy} + \\gamma \\cdot h_{zz}
+               h_{zy} \leftarrow h_{zy} + \gamma \cdot h_{zz}
 
-               y_i \\leftarrow y_i + \\gamma \\cdot z_i
+               y_i \leftarrow y_i + \gamma \cdot z_i
 
         2. **xz剪切** (direction=5)：
 
            .. math::
-               h_{zx} \\leftarrow h_{zx} + \\gamma \\cdot h_{zz}
+               h_{zx} \leftarrow h_{zx} + \gamma \cdot h_{zz}
 
-               x_i \\leftarrow x_i + \\gamma \\cdot z_i
+               x_i \leftarrow x_i + \gamma \cdot z_i
 
         3. **xy剪切** (direction=6)：
 
            .. math::
-               h_{yx} \\leftarrow h_{yx} + \\gamma \\cdot h_{yy}
+               h_{yx} \leftarrow h_{yx} + \gamma \cdot h_{yy}
 
-               x_i \\leftarrow x_i + \\gamma \\cdot y_i
+               x_i \leftarrow x_i + \gamma \cdot y_i
 
         其中：
-        - h是晶格矢量矩阵
-        - γ是工程剪切应变
-        - (x_i, y_i, z_i)是第i个原子的位置
+
+        h
+            晶格矢量矩阵
+
+        γ
+            工程剪切应变
+
+        (x_i, y_i, z_i)
+            第 i 个原子的坐标
 
         Examples
         --------
@@ -1856,9 +1944,14 @@ class ShearDeformationMethod:
         -------
         dict
             包含以下键的计算结果：
-            - 'directions': 剪切方向信息
-            - 'detailed_results': 每个方向的详细数据
-            - 'summary': 拟合结果汇总
+            'directions'
+                剪切方向信息
+
+            'detailed_results'
+                每个方向的详细数据
+
+            'summary'
+                拟合结果汇总
 
         Notes
         -----
@@ -1874,9 +1967,9 @@ class ShearDeformationMethod:
         立方晶系的剪切弹性常数：
 
         .. math::
-            C_{44} = C_{55} = C_{66} = \\frac{\\partial\\sigma_{ij}}{\\partial\\gamma_{ij}}
+            C_{44} = C_{55} = C_{66} = \frac{\partial\sigma_{ij}}{\partial\gamma_{ij}}
 
-        其中σ是剪切应力，γ是工程剪切应变。
+        其中 :math:`\sigma` 为剪切应力，:math:`\gamma` 为工程剪切应变。
 
         Examples
         --------

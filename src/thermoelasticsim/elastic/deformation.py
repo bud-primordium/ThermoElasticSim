@@ -3,13 +3,20 @@
 # 修改日期: 2025-03-27
 # 文件描述: 实现对晶胞施加微小应变的 Deformer 类。
 
-"""
+r"""
 变形模块
 
-包含 Deformer 类，用于生成并对晶胞施加微小应变的变形矩阵
+用于生成并对晶胞施加小形变矩阵的工具。
 
-Classes:
-    Deformer: 生成变形矩阵并应用于晶胞的类
+理论基础
+--------
+小形变近似下，形变梯度可写为：
+
+.. math::
+    \mathbf{F} = \mathbf{I} + \boldsymbol{\varepsilon}
+
+其中 :math:`\boldsymbol{\varepsilon}` 为对称的小应变张量。为便于逐分量扫描，
+本模块构造 6 个基方向（Voigt 记号）：:math:`\varepsilon_{11}, \varepsilon_{22}, \varepsilon_{33}, \varepsilon_{23}, \varepsilon_{13}, \varepsilon_{12}`。
 """
 
 import logging
@@ -66,19 +73,23 @@ class Deformer:
     ]
 
     def generate_deformation_matrices(self) -> list[np.ndarray]:
-        """生成变形矩阵列表
+        r"""生成形变矩阵列表
 
-        生成6个应变分量(εxx,εyy,εzz,εyz,εxz,εxy)的变形矩阵，
-        每个分量生成num_steps个变形矩阵
+        为 6 个 Voigt 分量依次生成均匀分布的形变序列，采用：
+
+        .. math::
+            \mathbf{F}(\delta) = \mathbf{I} + \delta\,\mathbf{E}_k
+
+        其中 :math:`\mathbf{E}_k` 为第 :math:`k` 个分量的基矩阵（剪切为对称填充）。
 
         Returns
         -------
-        list
-            包含变形矩阵的列表，每个矩阵是3x3 numpy数组
+        list of numpy.ndarray
+            形变矩阵列表，每个为 (3, 3)
 
         Notes
         -----
-        使用向量化计算优化性能，预分配结果列表空间
+        预分配结果列表以减少内存分配开销。
         """
         delta_values = np.linspace(-self.delta, self.delta, self.num_steps)
         total_matrices = len(self.STRAIN_COMPONENTS) * len(delta_values)
@@ -93,14 +104,14 @@ class Deformer:
         return F_list
 
     def apply_deformation(self, cell: Cell, deformation_matrix: np.ndarray) -> None:
-        """对晶胞施加变形矩阵
+        r"""对晶胞施加形变矩阵 :math:`\mathbf{F}`
 
         Parameters
         ----------
         cell : Cell
             包含原子的晶胞对象
         deformation_matrix : numpy.ndarray
-            3x3变形矩阵
+            3×3 形变矩阵
 
         Raises
         ------
@@ -115,6 +126,7 @@ class Deformer:
             raise ValueError("变形矩阵行列式接近零，可能导致数值不稳定")
 
         try:
+            # 委托给 Cell 方法，保持坐标与晶格约定一致
             cell.apply_deformation(deformation_matrix)
             logging.info(f"成功应用变形矩阵: {deformation_matrix}")
         except Exception as e:

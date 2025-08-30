@@ -2,6 +2,7 @@
 
 from .benchmark import (
     BenchmarkConfig,
+    calculate_c11_c12_robust,
     calculate_c11_c12_traditional,
     calculate_c44_lammps_shear,
     run_aluminum_benchmark,
@@ -45,6 +46,7 @@ __all__ = [
     # 基准工作流
     "BenchmarkConfig",
     "calculate_c11_c12_traditional",
+    "calculate_c11_c12_robust",
     "calculate_c44_lammps_shear",
     "run_zero_temp_benchmark",
     "run_aluminum_benchmark",

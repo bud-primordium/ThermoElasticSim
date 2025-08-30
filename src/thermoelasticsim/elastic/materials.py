@@ -6,9 +6,15 @@ r"""
 文献弹性常数等。支持多种晶体结构和材料元素。
 
 主要组件：
-- MaterialParameters: 材料参数数据类
-- 预定义材料常量: ALUMINUM_FCC, COPPER_FCC等
-- 材料查询和验证工具
+
+MaterialParameters
+    材料参数数据类
+
+预定义材料常量
+    `ALUMINUM_FCC`, `COPPER_FCC` 等
+
+材料查询和验证工具
+    材料检索、枚举与常数比较
 
 基本使用：
     >>> from thermoelasticsim.elastic.materials import ALUMINUM_FCC, COPPER_FCC
@@ -16,8 +22,6 @@ r"""
     Al晶格常数: 4.050 Å
 
 .. moduleauthor:: Gilbert Young
-.. created:: 2025-08-24
-.. version:: 4.0.0
 """
 
 from dataclasses import dataclass
@@ -74,10 +78,17 @@ class MaterialParameters:
     -----
     弹性常数命名约定：
 
-    - C11, C22, C33: 正应力-正应变常数
-    - C12, C13, C23: 泊松效应常数
-    - C44, C55, C66: 剪切常数
-    - 立方晶系: C11=C22=C33, C44=C55=C66, C12=C13=C23
+    C11, C22, C33
+        正应力-正应变常数
+
+    C12, C13, C23
+        泊松效应常数
+
+    C44, C55, C66
+        剪切常数
+
+    立方晶系
+        C11=C22=C33, C44=C55=C66, C12=C13=C23
     """
 
     name: str

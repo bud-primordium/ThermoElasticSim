@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""
+r"""
 ThermoElasticSim - 有限温弹性常数计算模块
 
-.. moduleauthor:: Gilbert Young
-.. created:: 2025-03-27
-.. modified:: 2025-07-08
-.. version:: 4.0.0
+该模块实现有限温条件下，通过显式形变法计算弹性常数的工作流：
 
-该模块实现了有限温条件下，通过显式形变法计算弹性常数的工作流。
+1. NPT 系综平衡
+2. NVT 系综应力采样
+3. 弹性常数拟合
 """
 
 import logging
@@ -157,7 +156,7 @@ class FiniteTempElasticityWorkflow:
         return cell
 
     def run_nvt_sampling(self, cell) -> tuple[np.ndarray, np.ndarray]:
-        """在NVT系综下采样应力
+        r"""在 NVT 系综下采样应力
 
         Parameters
         ----------
@@ -166,8 +165,10 @@ class FiniteTempElasticityWorkflow:
 
         Returns
         -------
-        tuple
-            (avg_stress: 平均应力张量(3x3), std_stress: 应力标准差(3x3))
+        avg_stress : numpy.ndarray
+            平均应力张量 (3, 3)，单位 eV/Å³
+        std_stress : numpy.ndarray
+            应力标准差 (3, 3)，单位 eV/Å³
         """
         simulator = MDSimulator(
             cell=cell,
@@ -205,18 +206,18 @@ class FiniteTempElasticityWorkflow:
         return avg_stress, std_stress
 
     def calculate_elastic_constants(self) -> np.ndarray:
-        """计算弹性常数的主流程
+        r"""计算弹性常数的主流程
 
         执行完整工作流：
         1. 生成变形矩阵
-        2. 对每个变形进行NPT平衡
-        3. 在NVT系综下采样应力
+        2. 对每个变形进行 NPT 平衡
+        3. 在 NVT 系综下采样应力
         4. 使用最小二乘法拟合弹性常数
 
         Returns
         -------
-        np.ndarray
-            6x6弹性常数矩阵(GPa)
+        numpy.ndarray
+            弹性常数矩阵 (6, 6)，单位 GPa
         """
         strain_data = []
         stress_data = []

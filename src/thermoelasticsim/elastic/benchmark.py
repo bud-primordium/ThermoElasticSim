@@ -3,14 +3,14 @@
 零温弹性常数基准工作流（反哺自 examples/zero_temp_al_benchmark.py）
 
 目标：
-- 将示例脚本中经过验证的计算流程沉淀为可复用API
-- 统一材料常量来源，减少硬编码
-- 保持输出与绘图尽可能一致（通过可选的可视化与CSV导出）
+1. 将示例脚本中经过验证的计算流程沉淀为可复用 API
+2. 统一材料常量来源，减少硬编码
+3. 尽可能保持输出与绘图一致（可视化与 CSV 导出可选）
 
 主要接口：
-- run_aluminum_benchmark(supercell_size) → dict
-- calculate_c11_c12_traditional(cell, potential, relaxer, mat)
-- calculate_c44_lammps_shear(cell, potential, relaxer, mat)
+1. run_aluminum_benchmark(supercell_size) → dict
+2. calculate_c11_c12_traditional(cell, potential, relaxer, mat)
+3. calculate_c44_lammps_shear(cell, potential, relaxer, mat)
 
 注意：
 本模块不负责日志目录管理，调用方可按需配置日志与输出目录。

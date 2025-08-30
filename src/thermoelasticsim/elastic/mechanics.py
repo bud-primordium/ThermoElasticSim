@@ -20,12 +20,28 @@ logger = logging.getLogger(__name__)
 
 
 class StressCalculator:
-    """应力张量计算器
+    r"""应力张量计算器
 
-    处理三个张量贡献：
-    1. 动能张量: p_i⊗p_i/m_i
-    2. 维里张量: r_i⊗f_i
-    3. 晶格应变张量: ∂U/∂h·h^T
+    总应力由两部分组成（体积 :math:`V`）：
+
+    动能项（动量通量）
+        .. math::
+            \sigma^{\text{kin}}_{\alpha\beta}
+            = -\,\frac{1}{V} \sum_i m_i\, v_{i\alpha} v_{i\beta}
+
+    维里项（力-位矢项）
+        .. math::
+            \sigma^{\text{vir}}_{\alpha\beta}
+            = -\,\frac{1}{V} \sum_{i<j} r_{ij,\alpha}\, F_{ij,\beta}
+
+    Notes
+    -----
+    - 有限差分/晶格导数法（如 :math:`-\partial U/\partial \varepsilon` 或
+      :math:`-V^{-1}\,\partial U/\partial \mathbf{h}\, \mathbf{h}^T`）是另一种等价
+      的应力计算方式，用于数值校验；它并非额外“第三项”，不与维里项相加。
+    - 本实现采用 :math:`\sigma = \sigma^{\text{kin}} + \sigma^{\text{vir}}`。
+    - 对 EAM 势，使用经特殊处理的多体维里解析形式；如解析不可用，可用有限差分做校验。
+    - 正负号及指标约定与项目其它模块保持一致。
     """
 
     def __init__(self):
@@ -33,11 +49,15 @@ class StressCalculator:
         logger.debug("StressCalculator initialized")
 
     def calculate_kinetic_stress(self, cell) -> np.ndarray:
-        """
-        计算纯动能应力张量
+        r"""计算动能应力张量
 
-        使用公式：σ_αβ^kinetic = -1/V * Σᵢ m_i v_iα v_iβ
-        在零温下此项为零
+        使用的约定：
+
+        .. math::
+           \sigma^{\text{kin}}_{\alpha\beta}
+           = -\,\frac{1}{V} \sum_i m_i\, v_{i\alpha} v_{i\beta}.
+
+        说明：在静止构型或 :math:`T\to 0` 极限，速度趋近于零，因此该项趋近于 0。
 
         Parameters
         ----------
@@ -46,8 +66,8 @@ class StressCalculator:
 
         Returns
         -------
-        np.ndarray
-            动能应力张量 (3x3)
+        numpy.ndarray
+            动能应力张量 (3, 3)，单位 eV/Å³
         """
         try:
             num_atoms = len(cell.atoms)
@@ -75,13 +95,21 @@ class StressCalculator:
             raise
 
     def calculate_virial_stress(self, cell, potential) -> np.ndarray:
-        """
-        计算纯维里应力张量（原子间相互作用力项）
+        r"""计算维里应力张量（相互作用力贡献）
 
-        使用公式：σ_αβ^virial = -1/V * Σ(i<j) r_ij^α * F_ij^β
+        公式：
+
+        .. math::
+            \sigma^{\text{vir}}_{\alpha\beta}
+            = -\,\frac{1}{V} \sum_{i<j} r_{ij,\alpha}\, F_{ij,\beta}
+
         其中：
-        - r_ij = r_i - r_j (从原子j指向原子i的向量)
-        - F_ij是原子j对原子i的力
+
+        :math:`\mathbf{r}_{ij} = \mathbf{r}_i - \mathbf{r}_j`
+            从原子 :math:`j` 指向原子 :math:`i` 的位移向量
+
+        :math:`\mathbf{F}_{ij}`
+            原子 :math:`j` 作用于 :math:`i` 的力
 
         Parameters
         ----------
@@ -93,7 +121,7 @@ class StressCalculator:
         Returns
         -------
         np.ndarray
-            维里应力张量 (3x3)
+            维里应力张量 (3, 3)，单位 eV/Å³
         """
         try:
             volume = cell.volume
@@ -142,10 +170,12 @@ class StressCalculator:
             raise
 
     def calculate_total_stress(self, cell, potential) -> np.ndarray:
-        """
-        计算总应力张量（动能+维里项）
+        r"""计算总应力张量（动能项 + 维里项）
 
-        使用公式：σ_αβ = -1/V * (Σᵢ m_i v_iα v_iβ + Σ(i<j) r_ij^α * F_ij^β)
+        .. math::
+            \sigma_{\alpha\beta}
+            = -\,\frac{1}{V} \left( \sum_i m_i v_{i\alpha} v_{i\beta}
+            + \sum_{i<j} r_{ij,\alpha} F_{ij,\beta} \right)
 
         Parameters
         ----------
@@ -157,7 +187,7 @@ class StressCalculator:
         Returns
         -------
         np.ndarray
-            总应力张量 (3x3)
+            总应力张量 (3, 3)，单位 eV/Å³
         """
         try:
             kinetic_stress = self.calculate_kinetic_stress(cell)
@@ -172,25 +202,32 @@ class StressCalculator:
             raise
 
     def _calculate_eam_virial_contribution(self, cell, potential) -> np.ndarray:
-        """
-        计算EAM势的维里贡献
+        r"""计算 EAM 势的维里贡献（多体解析形式）
 
-        基于公式: -1/V * Σ(i<j) r_ij^α * F_ij^β
+        仍采用维里框架：
+
+        .. math::
+            -\frac{1}{V} \sum_{i<j} r_{ij,\alpha} F_{ij,\beta}
+
         其中：
-        - r_ij = r_i - r_j (原子i指向原子j的向量)
-        - F_ij是原子j对原子i的力
+
+        :math:`\mathbf{r}_{ij} = \mathbf{r}_i - \mathbf{r}_j`
+            原子间最小镜像位移向量（适用于三斜晶胞）
+
+        :math:`\mathbf{F}_{ij}`
+            EAM 多体势对应的相互作用力（包含嵌入能项的贡献）
 
         Parameters
         ----------
         cell : Cell
             包含原子的晶胞对象
         potential : Potential
-            EAM势能对象
+            EAM 势能对象
 
         Returns
         -------
         np.ndarray
-            维里贡献张量 (3x3)
+            维里贡献张量 (3, 3)，单位 eV/Å³
         """
         try:
             num_atoms = len(cell.atoms)
@@ -461,8 +498,15 @@ class StressCalculator:
     def calculate_finite_difference_stress(
         self, cell, potential, dr=1e-6
     ) -> np.ndarray:
-        """
-        计算有限差分应力张量（基于能量导数）
+        r"""计算有限差分应力张量（基于能量对胞矩的导数）
+
+        思路：在小形变量 :math:`d` 下，用中心差分近似 :math:`\partial U/\partial h_{ij}`，
+        并换算为应力。
+
+        Notes
+        -----
+        - 这是与维里等价的另一种应力计算策略，常用于数值验证；
+          并不与 :meth:`calculate_virial_stress` 相加。
 
         Parameters
         ----------
@@ -471,12 +515,12 @@ class StressCalculator:
         potential : Potential
             势能对象，用于计算能量
         dr : float, optional
-            形变量的步长, 默认值为1e-6
+            形变量步长，默认 1e-6
 
         Returns
         -------
         np.ndarray
-            有限差分应力张量 (3x3)
+            有限差分应力张量 (3, 3)，单位 eV/Å³
         """
         try:
             # 初始化能量导数矩阵
