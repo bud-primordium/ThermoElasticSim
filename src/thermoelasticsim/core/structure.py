@@ -7,20 +7,31 @@ r"""
 
 理论基础
 --------
-周期性边界条件 (Periodic Boundary Conditions, PBC)：
+分数/笛卡尔坐标定义（采用列向量记号）：
 
 .. math::
-    \mathbf{r}_{frac} = \mathbf{L}^{-T} \cdot \mathbf{r}_{cart}
+    \mathbf{r} = \mathbf{L}\,\mathbf{s},\qquad
+    \mathbf{s} = \mathbf{L}^{-1}\,\mathbf{r}
 
 其中：
-- :math:`\mathbf{r}_{cart}` - 笛卡尔坐标
-- :math:`\mathbf{r}_{frac}` - 分数坐标
-- :math:`\mathbf{L}` - 晶格矢量矩阵
+
+:math:`\mathbf{r}`
+    笛卡尔坐标
+
+:math:`\mathbf{s}`
+    分数坐标
+
+:math:`\mathbf{L}`
+    晶格矢量矩阵（列向量为基矢）
 
 最小镜像约定 (Minimum Image Convention)：
 
 .. math::
-    \mathbf{r}_{min} = \mathbf{r} - \mathbf{L} \cdot \text{round}(\mathbf{L}^{-1} \cdot \mathbf{r})
+    \mathbf{r}_{\min} = \mathbf{r} - \mathbf{L}\, \operatorname{round}(\mathbf{L}^{-1} \mathbf{r})
+
+实现说明：本模块内部在代码中使用“行向量右乘”的等价实现。
+例如上式可写作 :math:`\mathbf{s}^{\top} = \mathbf{r}^{\top}\,\mathbf{L}^{-1}` 与
+:math:`\mathbf{r}^{\top} = \mathbf{s}^{\top}\,\mathbf{L}^{\top}`。
 
 Classes
 -------
@@ -56,8 +67,7 @@ Examples
 ... ]
 >>> cell = Cell(lattice, atoms)
 
-.. moduleauthor:: Gilbert Young
-.. versionadded:: 4.0.0
+
 """
 
 __version__ = "4.0.0"
@@ -140,8 +150,13 @@ class Atom:
 
     Notes
     -----
-    质量单位转换关系：
-    1 amu = 1.66054e-27 kg = 103.62 eV·fs²/Å²
+    质量与常数采用全局统一定义（参见 ``thermoelasticsim.utils.utils`` 模块）：
+
+    ``AMU_TO_EVFSA2``
+        质量单位转换常量（amu → eV·fs²/Å²）。
+
+    ``KB_IN_EV``
+        玻尔兹曼常数（eV/K）。
 
     Examples
     --------
@@ -175,19 +190,22 @@ class Atom:
     def move_by(self, displacement: np.ndarray) -> None:
         """通过位置增量移动原子
 
-        Args:
-            displacement: 位置增量向量，形状为(3,)
+        Parameters
+        ----------
+        displacement : numpy.ndarray | array_like
+            位置增量向量，形状为 (3,)
 
         Raises
         ------
-            ValueError: 如果位置增量不是3D向量
+        ValueError
+            如果位置增量不是3D向量
 
         Examples
         --------
-            >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
-            >>> atom.move_by([0.1, 0.2, 0.3])
-            >>> print(atom.position)
-            [0.1 0.2 0.3]
+        >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
+        >>> atom.move_by([0.1, 0.2, 0.3])
+        >>> print(atom.position)
+        [0.1 0.2 0.3]
         """
         if not isinstance(displacement, np.ndarray):
             displacement = np.array(displacement, dtype=np.float64)
@@ -200,19 +218,22 @@ class Atom:
     def accelerate_by(self, velocity_change: np.ndarray) -> None:
         """通过速度增量改变原子速度
 
-        Args:
-            velocity_change: 速度增量向量，形状为(3,)
+        Parameters
+        ----------
+        velocity_change : numpy.ndarray | array_like
+            速度增量向量，形状为 (3,)
 
         Raises
         ------
-            ValueError: 如果velocity_change不是3D向量
+        ValueError
+            如果速度增量不是3D向量
 
         Examples
         --------
-            >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
-            >>> atom.accelerate_by([0.1, 0.2, 0.3])
-            >>> print(atom.velocity)
-            [0.1 0.2 0.3]
+        >>> atom = Atom(1, 'H', 1.0, [0, 0, 0])
+        >>> atom.accelerate_by([0.1, 0.2, 0.3])
+        >>> print(atom.velocity)
+        [0.1 0.2 0.3]
         """
         if not isinstance(velocity_change, np.ndarray):
             velocity_change = np.array(velocity_change, dtype=np.float64)
@@ -227,16 +248,17 @@ class Atom:
 
         Returns
         -------
-            新的Atom对象，包含当前原子的所有属性的副本
+        Atom
+            新的 Atom 对象，包含当前原子的所有属性的副本
 
         Examples
         --------
-            >>> atom1 = Atom(1, 'H', 1.0, [0, 0, 0])
-            >>> atom2 = atom1.copy()
-            >>> atom2.id == atom1.id
-            True
-            >>> atom2.position is atom1.position
-            False
+        >>> atom1 = Atom(1, 'H', 1.0, [0, 0, 0])
+        >>> atom2 = atom1.copy()
+        >>> atom2.id == atom1.id
+        True
+        >>> atom2.position is atom1.position
+        False
         """
         return Atom(
             id=self.id,
@@ -306,9 +328,17 @@ class Cell:
 
     Notes
     -----
-    分数坐标与笛卡尔坐标转换：
-    - 笛卡尔→分数: :math:`\mathbf{s} = \mathbf{L}^{-T} \cdot \mathbf{r}`
-    - 分数→笛卡尔: :math:`\mathbf{r} = \mathbf{L}^T \cdot \mathbf{s}`
+    分数/笛卡尔坐标转换（列向量记号）：
+
+    .. math::
+        \mathbf{r} = \mathbf{L}\,\mathbf{s},\qquad
+        \mathbf{s} = \mathbf{L}^{-1}\,\mathbf{r}
+
+    实现采用“行向量右乘”的等价式：
+
+    .. math::
+        \mathbf{s}^{\top} = \mathbf{r}^{\top}\,\mathbf{L}^{-1},\qquad
+        \mathbf{r}^{\top} = \mathbf{s}^{\top}\,\mathbf{L}^{\top}
 
     Examples
     --------
@@ -457,7 +487,7 @@ class Cell:
         Returns
         -------
         float
-            晶胞体积，单位为Å^3
+            晶胞体积 (Å³)
         """
         return np.linalg.det(self.lattice_vectors)
 
@@ -467,7 +497,7 @@ class Cell:
         Returns
         -------
         numpy.ndarray
-            包含三个方向长度的数组，单位为Å
+            包含三个方向长度的数组 (Å)
         """
         box_lengths = np.linalg.norm(self.lattice_vectors, axis=1)
         return box_lengths
@@ -483,7 +513,7 @@ class Cell:
         Returns
         -------
         numpy.ndarray
-            3x3应力张量矩阵，单位为eV/Å^3
+            3×3 应力张量矩阵 (eV/Å³)
         """
         from thermoelasticsim.elastic.mechanics import StressCalculator
 
@@ -495,7 +525,7 @@ class Cell:
 
         Notes
         -----
-        锁定后，晶格向量将不能被修改，直到调用unlock_lattice_vectors()
+        锁定后，晶格向量将不能被修改，直到调用 :meth:`unlock_lattice_vectors`。
         """
         self.lattice_locked = True
         logger.debug("Lattice vectors have been locked.")
@@ -505,32 +535,45 @@ class Cell:
 
         Notes
         -----
-        解锁后，晶格向量可以被修改，直到再次调用lock_lattice_vectors()
+        解锁后，晶格向量可以被修改，直到再次调用 :meth:`lock_lattice_vectors`。
         """
         self.lattice_locked = False
         logger.debug("Lattice vectors have been unlocked.")
 
     def apply_deformation(self, deformation_matrix: np.ndarray) -> None:
-        """对晶胞和原子坐标施加变形矩阵F
+        r"""对晶格与原子坐标施加形变矩阵 :math:`\mathbf{F}`
 
-        Args:
-            deformation_matrix: 3x3变形矩阵F
+        Parameters
+        ----------
+        deformation_matrix : numpy.ndarray
+            形变矩阵 :math:`\mathbf{F}`，形状为 (3, 3)
 
         Notes
         -----
-            当晶格未锁定时：
-            1. 更新晶格矢量： L_new = F * L_old
-            2. 更新原子坐标： r_new = r_old * F^T
+        采用列向量约定的连续介质力学记号：
 
-            当晶格已锁定时：
-            仅对原子坐标施加F变形： r_new = r_old * F^T
+        - 晶格未锁定（允许变胞）时：
+
+          .. math::
+             \mathbf{L}_{\text{new}} = \mathbf{F}\, \mathbf{L}_{\text{old}},\qquad
+             \mathbf{r}_{\text{new}} = \mathbf{F}\, \mathbf{r}_{\text{old}}
+
+        - 晶格已锁定（固定胞形）时：
+
+          .. math::
+             \mathbf{L}_{\text{new}} = \mathbf{L}_{\text{old}},\qquad
+             \mathbf{r}_{\text{new}} = \mathbf{F}\, \mathbf{r}_{\text{old}}
+
+        实现细节：本实现使用“行向量右乘”形式，等价写法为
+
+        .. math::
+           \mathbf{r}_{\text{new}}^{\top} = \mathbf{r}_{\text{old}}^{\top} \mathbf{F}^{\top}.
 
         Examples
         --------
-            >>> import numpy as np
-            >>> # 小幅变形矩阵
-            >>> F = np.array([[1.01, 0, 0], [0, 1, 0], [0, 0, 1]])
-            >>> cell.apply_deformation(F)
+        >>> import numpy as np
+        >>> F = np.array([[1.01, 0, 0], [0, 1, 0], [0, 0, 1]])
+        >>> cell.apply_deformation(F)
         """
         logger = logging.getLogger(__name__)
 
@@ -583,14 +626,12 @@ class Cell:
 
         将原子位置映射回主晶胞内，使用标准的最小镜像约定。
 
-        算法：
+        算法（列向量记号）：
 
         .. math::
-            \mathbf{s} = \mathbf{L}^{-T} \cdot \mathbf{r}
-
-            \mathbf{s}' = \mathbf{s} - \lfloor \mathbf{s} + 0.5 \rfloor
-
-            \mathbf{r}' = \mathbf{L}^T \cdot \mathbf{s}'
+            \mathbf{s} = \mathbf{L}^{-1}\,\mathbf{r},\qquad
+            \mathbf{s}' = \mathbf{s} - \lfloor \mathbf{s} + 0.5 \rfloor,\qquad
+            \mathbf{r}' = \mathbf{L}\,\mathbf{s}'
 
         Parameters
         ----------
@@ -672,14 +713,18 @@ class Cell:
         .. math::
             E_{kin} = \sum_i \frac{1}{2} m_i |\mathbf{v}_i - \mathbf{v}_{cm}|^2
 
-        自由度数：
-        - 多原子系统: :math:`N_{dof} = 3N - 3` (扣除质心平动)
-        - 单原子系统: :math:`N_{dof} = 3` (不扣除)
+        自由度数定义：
+
+        .. math::
+            N_{\mathrm{dof}} = \begin{cases}
+                3N - 3, & N > 1, \\
+                3, & N = 1.
+            \end{cases}
 
         Returns
         -------
         float
-            系统温度 (K)
+            系统温度，单位为 :math:`\mathrm{K}`
 
         Notes
         -----
@@ -729,11 +774,12 @@ class Cell:
         return temperature
 
     def calculate_kinetic_energy(self) -> float:
-        """计算当前系统的总动能
+        r"""计算当前系统的总动能
 
         Returns
         -------
-            系统总动能，单位为eV
+        float
+            系统总动能，单位为 :math:`\mathrm{eV}`
 
         Notes
         -----
@@ -762,7 +808,8 @@ class Cell:
 
         Returns
         -------
-            原子位置数组，形状为(num_atoms, 3)
+        numpy.ndarray
+            原子位置数组，形状为 (num_atoms, 3)
 
         Examples
         --------
@@ -799,10 +846,10 @@ class Cell:
         根据最小镜像约定，找到最近的周期镜像之间的位移。
         这对于正确计算周期性系统中的距离和力至关重要。
 
-        数学原理：
+        数学原理（列向量记号）：
 
         .. math::
-            \mathbf{d}_{min} = \mathbf{d} - \mathbf{L} \cdot \text{round}(\mathbf{L}^{-1} \cdot \mathbf{d})
+            \mathbf{d}_{\min} = \mathbf{d} - \mathbf{L}\, \operatorname{round}(\mathbf{L}^{-1} \mathbf{d})
 
         Parameters
         ----------
@@ -989,7 +1036,7 @@ class Cell:
         logger.debug("晶格矢量已更新。")
 
     def get_fractional_coordinates(self) -> np.ndarray:
-        """获取所有原子的分数坐标
+        r"""获取所有原子的分数坐标
 
         Returns
         -------
@@ -998,8 +1045,12 @@ class Cell:
 
         Notes
         -----
-        分数坐标：r_frac = (L^T)^-1 * r_cart
-        其中L是晶格矢量矩阵，r_cart是笛卡尔坐标
+        坐标关系（列向量记号）：
+
+        .. math::
+            \mathbf{s} = \mathbf{L}^{-1}\,\mathbf{r}
+
+        代码实现采用行向量右乘：:math:`\mathbf{s}^{\top} = \mathbf{r}^{\top}\,\mathbf{L}^{-1}`。
         """
         positions = self.get_positions()  # shape (N, 3)
         # 转换到分数坐标：(L^T)^-1 * r
@@ -1007,7 +1058,7 @@ class Cell:
         return fractional_coords
 
     def set_fractional_coordinates(self, fractional_coords: np.ndarray) -> None:
-        """根据分数坐标设置所有原子的笛卡尔坐标
+        r"""根据分数坐标设置所有原子的笛卡尔坐标
 
         Parameters
         ----------
@@ -1016,8 +1067,12 @@ class Cell:
 
         Notes
         -----
-        笛卡尔坐标：r_cart = L^T * r_frac
-        其中L是晶格矢量矩阵，r_frac是分数坐标
+        坐标关系（列向量记号）：
+
+        .. math::
+            \mathbf{r} = \mathbf{L}\,\mathbf{s}
+
+        代码实现采用行向量右乘：:math:`\mathbf{r}^{\top} = \mathbf{s}^{\top}\,\mathbf{L}^{\top}`。
         """
         if fractional_coords.shape != (len(self.atoms), 3):
             raise ValueError(
@@ -1048,7 +1103,7 @@ class Cell:
             atom.position = positions[i].copy()
 
     def get_volume(self) -> float:
-        """计算晶胞体积
+        r"""计算晶胞体积
 
         Returns
         -------
@@ -1058,7 +1113,9 @@ class Cell:
         Notes
         -----
         体积通过晶格矢量的标量三重积计算：
-        V = |a · (b × c)|
+
+        .. math::
+           V = \left|\, \mathbf{a} \cdot (\mathbf{b} \times \mathbf{c}) \,\right|
         """
         # 计算混合积：a · (b × c)
         a, b, c = self.lattice_vectors

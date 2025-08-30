@@ -2,23 +2,23 @@
 r"""
 晶体结构生成器模块
 
-该模块提供统一的晶体结构生成接口，支持多种晶格类型和材料元素。
-主要用于为弹性常数计算和分子动力学模拟创建标准的晶体结构。
+该模块提供统一的晶体结构生成接口，支持多种晶格类型和材料元素，
+用于为弹性常数计算和分子动力学模拟创建标准晶体结构。
 
 支持的晶格类型：
-- FCC (面心立方): 如Al、Cu、Au等
-- BCC (体心立方): 如Fe、Cr等 (预留)
-- HCP (密排六方): 如Zn、Mg等 (预留)
 
-基本使用：
-    >>> builder = CrystallineStructureBuilder()
-    >>> cell = builder.create_fcc("Al", 4.05, (3, 3, 3))
-    >>> cell.num_atoms
-    108
+- FCC（面心立方）：如 Al、Cu、Au 等
+- BCC（体心立方）：如 Fe、Cr 等（预留）
+- HCP（密排六方）：如 Zn、Mg 等（预留）
 
-.. moduleauthor:: Gilbert Young
-.. created:: 2025-08-24
-.. version:: 4.0.0
+Examples
+--------
+创建 3×3×3 的铝 FCC 超胞：
+
+>>> builder = CrystallineStructureBuilder()
+>>> cell = builder.create_fcc("Al", 4.05, (3, 3, 3))
+>>> cell.num_atoms
+108
 """
 
 import numpy as np
