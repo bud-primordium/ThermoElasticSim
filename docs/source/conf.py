@@ -33,7 +33,13 @@ extensions = [
     "sphinx.ext.coverage",  # 文档覆盖率检查
     "sphinx.ext.todo",  # TODO标记支持
     "numpydoc",  # NumPy文档风格支持
+    "sphinxcontrib.bibtex",  # BibTeX文献引用支持
 ]
+
+# BibTeX配置
+bibtex_bibfiles = ["references.bib"]
+bibtex_default_style = "unsrt"
+bibtex_reference_style = "author_year"
 
 # 模板路径
 templates_path = ["_templates"]
@@ -66,8 +72,31 @@ autodoc_default_options = {
 
 # Mock导入（对于C扩展等）
 autodoc_mock_imports = [
+    # C/C++ bindings
     "pybind11",
     "thermoelasticsim._cpp_core",
+    # Heavy/optional runtime deps mocked for docs build
+    "numba",
+    "matplotlib",
+    "matplotlib.pyplot",
+    "matplotlib.animation",
+    "plotly",
+    "plotly.graph_objects",
+    "plotly.express",
+    "plotly.subplots",
+    "h5py",
+    "pandas",
+    "scipy",
+    "sklearn",
+    "yaml",
+    # Project subpackages that trigger heavy runtime side-effects
+    "thermoelasticsim.visualization",
+    "thermoelasticsim.visualization.elastic",
+    "thermoelasticsim.visualization.web",
+    "thermoelasticsim.utils.plot_config",
+    "thermoelasticsim.utils.visualization",
+    "thermoelasticsim.utils.modern_visualization",
+    "thermoelasticsim.elastic.benchmark",
 ]
 
 # 类型提示配置
@@ -97,6 +126,7 @@ napoleon_custom_sections = [
     "Theory",  # 理论基础
     "Algorithm",  # 算法说明
 ]
+numpydoc_show_class_members = False
 
 # -- MathJax配置 (数学公式) --------------------------------------------------
 
@@ -126,12 +156,14 @@ html_theme_options = {
     "sticky_navigation": True,  # 固定导航栏
     "includehidden": True,  # 包含隐藏的toctree
     "titles_only": False,  # 显示子标题
-    "display_version": True,  # 显示版本号
     "prev_next_buttons_location": "bottom",  # 上下页按钮位置
 }
 
 # 静态文件路径
 html_static_path = ["_static"]
+html_css_files = [
+    "custom.css",
+]
 
 # 网站图标
 # html_favicon = '_static/favicon.ico'
@@ -152,6 +184,15 @@ html_sidebars = {
 
 # 显示源码链接
 html_show_sourcelink = True
+
+# -- 严格模式配置 -------------------------------------------------------------
+# 启用nitpicky模式，任何未解析的交叉引用都会导致构建失败
+nitpicky = True
+
+# 忽略某些已知问题的引用（如果需要）
+nitpick_ignore = [
+    # 示例：('py:class', 'numpy.ndarray'),
+]
 html_copy_source = True
 
 # -- LaTeX输出配置 ------------------------------------------------------------

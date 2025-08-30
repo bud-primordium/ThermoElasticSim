@@ -49,6 +49,7 @@ docs = [
     "sphinx>=5.0",
     "sphinx-rtd-theme>=1.2",
     "numpydoc>=1.5",
+    "sphinxcontrib-bibtex>=2.4.0",
 ]
 
 
