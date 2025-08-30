@@ -130,8 +130,7 @@ class BerendsenThermostat(Thermostat):
         目标温度，单位为开尔文 (K)。
     tau : float
         耦合时间常数，控制温度达到目标值的速率。
-        较小的 `\\tau` 值表示更快的温度响应，但可能导致数值不稳定；
-        较大的 `\\tau` 值则响应较慢，温度调整更加平缓。
+        较小的 :math:`\tau` 值响应更快但稳定性较差；较大的 :math:`\tau` 响应更平缓。
     """
 
     def __init__(self, target_temperature: float, tau: float):
@@ -142,24 +141,30 @@ class BerendsenThermostat(Thermostat):
         r"""
         应用 Berendsen 恒温器以控制系统温度。
 
-        该恒温器通过以下缩放因子 `\\lambda` 来调整原子速度：
+        该恒温器通过以下缩放因子 :math:`\lambda` 调整原子速度：
 
         .. math::
-            \\lambda = \\sqrt{1 + \\frac{\\Delta t}{\\tau} \\left(\\frac{T_{\\text{target}}}{T_{\\text{current}}} - 1\\right)}
+            \lambda = \sqrt{1 + \frac{\Delta t}{\tau} \left(\frac{T_{\text{target}}}{T_{\text{current}}} - 1\right)}
 
-        其中：
-        - `\\Delta t` 为时间步长 `dt`，
-        - `T_{\\text{target}}` 为目标温度 `target_temperature`，
-        - `T_{\\text{current}}` 为当前系统温度。
+        其中
 
-        然后通过 `\\lambda` 缩放原子速度，以达到近似的温度控制。
+        :math:`\Delta t`
+            时间步长 `dt`
+
+        :math:`T_{\text{target}}`
+            目标温度 `target_temperature`
+
+        :math:`T_{\text{current}}`
+            当前系统温度
 
         Parameters
         ----------
-        atoms : list
-            原子对象的列表。
+        cell : Cell
+            晶胞对象，包含原子集合
         dt : float
-            时间步长。
+            时间步长 (fs)
+        potential : Potential
+            势函数对象（此实现中未使用）
         """
         atoms = cell.atoms
         current_temp = self.get_temperature(atoms)
@@ -192,7 +197,7 @@ class AndersenThermostat(Thermostat):
     target_temperature : float
         目标温度，单位为开尔文 (K)。
     collision_frequency : float
-        碰撞频率，单位为 `\\text{fs}^{-1}`。
+        碰撞频率，单位为 fs⁻¹。
         较高的碰撞频率会更频繁地随机分配速度，导致温度波动较大；
         较低的碰撞频率则速度随机化较少，温度控制更稳定。
     """
@@ -205,29 +210,29 @@ class AndersenThermostat(Thermostat):
         r"""
         应用 Andersen 恒温器以控制系统温度。
 
-        在每个时间步，针对每个原子，发生碰撞的概率为 `p`：
+        在每个时间步，针对每个原子，发生碰撞的概率为 :math:`p`：
 
         .. math::
-            p = \\text{collision\\_frequency} \\times \\Delta t
+            p = \nu \times \Delta t
 
-        若发生碰撞，则根据目标温度 `T_{\\text{target}}` 的 Maxwell-Boltzmann 分布重新分配原子的速度：
-
-        .. math::
-            v_i = \\mathcal{N}(0, \\sigma)
-
-        其中 `\\sigma` 为速度分布的标准差，定义为：
+        若发生碰撞，则根据目标温度 :math:`T_{\text{target}}` 的 Maxwell-Boltzmann 分布重新分配原子速度：
 
         .. math::
-            \\sigma = \\sqrt{\\frac{k_B \\times T_{\\text{target}}}{m}}
+            v_i \sim \mathcal{N}(0, \sigma)
 
-        其中 `k_B` 为玻尔兹曼常数，`m` 为原子质量。
+        其中 :math:`\sigma` 为速度分布的标准差：
+
+        .. math::
+            \sigma = \sqrt{\frac{k_B\, T_{\text{target}}}{m}}
 
         Parameters
         ----------
-        atoms : list
-            原子对象的列表。
+        cell : Cell
+            晶胞对象，包含原子集合
         dt : float
-            时间步长。
+            时间步长 (fs)
+        potential : Potential
+            势函数对象（此实现中未直接使用）
         """
         atoms = cell.atoms
         velocities = np.array([atom.velocity for atom in atoms], dtype=np.float64)
@@ -260,18 +265,17 @@ class AndersenThermostat(Thermostat):
 
 
 class NoseHooverThermostat(Thermostat):
-    """
-    Nose-Hoover 恒温器 (Python直接实现版本)
+    r"""Nosé–Hoover 恒温器（已弃用）
 
-    使用Velocity-Verlet + Nose-Hoover对称分解的方式：
-    1. 半步更新xi
-    2. 半步速度缩放
-    3. 半步力更新速度
-    4. 更新位置
-    5. 调用potential.calculate_forces(cell)以更新力
-    6. 半步力更新速度
-    7. 半步速度缩放
-    8. 半步更新xi
+    Deprecated
+    ---------
+    该旧架构实现已弃用；请使用新架构中的
+    :class:`thermoelasticsim.md.propagators.NoseHooverChainPropagator`。
+
+    Notes
+    -----
+    历史说明：本类为早期 Python 直接实现版本，用对称分解包裹 NVE。
+    新版实现提供更稳健的 NHC 链与严格的算符分离。
     """
 
     def __init__(
@@ -404,26 +408,17 @@ class NoseHooverThermostat(Thermostat):
 
 
 class NoseHooverChainThermostat(Thermostat):
-    """
-    Nose-Hoover 链恒温器
+    r"""Nosé–Hoover 链恒温器（已弃用）
 
-    通过多个热浴形成链来改善遍历性，适合复杂系统。
-    采用C++后端实现核心积分步骤。
+    Deprecated
+    ---------
+    该旧架构实现已弃用；请使用新架构中的
+    :class:`thermoelasticsim.md.propagators.NoseHooverChainPropagator`。
 
-    Parameters
-    ----------
-    target_temperature : float
-        目标温度，单位K
-    time_constant : float
-        时间常数，控制热浴耦合强度。
-        较大的time_constant意味着热浴链的响应较慢，温度调整更加平缓。
-        较小的time_constant则响应较快，但可能导致温度波动。
-    chain_length : int, optional
-        链的长度，默认为3。
-        链长度增加可以改善相空间的遍历性，但会增加计算复杂度。
-    Q : numpy.ndarray, optional
-        热浴质量参数数组，长度应等于 `chain_length`。
-        如果未提供，将根据默认方式初始化。
+    Notes
+    -----
+    历史说明：本类依赖 C++ 接口；新版以纯 Python 传播子架构重写，
+    文档与接口更一致，建议迁移。
     """
 
     def __init__(

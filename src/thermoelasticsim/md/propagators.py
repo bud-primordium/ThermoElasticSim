@@ -1,20 +1,24 @@
-"""基础算符传播子实现
+r"""基础算符传播子实现
 
-本模块实现了分子动力学中的基础传播子，每个类对应一个基本的物理过程。
-这些传播子可以通过Trotter分解组合成完整的积分方案。
+每个传播子对应一个基本物理过程，可通过对称 Trotter 分解组合为完整积分方案。
 
-已实现的传播子：
-- PositionPropagator: 位置演化 r += v*dt
-- VelocityPropagator: 速度演化 v += F/m*dt
-- ForcePropagator: 力计算 F = -∇U(r)
+已实现的传播子
+--------------
 
-设计要点：
-1. 每个传播子只负责一种物理过程
-2. 严格遵循Velocity-Verlet算法的分解逻辑
-3. 避免重复计算力（通过ForcePropagator分离）
-4. 保持数值精度和时间可逆性
+PositionPropagator
+    位置演化：:math:`\mathbf{r} \leftarrow \mathbf{r} + \mathbf{v}\,\Delta t`
 
-Created: 2025-08-18
+VelocityPropagator
+    速度演化：:math:`\mathbf{v} \leftarrow \mathbf{v} + \mathbf{F}\,\Delta t/m`
+
+ForcePropagator
+    力计算：:math:`\mathbf{F} = -\nabla U(\mathbf{r})`
+
+设计要点
+--------
+1. 单一职责：每个传播子仅负责一种过程
+2. 与 Velocity-Verlet 分解一致，减少重复力计算
+3. 数值稳定、支持时间可逆的对称分解
 """
 
 from typing import Any
@@ -51,20 +55,13 @@ _W2 = -1.7024143839193153  # -2^(1/3)/(2-2^(1/3))
 
 
 class PositionPropagator(Propagator):
-    """位置传播子: exp(iL_r * dt)
+    r"""位置传播子：:math:`\exp(iL_r\,\Delta t)`
 
-    实现位置的时间演化：r(t+dt) = r(t) + v(t)*dt
-    这对应于哈密顿动力学中动量项对位置的作用。
+    实现位置的时间演化：:math:`\mathbf{r}(t+\Delta t)=\mathbf{r}(t)+\mathbf{v}(t)\,\Delta t`。
 
-    物理意义：
-    - 在恒定速度场中的自由传播
-    - 保持相空间体积（辛性质）
-    - 与势能无关的纯几何演化
-
-    注意事项：
-    - 必须处理周期性边界条件
-    - 不改变速度和力
-    - 时间可逆：propagate(dt)后propagate(-dt)应恢复原状
+    Notes
+    -----
+    处理周期性边界；不改变速度与力；与势能无关。
     """
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
@@ -88,20 +85,13 @@ class PositionPropagator(Propagator):
 
 
 class VelocityPropagator(Propagator):
-    """速度传播子: exp(iL_v * dt)
+    r"""速度传播子：:math:`\exp(iL_v\,\Delta t)`
 
-    实现速度的时间演化：v(t+dt) = v(t) + F(t)/m*dt
-    这对应于哈密顿动力学中力项对动量的作用。
+    实现速度的时间演化：:math:`\mathbf{v}(t+\Delta t)=\mathbf{v}(t)+\mathbf{F}(t)\,\Delta t/m`。
 
-    物理意义：
-    - 在恒定力场中的匀加速运动
-    - 牛顿第二定律的直接数值实现
-    - 动能的改变源于势能梯度
-
-    关键设计：
-    - 假设原子的力已经正确计算
-    - 不负责力的计算，只使用现有的atom.force
-    - 这避免了在Velocity-Verlet中重复计算力的问题
+    Notes
+    -----
+    假设 :code:`atom.force` 已计算；不在此处重新计算力。
     """
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
@@ -127,24 +117,9 @@ class VelocityPropagator(Propagator):
 
 
 class ForcePropagator(Propagator):
-    """力计算传播子: F = -∇U(r)
+    r"""力计算传播子：:math:`\mathbf{F} = -\nabla U(\mathbf{r})`
 
-    负责计算系统中所有原子受到的力。严格来说这不是时间演化算符，
-    但将其统一到Propagator接口中有助于：
-    1. 明确力计算的时机
-    2. 避免在积分过程中重复计算
-    3. 保持代码的模块化和可测试性
-
-    设计要点：
-    - 封装势函数的调用
-    - 确保力计算只在必要时进行
-    - 支持不同类型的势函数
-    - 处理力计算可能的异常
-
-    使用场景：
-    - Velocity-Verlet中位置更新后的力计算
-    - 系统初始化时的初始力计算
-    - 势函数切换后的力重新计算
+    封装势函数的力计算调用，控制力计算时机，避免重复计算。
     """
 
     def __init__(self, potential):
@@ -184,56 +159,45 @@ class ForcePropagator(Propagator):
 
 
 class BerendsenThermostatPropagator(Propagator):
-    """Berendsen恒温器传播子
+    r"""Berendsen 恒温器传播子（速度缩放）
 
-    实现Berendsen弱耦合恒温器，通过速度重新缩放维持目标温度。
-    这是一个后处理方法，不是真正的算符分离，但适合在现有框架中使用。
+    缩放因子 :math:`\lambda`：
 
-    算法原理：
-    - 计算当前系统温度 T_current
-    - 根据目标温度计算缩放因子: λ = sqrt(1 + dt/τ * (T_target/T_current - 1))
-    - 对所有原子速度进行缩放: v_new = λ * v_old
+    .. math::
+        \lambda = \sqrt{1 + \frac{\Delta t}{\tau}\left(\frac{T_0}{T}-1\right)}
 
-    优点：
-    - 实现简单，计算开销小
-    - 快速收敛到目标温度
-    - 对系统动力学影响较小
+    Notes
+    -----
+    后处理式恒温；不严格产生正则分布，常用于快速平衡。
 
-    缺点：
-    - 不产生正确的正则系综分布
-    - 抑制温度涨落
-    - 不严格保守
-
-    适用场景：
-    - 快速温度平衡
-    - 温度控制要求不严格的模拟
-    - 作为更复杂恒温器的预平衡步骤
+    References
+    ----------
+    Berendsen, H. J. C.; Postma, J. P. M.; van Gunsteren, W. F.; DiNola, A.; Haak, J. R. (1984).
+    Molecular dynamics with coupling to an external bath. The Journal of Chemical Physics, 81(8), 3684–3690.
+    https://doi.org/10.1063/1.448118
     """
 
     def __init__(
         self, target_temperature: float, tau: float = None, mode: str = "equilibration"
     ):
-        """初始化Berendsen恒温器
+        r"""初始化 Berendsen 恒温器
 
         Parameters
         ----------
         target_temperature : float
             目标温度 (K)
         tau : float, optional
-            时间常数τ_T (fs)，控制温度耦合强度
-            如果为None，则根据mode自动选择:
-            - 平衡模式: 500 fs (中等强度耦合，快速收敛)
-            - 生产模式: 2000 fs (弱耦合，减少动力学扰动)
+            时间常数 :math:`\tau_T` (fs)。未给定时按 `mode` 选择：
+
+            500.0
+                平衡模式（中等耦合，收敛较快）
+
+            2000.0
+                生产模式（弱耦合，扰动更小）
         mode : str, optional
             运行模式，'equilibration'(平衡) 或 'production'(生产)
             影响默认τ_T值的选择
 
-        Notes
-        -----
-        根据MD恒温器研究报告建议:
-        - 平衡阶段: τ_T = 0.1-1.0 ps，快速达到目标温度
-        - 生产阶段: τ_T = 2.0-10.0 ps，最小化动力学扰动
-        - 经验法则: τ_T ≈ 50-100 × dt，确保数值稳定性
         """
         if target_temperature <= 0:
             raise ValueError(f"目标温度必须为正数，得到 {target_temperature} K")
@@ -243,7 +207,7 @@ class BerendsenThermostatPropagator(Propagator):
         self.target_temperature = target_temperature
         self.mode = mode
 
-        # 根据研究报告设置τ_T参数
+        # 默认 τ_T 参数选择
         if tau is None:
             if mode == "equilibration":
                 self.tau = 500.0  # fs，快速平衡
@@ -268,7 +232,7 @@ class BerendsenThermostatPropagator(Propagator):
         self._lower_limited = 0  # 下限限制次数
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
-        """执行Berendsen温度调节
+        r"""执行 Berendsen 温度调节
 
         Parameters
         ----------
@@ -281,14 +245,12 @@ class BerendsenThermostatPropagator(Propagator):
 
         Notes
         -----
-        该方法实现Berendsen恒温器的标准算法：
-        1. 计算当前系统瞬时温度 T_inst
-        2. 根据温度弛豫方程计算缩放因子: λ = sqrt(1 + dt/τ_T * (T_0/T_inst - 1))
-        3. 对所有原子速度进行缩放: v_new = λ * v_old
-        4. 应用数值稳定性限制和统计监控
+        标准流程：
 
-        根据MD恒温器研究报告的理论指导，此算法虽然不产生严格的
-        正则系综，但适合于平衡阶段和快速温度收敛。
+        1. 计算瞬时温度 :math:`T`
+        2. 计算缩放因子 :math:`\lambda = \sqrt{1 + \tfrac{\Delta t}{\tau_T}(\tfrac{T_0}{T}-1)}`
+        3. 对所有原子速度缩放 :math:`\mathbf{v} \leftarrow \lambda\,\mathbf{v}`
+        4. 可选：数值稳定性限制与统计监控
         """
         # 根据研究报告算法步骤：计算当前系统瞬时温度
         current_temp = cell.calculate_temperature()
@@ -384,24 +346,45 @@ class BerendsenThermostatPropagator(Propagator):
         cell.remove_com_motion()
 
     def get_statistics(self) -> dict:
-        """获取Berendsen恒温器详细统计信息
+        r"""获取 Berendsen 恒温器统计信息
 
         Returns
         -------
         dict
-            包含统计信息的字典:
-            - 'total_steps': 总调节步数
-            - 'average_scaling': 平均缩放因子
-            - 'max_scaling': 最大缩放因子
-            - 'min_scaling': 最小缩放因子
-            - 'target_temperature': 目标温度 (K)
-            - 'tau': 时间常数 τ_T (fs)
-            - 'mode': 运行模式 (equilibration/production)
-            - 'limited_steps': 被ASE限制的步数
-            - 'upper_limited': 上限限制次数
-            - 'lower_limited': 下限限制次数
-            - 'limitation_rate': 限制比例 (%)
-            - 'effective_coupling': 有效耦合强度评估
+            统计信息字典：
+
+            total_steps
+                总调节步数
+
+            average_scaling
+                平均缩放因子
+
+            max_scaling
+                最大缩放因子
+
+            min_scaling
+                最小缩放因子
+
+            target_temperature
+                目标温度 (K)
+
+            tau
+                时间常数 :math:`\tau_T` (fs)
+
+            mode
+                运行模式（equilibration/production）
+
+            limited_steps
+                被限制的步数
+
+            upper_limited / lower_limited
+                上/下限限制次数
+
+            limitation_rate
+                限制比例 (%)
+
+            effective_coupling
+                有效耦合强度评估
         """
         if self._total_scaling_steps == 0:
             return {
@@ -458,55 +441,39 @@ class BerendsenThermostatPropagator(Propagator):
 
 
 class AndersenThermostatPropagator(Propagator):
-    """Andersen随机碰撞恒温器传播子
+    r"""Andersen 随机碰撞恒温器传播子
 
-    实现Andersen恒温器，通过随机碰撞维持目标温度。
-    每个原子在每个时间步都有一定概率与热浴发生碰撞，
-    碰撞时原子速度从Maxwell分布重新采样。
+    每个原子在每个时间步以概率 :math:`p=\nu\,\Delta t` 与热浴碰撞，
+    并从 Maxwell–Boltzmann 分布重新采样速度。
 
-    算法原理：
-    - 每个时间步，每个原子有概率 P = ν*dt 发生碰撞
-    - 如果发生碰撞，从Maxwell分布重新采样该原子速度
-    - 碰撞是独立的，不影响系统其他原子
+    Notes
+    -----
+    产生正确的正则 (NVT) 分布，但会打断动力学连续性。
 
-    优点：
-    - 产生正确的正则系综分布
-    - 理论基础严格，符合统计力学
-    - 实现简单，数值稳定
-    - 不抑制温度涨落
-
-    缺点：
-    - 破坏动力学连续性
-    - 不保持相关函数
-    - 随机性强，不适合某些分析
-
-    适用场景：
-    - 需要正确正则系综的模拟
-    - 平衡态性质计算
-    - 温度涨落重要的系统
+    References
+    ----------
+    Andersen, H. C. (1980). Molecular dynamics simulations at constant pressure and/or temperature.
+    The Journal of Chemical Physics, 72(4), 2384–2393. https://doi.org/10.1063/1.439486
     """
 
     def __init__(self, target_temperature: float, collision_frequency: float = None):
-        """初始化Andersen恒温器
+        r"""初始化 Andersen 恒温器
 
         Parameters
         ----------
         target_temperature : float
             目标温度 (K)
         collision_frequency : float, optional
-            碰撞频率 ν (fs⁻¹)
-            如果为None，则根据系统尺寸自动选择:
-            - 小系统(≤50原子): 0.005 fs⁻¹
-            - 中系统(50-150原子): 0.03 fs⁻¹
-            - 大系统(>150原子): 0.08 fs⁻¹
+            碰撞频率 :math:`\nu` (fs⁻¹)。未给定时按系统尺寸选取：
 
-        Notes
-        -----
-        根据MD恒温器研究报告(Lines 210-221):
-        - 碰撞概率: P_collision = ν × Δt (系统级频率)
-        - 典型ν范围: 10^-4 到 10^-1 fs⁻¹
-        - Maxwell-Boltzmann采样: σ = sqrt(k_B*T/m)
-        - 严格产生正则(NVT)系综分布
+            小系统 (≤ 50 原子)
+                0.005 fs⁻¹
+
+            中系统 (50–150 原子)
+                0.03 fs⁻¹
+
+            大系统 (> 150 原子)
+                0.08 fs⁻¹
 
         Raises
         ------
@@ -565,7 +532,7 @@ class AndersenThermostatPropagator(Propagator):
         return base_freq
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
-        """执行Andersen随机碰撞（根据研究报告的标准算法）
+        r"""执行 Andersen 随机碰撞
 
         Parameters
         ----------
@@ -578,18 +545,9 @@ class AndersenThermostatPropagator(Propagator):
 
         Notes
         -----
-        根据MD恒温器研究报告(Lines 159-187)的标准Andersen算法:
-
-        1. 碰撞概率计算: P_collision = ν × Δt (系统级)
-        2. 遵历所有原子，以概率P判断是否碰撞
-        3. 如果碰撞，从麦克斯韦-玻尔兹曼分布重新采样速度
-        4. Maxwell分布: σ = sqrt(k_B*T/m)，每个分量独立采样
-
-        关键改进:
-        - 修复碰撞概率计算错误（系统级而非原子级）
-        - 根据系统尺寸适应频率选择
-        - 使用正确的Maxwell-Boltzmann采样
-        - 监控实际碰撞率与期望值的匹配
+        1. 计算系统级碰撞概率 :math:`P=\nu\,\Delta t`
+        2. 逐原子以概率 :math:`P/N` 判定是否碰撞
+        3. 若碰撞，从 Maxwell–Boltzmann 分布采样新速度
         """
         num_atoms = len(cell.atoms)
 
@@ -679,21 +637,39 @@ class AndersenThermostatPropagator(Propagator):
         atom.velocity = np.random.normal(0, sigma, 3)
 
     def get_statistics(self) -> dict:
-        """获取Andersen恒温器详细统计信息
+        """获取 Andersen 恒温器统计信息
 
         Returns
         -------
         dict
-            包含统计信息的字典:
-            - 'total_steps': 总步数
-            - 'total_collisions': 总碰撞次数
-            - 'collision_rate': 平均碰撞率 (次/步)
-            - 'expected_rate': 理论碰撞率 (fs⁻¹)
-            - 'target_temperature': 目标温度 (K)
-            - 'effective_collision_frequency': 有效碰撞频率 (fs⁻¹)
-            - 'base_collision_frequency': 用户设置或系统推荐的基础频率 (fs⁻¹)
-            - 'recent_collisions': 最近100步的碰撞数
-            - 'system_size_initialized': 是否已根据系统尺寸初始化
+            统计信息字典：
+
+            total_steps
+                总步数
+
+            total_collisions
+                总碰撞次数
+
+            collision_rate
+                平均碰撞率 (次/步)
+
+            expected_rate
+                理论碰撞率 (fs⁻¹)
+
+            target_temperature
+                目标温度 (K)
+
+            effective_collision_frequency
+                有效碰撞频率 (fs⁻¹)
+
+            base_collision_frequency
+                基础频率 (fs⁻¹)
+
+            recent_collisions
+                最近 100 步的碰撞数
+
+            system_size_initialized
+                是否已根据系统尺寸初始化
         """
         if self._total_steps == 0:
             return {
@@ -734,33 +710,19 @@ class AndersenThermostatPropagator(Propagator):
 
 
 class NoseHooverChainPropagator(Propagator):
-    """Nose-Hoover链恒温器传播子 (高精度实现)
+    r"""Nose–Hoover 链恒温器传播子（四阶 Suzuki–Yoshida 分解）
 
-    基于ASE和Martyna等人工作的严格实现，采用M个热浴变量的链式结构
-    和四阶Suzuki-Yoshida分解，确保数值稳定性和正确的正则系综采样。
+    Notes
+    -----
+    链式热浴变量自洽演化，时间可逆对称分解，保证正则系综采样质量。
 
-    关键特性：
-    - **链式结构**: M个热浴变量，默认M=3，保证遍历性
-    - **四阶精度**: Suzuki-Yoshida分解，相比二阶显著提升长期稳定性
-    - **对称回文**: 时间可逆的算符分离序列
-    - **正确Q参数**: τ=50-100*dt，避免过强耦合导致的数值不稳定
-
-    物理原理：
-    基于扩展拉格朗日量方法，引入链式热浴变量{ζ_j, p_ζ,j}：
-    - 第一个热浴直接与物理系统耦合
-    - 后续热浴控制前一个热浴的涨落
-    - 保证正则系综的严格采样
-
-    运动方程：
-    dv_i/dt = F_i/m_i - (p_ζ,1/Q_1) * v_i
-    dp_ζ,1/dt = Σ(m_i*v_i²) - N_f*k_B*T₀ - (p_ζ,2/Q_2)*p_ζ,1
-    dp_ζ,j/dt = (p_ζ,j-1²/Q_j-1) - k_B*T₀ - (p_ζ,j+1/Q_j+1)*p_ζ,j  (j=2,...,M-1)
-    dp_ζ,M/dt = (p_ζ,M-1²/Q_M-1) - k_B*T₀
-
-    参考文献：
-    - Martyna, Klein, Tuckerman, J. Chem. Phys. 97, 2635 (1992)
-    - ASE implementation: ase.md.nose_hoover_chain
-    - Yoshida, Phys. Lett. A 150, 262 (1990) - 四阶分解方案
+    References
+    ----------
+    .. [1] Martyna, G. J.; Klein, M. L.; Tuckerman, M. E. (1992).
+           Nosé–Hoover chains: The canonical ensemble via continuous dynamics.
+           The Journal of Chemical Physics, 97(4), 2635–2643. https://doi.org/10.1063/1.463940
+    .. [2] Yoshida, H. (1990). Construction of higher order symplectic integrators.
+           Physics Letters A, 150(5–7), 262–268. https://doi.org/10.1016/0375-9601(90)90092-3
     """
 
     def __init__(
@@ -880,16 +842,20 @@ class NoseHooverChainPropagator(Propagator):
         return total_kinetic
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
-        """执行Nose-Hoover链传播（四阶Suzuki-Yoshida）
+        r"""执行 Nose–Hoover 链传播（四阶 Suzuki–Yoshida）
 
-        实现完整的NHC算符：exp(iL_NHC * dt)
-        采用三步四阶Suzuki-Yoshida分解保证高精度和长期稳定性。
+        实现完整的 NHC 算符：
+
+        .. math::
+            \exp\big(iL_{\mathrm{NHC}}\,\Delta t\big)
+
+        采用三步四阶 Suzuki–Yoshida 分解保证高精度和长期稳定性。
 
         算法流程：
 
-        1. 对每个SY系数w_k：
-        2. 对tloop次循环：
-        3. 执行NHC_integration_loop(w_k * dt / tloop)
+        1. 遍历每个 SY 系数 :math:`w_k`
+        2. 对每个系数执行 :math:`t_{loop}` 次内循环
+        3. 调用 :code:`_nhc_integration_loop(w_k \cdot \Delta t / t_{loop})`
 
         Parameters
         ----------
@@ -902,8 +868,10 @@ class NoseHooverChainPropagator(Propagator):
 
         Notes
         -----
-        这是NHC的核心方法，必须在NVE积分的两侧各调用一次：
-        exp(iL_NHC * dt/2) * exp(iL_NVE * dt) * exp(iL_NHC * dt/2)
+        与 NVE 的对称包裹关系：
+
+        .. math::
+            \exp\big(iL_{\mathrm{NHC}}\tfrac{\Delta t}{2}\big)\,\exp\big(iL_{\mathrm{NVE}}\,\Delta t\big)\,\exp\big(iL_{\mathrm{NHC}}\tfrac{\Delta t}{2}\big)
         """
         # 延迟初始化Q参数
         if not self._initialized:
@@ -921,14 +889,15 @@ class NoseHooverChainPropagator(Propagator):
         self._update_statistics(cell)
 
     def _nhc_integration_loop(self, cell: Cell, delta: float) -> None:
-        """单次NHC积分循环 - 对称回文序列
+        r"""单次 NHC 积分循环（对称回文序列）
 
-        实现MTK算法的核心：对称回文式更新保证时间可逆性。
+        实现 MTK 方法的核心：对称回文更新保证时间可逆性。
 
-        算法步骤（PRD Section 1.4 Lines 115-139）：
-        1. "向前"传播热浴链（从M-1到0）
-        2. 缩放粒子速度（热浴耦合）
-        3. "向后"传播热浴链（从0到M-1）
+        步骤：
+
+        1. 从后向前传播热浴链（:math:`M-1\to 0`）
+        2. 更新热浴位置并缩放粒子速度（热浴耦合）
+        3. 从前向后传播热浴链（:math:`0\to M-1`）
 
         Parameters
         ----------
@@ -1037,13 +1006,17 @@ class NoseHooverChainPropagator(Propagator):
             self._conserved_energy_history.pop(0)
 
     def get_conserved_energy(self, cell: Cell) -> float:
-        """计算扩展哈密顿量（守恒量）
+        r"""计算 NHC 扩展哈密顿量（守恒量）
 
-        NHC系统的守恒量为：
-        H' = E_kinetic + E_potential + E_thermostat
+        .. math::
+            H' = E_{\mathrm{kin}} + E_{\mathrm{pot}} + E_{\mathrm{thermo}}
 
-        其中热浴能量：
-        E_thermostat = Σ(p_ζ²/2Q) + N_f*k_B*T₀*ζ[0] + k_B*T₀*Σ(ζ[1:])
+        其中热浴能量 :math:`E_{\mathrm{thermo}}` 为：
+
+        .. math::
+            E_{\mathrm{thermo}} = \sum_{j=0}^{M-1} \frac{p_{\zeta_j}^2}{2 Q_j}
+            + N_f k_B T_0\, \zeta_0
+            + k_B T_0 \sum_{j=1}^{M-1} \zeta_j
 
         Returns
         -------
@@ -1128,7 +1101,7 @@ class NoseHooverChainPropagator(Propagator):
 
 # 为了方便导入，提供一个创建基础NVE传播子的工厂函数
 def create_nve_propagators(potential):
-    """创建NVE积分所需的基础传播子
+    r"""创建 NVE 积分所需的基础传播子
 
     Parameters
     ----------
@@ -1138,10 +1111,16 @@ def create_nve_propagators(potential):
     Returns
     -------
     dict
-        包含所有NVE传播子的字典:
-        - 'position': PositionPropagator实例
-        - 'velocity': VelocityPropagator实例
-        - 'force': ForcePropagator实例
+        传播子字典：
+
+        ``'position'``
+            :class:`~thermoelasticsim.md.propagators.PositionPropagator` 实例
+
+        ``'velocity'``
+            :class:`~thermoelasticsim.md.propagators.VelocityPropagator` 实例
+
+        ``'force'``
+            :class:`~thermoelasticsim.md.propagators.ForcePropagator` 实例
 
     Examples
     --------
@@ -1158,78 +1137,56 @@ def create_nve_propagators(potential):
 
 
 class LangevinThermostatPropagator(Propagator):
-    r"""Langevin动力学恒温器传播子
-
-    基于Brunger-Brooks-Karplus (BBK)积分算法实现Langevin动力学恒温器。
-    该恒温器通过在牛顿运动方程中加入摩擦阻力项和随机力项来模拟系统与热浴的相互作用。
+    r"""Langevin 动力学恒温器传播子（BBK 积分）
 
     Notes
     -----
-    **理论基础**
-
-    Langevin运动方程：
+    Langevin 运动方程：
 
     .. math::
         m_i \frac{d^2\mathbf{r}_i}{dt^2} = \mathbf{F}_i(\mathbf{r}) - \gamma m_i \frac{d\mathbf{r}_i}{dt} + \mathbf{R}_i(t)
 
-    其中：
+    符号说明：
 
-    - :math:`\mathbf{F}_i(\mathbf{r})`: 保守力
-    - :math:`\gamma`: 摩擦系数（friction coefficient）
-    - :math:`\mathbf{R}_i(t)`: 随机力，满足涨落-耗散定理
+    :math:`\mathbf{F}_i(\mathbf{r})`
+        保守力
 
-    涨落-耗散定理保证热力学一致性：
+    :math:`\gamma`
+        摩擦系数（friction coefficient）
 
-    .. math::
-        :nowrap:
+    :math:`\mathbf{R}_i(t)`
+        随机力，满足涨落–耗散定理
 
-        \begin{align}
-        \langle \mathbf{R}_i(t) \rangle &= 0 \\
-        \langle R_{i,\alpha}(t) R_{j,\beta}(t') \rangle &= 2m_i\gamma k_B T_0 \delta_{ij}\delta_{\alpha\beta}\delta(t-t')
-        \end{align}
+    BBK 常数：
 
-    **BBK积分算法步骤**
+    :math:`c_1`
+        :math:`\exp(-\gamma\,\Delta t)`
 
-    1. **计算常数**:
-       :math:`c_1 = \exp(-\gamma dt), \quad \sigma = \sqrt{k_B T(1-c_1^2)/m}`
+    :math:`\sigma`
+        :math:`\sqrt{k_B T\,(1-c_1^2)/m}`
 
-    2. **半步速度更新**:
-       :math:`\mathbf{v}(t+dt/2) = \mathbf{v}(t) + \frac{1}{2}\mathbf{a}(t)dt`
-
-    3. **位置更新**:
-       :math:`\mathbf{r}(t+dt) = \mathbf{r}(t) + \mathbf{v}(t+dt/2)dt`
-
-    4. **计算新力**:
-       :math:`\mathbf{a}(t+dt) = \mathbf{F}(\mathbf{r}(t+dt))/m`
-
-    5. **最终速度更新**:
-       :math:`\mathbf{v}(t+dt) = c_1 \mathbf{v}_{\text{det}} + \sigma \boldsymbol{\xi}`
-
-    **参数选择建议**
-
-    - **平衡阶段**: :math:`\gamma \sim 1-10 \text{ ps}^{-1}` （快速温度控制）
-    - **生产阶段**: :math:`\gamma \sim 0.1-5 \text{ ps}^{-1}` （保持动力学真实性）
-    - **过阻尼极限**: :math:`\gamma \gg` 系统振动频率（布朗动力学）
-
-    **算法特性**
-
-    - **严格正则系综**: 产生正确的正则分布
-    - **物理一致性**: 基于真实的系统-热浴耦合
-    - **参数灵活**: 摩擦系数可调节耦合强度
-    - **涨落保持**: 保留自然的热涨落
+    References
+    ----------
+    Brünger, A.; Brooks, C. L.; Karplus, M. (1984). Stochastic boundary conditions
+    for molecular dynamics simulations of ST2 water. Chemical Physics Letters, 105(5), 495–500.
+    https://doi.org/10.1016/0009-2614(84)80098-6
     """
 
     def __init__(self, target_temperature: float, friction: float = 1.0):
-        """初始化Langevin恒温器
+        r"""初始化 Langevin 恒温器
 
         Parameters
         ----------
         target_temperature : float
             目标温度 (K)，必须为正数
         friction : float, optional
-            摩擦系数 γ (ps⁻¹)，默认值1.0 ps⁻¹
-            - 大值：强耦合，快速温度控制，动力学扰动大
-            - 小值：弱耦合，温度控制慢，动力学保持好
+            摩擦系数 :math:`\gamma` (ps⁻¹)，默认值 1.0 ps⁻¹。
+
+            大值
+                强耦合，快速温度控制，动力学扰动较大
+
+            小值
+                弱耦合，温度控制慢，动力学保持较好
 
         Raises
         ------
@@ -1238,11 +1195,16 @@ class LangevinThermostatPropagator(Propagator):
 
         Notes
         -----
-        摩擦系数的物理意义：
-        - γ描述了系统与热浴的耦合强度
-        - 可理解为背景溶剂的粘性效应
-        - 与LAMMPS参数关系：damp = 1/γ
-        - 与阻尼时间关系：τ_damp = 1/γ
+        摩擦系数相关：
+
+        :math:`\gamma`
+            系统与热浴的耦合强度；可理解为背景溶剂的粘性效应
+
+        :code:`damp`（LAMMPS）
+            :math:`\mathrm{damp} = 1/\gamma`
+
+        :math:`\tau_{\mathrm{damp}}`
+            阻尼时间，:math:`\tau_{\mathrm{damp}} = 1/\gamma`
         """
         if target_temperature <= 0:
             raise ValueError(f"目标温度必须为正数，得到 {target_temperature} K")
@@ -1265,18 +1227,19 @@ class LangevinThermostatPropagator(Propagator):
         )
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
-        """执行Langevin恒温器传播（BBK算法的速度更新部分）
+        r"""执行 Langevin 恒温器传播（BBK 速度更新）
 
-        注意：这个传播子只处理Langevin恒温器的速度更新部分，
-        即在标准速度-Verlet积分的基础上添加摩擦和随机力效应。
+        仅处理 Langevin 的速度更新部分（在标准速度-Verlet后附加摩擦与随机力）。
 
-        在完整的Langevin积分方案中，这个传播子应该在标准的
-        位置和力更新之后调用，用于最终的速度修正。
+        BBK 核心常数：
 
-        BBK算法的这一步骤：
-        1. 计算BBK常数：c1 = exp(-γ*dt), σ = sqrt(k_B*T*(1-c1²)/m)
-        2. 为每个原子生成高斯随机向量
-        3. 应用速度修正：v_new = c1*v_old + σ*random_vector
+        :math:`c_1 = \exp(-\gamma\,\Delta t)`,
+        :math:`\sigma = \sqrt{k_B T\,(1-c_1^2)/m}`
+
+        速度更新：
+
+        .. math::
+            \mathbf{v}(t+\Delta t) = c_1\,\mathbf{v}_{\mathrm{det}}(t+\Delta t) + \sigma\,\boldsymbol{\xi}
 
         Parameters
         ----------
@@ -1289,16 +1252,11 @@ class LangevinThermostatPropagator(Propagator):
 
         Notes
         -----
-        该方法实现BBK算法中的随机-摩擦速度更新：
+        步骤概述：
 
-        1. 对每个原子，计算：
-           - c1 = exp(-γ*dt)：速度衰减因子
-           - σ = sqrt(k_B*T*(1-c1²)/m)：随机力强度
-
-        2. 生成高斯随机力并更新速度：
-           v(t+dt) = c1*v_det(t+dt) + σ*R
-
-        这确保了涨落-耗散定理的满足，产生正确的正则系综。
+        1. 计算 :math:`c_1, \sigma`（见上式）
+        2. 为每个原子生成独立的高斯随机向量 :math:`\boldsymbol{\xi}`
+        3. 按上式更新 :math:`\mathbf{v}(t+\Delta t)`（满足涨落–耗散定理）
 
         Raises
         ------
@@ -1431,24 +1389,48 @@ class LangevinThermostatPropagator(Propagator):
         return temperature
 
     def get_statistics(self) -> dict:
-        """获取Langevin恒温器详细统计信息
+        """获取 Langevin 恒温器统计信息
 
         Returns
         -------
         dict
-            包含详细统计的字典:
-            - 'total_steps': 总传播步数
-            - 'target_temperature': 目标温度 (K)
-            - 'friction': 摩擦系数 (ps⁻¹)
-            - 'damping_time': 阻尼时间 (ps)
-            - 'coupling_strength': 耦合强度描述
-            - 'average_temperature': 平均温度 (K)
-            - 'temperature_std': 温度标准差 (K)
-            - 'temperature_error': 平均温度误差 (%)
-            - 'average_friction_work': 平均摩擦做功 (eV)
-            - 'average_random_work': 平均随机做功 (eV)
-            - 'energy_balance': 摩擦做功与随机做功比值
-            - 'recent_temperatures': 最近100步的温度历史
+            统计信息字典：
+
+            total_steps
+                总传播步数
+
+            target_temperature
+                目标温度 (K)
+
+            friction
+                摩擦系数 (ps⁻¹)
+
+            damping_time
+                阻尼时间 (ps)
+
+            coupling_strength
+                耦合强度描述
+
+            average_temperature
+                平均温度 (K)
+
+            temperature_std
+                温度标准差 (K)
+
+            temperature_error
+                平均温度误差 (%)
+
+            average_friction_work
+                平均摩擦做功 (eV)
+
+            average_random_work
+                平均随机做功 (eV)
+
+            energy_balance
+                摩擦做功与随机做功比值
+
+            recent_temperatures
+                最近 100 步的温度历史
         """
         if self._total_steps == 0:
             return {
@@ -1551,16 +1533,24 @@ class LangevinThermostatPropagator(Propagator):
         print(f"阻尼时间已更新: {1 / old_friction:.3f} -> {1 / new_friction:.3f} ps")
 
     def get_effective_parameters(self) -> dict:
-        """获取当前有效参数
+        r"""获取当前有效参数
 
         Returns
         -------
         dict
-            当前参数字典:
-            - 'friction': 摩擦系数 (ps⁻¹)
-            - 'damping_time': 阻尼时间 (ps)
-            - 'target_temperature': 目标温度 (K)
-            - 'coupling_description': 耦合强度描述
+            参数字典：
+
+            friction
+                摩擦系数 (ps⁻¹)
+
+            damping_time
+                阻尼时间 (ps)，:math:`\tau_{\mathrm{damp}} = 1/\gamma`
+
+            target_temperature
+                目标温度 (K)
+
+            coupling_description
+                耦合强度描述（weak/moderate/strong）
         """
         return {
             "friction": self.friction,
@@ -1605,35 +1595,37 @@ def exprel(x: np.ndarray) -> np.ndarray:
 
 
 class MTKBarostatPropagator(Propagator):
-    """
-    MTK (Martyna-Tobias-Klein) 恒压器传播算符
+    r"""MTK（Martyna–Tobias–Klein）恒压器传播子
 
-    实现基于Nose-Hoover链的各向同性恒压器，支持体积和晶格形状变化。
-    基于ASE实现和PRD文档的精确算符分离方法。
+    Notes
+    -----
+    对称分解 + 矩阵指数实现：
 
-    主要功能:
-    1. 压力控制的Nose-Hoover链
-    2. 晶格矩阵h和共轭动量P_g的演化
-    3. 矩阵指数精确计算
-    4. 对称Trotter分解确保时间可逆性
+    - 晶格共轭动量 :math:`\mathbf{P}_g` 的演化由应力与外压驱动
+    - 在 :math:`\mathbf{P}_g` 的特征基中进行精确积分（矩阵指数）
 
-    参考文献:
-    - Martyna, Tobias, Klein. J. Chem. Phys. 101, 4177 (1994)
-    - ASE源码: ase/md/nose_hoover_chain.py MTKBarostat类
-    - 四阶Suzuki-Yoshida分解方法
+    核心关系：
+
+    .. math::
+        d\mathbf{P}_g/dt = V\,(\boldsymbol{\sigma}_{\mathrm{int}} - P_{\mathrm{ext}}\,\mathbf{I}) + \text{kinetic correction}
+
+    References
+    ----------
+    Martyna, G. J.; Tobias, D. J.; Klein, M. L. (1994). Constant pressure molecular dynamics algorithms.
+    The Journal of Chemical Physics, 101(5), 4177–4189. https://doi.org/10.1063/1.467468
 
     Parameters
     ----------
     target_temperature : float
         目标温度 (K)
     target_pressure : float
-        目标压力 (eV/Å³) - 注意单位！0.0表示零压
+        目标压力 (eV/Å³)
     pdamp : float
-        压力阻尼时间 (fs)，典型值为100*dt
+        压力阻尼时间 (fs)，典型值约 :math:`100\,\times\,dt`
     pchain : int, optional
-        恒压器链长度，默认为3
+        恒压器链长度，默认 3
     ploop : int, optional
-        恒压器链积分循环次数，默认为1
+        恒压器链积分循环次数，默认 1
     """
 
     def __init__(
@@ -1916,17 +1908,21 @@ class MTKBarostatPropagator(Propagator):
         self._P_g += G * dt
 
     def integrate_momenta(self, cell: Cell, potential, dt: float) -> None:
-        """
-        按MTK各向异性公式更新粒子动量（与恒压器耦合的半步）
+        r"""
+        更新粒子动量（与恒压器耦合的半步，MTK 公式）
 
-        在特征基下：
-        p' = p * exp(-kappa * dt / W) + dt * F * exprel(-kappa * dt / W)
-        其中 kappa = lambda_i + Tr(P_g)/(3N)
+        在 :math:`\mathbf{P}_g` 的特征基下：
+
+        .. math::
+            \mathbf{p}' = \mathbf{p}\,\exp\!\Big(-\frac{\boldsymbol{\kappa}\,\Delta t}{W}\Big)
+            + \Delta t\,\mathbf{F}\,\operatorname{exprel}\!\Big(-\frac{\boldsymbol{\kappa}\,\Delta t}{W}\Big)
+
+        其中 :math:`\boldsymbol{\kappa} = \boldsymbol{\lambda} + \operatorname{Tr}(\mathbf{P}_g)/(3N)`。
 
         Notes
         -----
-        - 此方法包含力贡献，因此无需外层的纯NVE速度半步。
-        - 必须在调用前后配合 _update_cell_momenta(dt/2) 和位置/晶格传播。
+        - 此方法已包含力贡献，无需额外的 NVE 速度半步
+        - 调用前后需配合 ``_update_cell_momenta(dt/2)`` 与位置/晶格传播
         """
         if not self._initialized:
             self._initialize_parameters(cell)
@@ -1969,15 +1965,13 @@ class MTKBarostatPropagator(Propagator):
             atom.velocity = v_new[i]
 
     def propagate_positions_and_cell(self, cell: Cell, dt: float) -> None:
-        """
-        使用矩阵指数精确传播粒子位置和晶格
+        r"""
+        使用矩阵指数精确传播粒子位置与晶格（MTK 核心步骤）
 
-        这是MTK算法的核心：通过对P_g矩阵的对角化和指数积分，
-        实现原子位置和晶格矩阵的同步演化。
+        流程：
 
-        算法流程:
-        1. 对P_g进行特征值分解: P_g = U @ diag(λ) @ U.T
-        2. 在特征坐标系中精确积分: exp(λ*dt/W)
+        1. 特征分解 :math:`\mathbf{P}_g = \mathbf{U}\,\operatorname{diag}(\boldsymbol{\lambda})\,\mathbf{U}^\top`
+        2. 在特征坐标系中用 :math:`\exp(\boldsymbol{\lambda}\,\Delta t/W)` 精确积分
         3. 变换回原坐标系
 
         Parameters
@@ -1985,7 +1979,7 @@ class MTKBarostatPropagator(Propagator):
         cell : Cell
             晶胞对象
         dt : float
-            时间步长
+            时间步长 (fs)
         """
         if not self._initialized:
             self._initialize_parameters(cell)
@@ -2063,10 +2057,13 @@ class MTKBarostatPropagator(Propagator):
             self._barostat_energy_history = self._barostat_energy_history[-max_history:]
 
     def get_barostat_energy(self) -> float:
-        """
+        r"""
         计算恒压器贡献的能量
 
-        E_barostat = Σ(p_xi²/2R_j) + Tr(P_g.T @ P_g)/(2W) + external work
+        .. math::
+            E_{\mathrm{baro}} = \sum_j \frac{p_{\xi_j}^2}{2 R_j}
+            + \frac{\operatorname{Tr}(\mathbf{P}_g^{\top}\mathbf{P}_g)}{2W}
+            + \text{external work}
 
         Returns
         -------

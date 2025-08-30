@@ -1,18 +1,33 @@
-"""MD算符分离架构接口定义
+r"""MD 算符分离架构接口定义
 
-本模块定义了基于刘维尔算符Trotter分解的MD架构接口。
-设计思想：将复杂的MD积分分解为可组合的基础算符。
+本模块定义了基于刘维尔算符 Trotter 分解的 MD 架构接口；
+核心思想是将完整积分步骤拆解为可组合的基础算符。
 
-主要类：
-- MDComponent: MD组件基类
-- Propagator: 算符传播子基类，对应exp(iL*dt)
-- IntegrationScheme: 积分方案基类，通过Trotter分解组合Propagator
+主要类
+------
 
-参考文献：
-- Martyna et al., Mol. Phys. 87, 1117 (1996)
-- Tuckerman et al., J. Chem. Phys. 97, 1990 (1992)
+MDComponent
+    MD 组件基类
 
-Created: 2025-08-18
+Propagator
+    算符传播子基类，对应 :math:`\exp(iL\,\Delta t)`
+
+IntegrationScheme
+    积分方案基类，通过 Trotter 分解组合多个传播子
+
+References
+----------
+.. [1] Martyna, G. J.; Tuckerman, M. E.; Tobias, D. J.; Klein, M. L. (1996).
+       Explicit reversible integrators for extended systems dynamics.
+       Molecular Physics, 87(5), 1117–1157. https://doi.org/10.1080/00268979600100761
+.. [2] Tuckerman, M.; Berne, B. J.; Martyna, G. J. (1992).
+       Reversible multiple time scale molecular dynamics.
+       The Journal of Chemical Physics, 97(3), 1990–2001. https://doi.org/10.1063/1.463137
+.. [3] Martyna, G. J.; Klein, M. L.; Tuckerman, M. E. (1992).
+       Nosé–Hoover chains: The canonical ensemble via continuous dynamics.
+       The Journal of Chemical Physics, 97(4), 2635–2643. https://doi.org/10.1063/1.463940
+.. [4] Yoshida, H. (1990). Construction of higher order symplectic integrators.
+       Physics Letters A, 150(5–7), 262–268. https://doi.org/10.1016/0375-9601(90)90092-3
 """
 
 from abc import abstractmethod
@@ -28,27 +43,34 @@ class MDComponent:
 
 
 class Propagator(MDComponent):
-    """算符传播子基类
+    r"""算符传播子基类
 
-    对应刘维尔算符exp(iL*dt)的数值实现。每个Propagator负责系统状态
-    在特定物理过程下的时间演化，如位置更新、速度更新、热浴演化等。
+    数值实现 :math:`\exp(iL\,\Delta t)`，在特定物理过程下更新系统状态
+    （如位置、速度、热浴变量等）。
 
-    设计原则：
-    1. 单一职责：每个Propagator只负责一种物理过程
-    2. 无状态：不依赖外部状态，所有信息通过参数传递
-    3. 可组合性：可通过Trotter分解自由组合
-    4. 时间可逆：支持对称分解保证数值稳定性
+    设计原则
+    --------
+    1. 单一职责：每个传播子仅负责一种物理过程
+    2. 无状态：不依赖外部全局状态，信息通过参数传递
+    3. 可组合：通过 Trotter 分解自由组合
+    4. 可逆性：优先对称分解以提高稳定性
 
-    典型实现：
-    - PositionPropagator: exp(iL_r * dt) → r += v*dt
-    - VelocityPropagator: exp(iL_v * dt) → v += F/m*dt
-    - NoseHooverPropagator: 热浴变量演化
-    - BarostatPropagator: 压浴变量演化
+    典型实现
+    --------
+
+    :math:`\exp(iL_r\,\Delta t)`
+        位置传播（:class:`~thermoelasticsim.md.propagators.PositionPropagator`）
+
+    :math:`\exp(iL_v\,\Delta t)`
+        速度传播（:class:`~thermoelasticsim.md.propagators.VelocityPropagator`）
+
+    热浴/压浴变量传播
+        如 Nose–Hoover、MTK 等（见相关类）
     """
 
     @abstractmethod
     def propagate(self, cell, dt: float, **kwargs) -> None:
-        """执行dt时间的演化
+        r"""执行 :math:`\Delta t` 时间的演化
 
         Parameters
         ----------
@@ -57,40 +79,40 @@ class Propagator(MDComponent):
         dt : float
             时间步长 (fs)
         **kwargs : dict
-            额外参数，如potential对象、温度、压力等
+            额外参数，如 ``potential`` 对象、温度、压力等
 
         Notes
         -----
-        该方法应当：
-        1. 就地修改cell中的相关属性
+        1. 就地修改 `cell` 的相关属性
         2. 保持算符的数学性质（线性、幺正性等）
-        3. 不产生副作用（如文件IO、日志输出等）
+        3. 不产生副作用（如文件 IO、日志输出等）
         4. 在数值精度范围内保持可逆性
         """
         pass
 
 
 class IntegrationScheme(MDComponent):
-    """积分方案基类
+    r"""积分方案基类
 
-    通过Trotter分解组合多个Propagator实现完整的MD积分步骤。
-    负责将物理上耦合的演化过程分解为可计算的序列。
+    通过 Trotter 分解组合多个传播子，实现完整积分步骤。
 
-    设计原则：
-    1. 对称性：优先使用对称分解保证时间可逆性
-    2. 物理正确：遵循相应系综的统计力学原理
-    3. 数值稳定：控制Trotter分解误差在可接受范围
-    4. 可扩展性：易于添加新的物理过程
+    设计原则
+    --------
+    1. 对称性：优先对称分解以保证时间可逆性
+    2. 物理性：遵循目标系综的统计力学原理
+    3. 稳定性：控制分解误差在可接受范围
+    4. 扩展性：便于添加新的物理过程
 
-    常见分解模式：
-    - NVE: exp(iL*dt) ≈ exp(iL_v*dt/2)·exp(iL_r*dt)·exp(iL_v*dt/2)
-    - NVT: 恒温器包裹NVE核心的对称分解
-    - NPT: 多层嵌套的复杂对称分解
+    示例（NVE 对称分解）
+    --------------------
+
+    .. math::
+        \exp(iL\,\Delta t) \approx \exp(iL_v\,\tfrac{\Delta t}{2})\,\exp(iL_r\,\Delta t)\,\exp(iL_v\,\tfrac{\Delta t}{2})
     """
 
     @abstractmethod
     def step(self, cell, potential, dt: float) -> None:
-        """执行一个完整积分步
+        r"""执行一个完整积分步
 
         Parameters
         ----------
@@ -103,11 +125,10 @@ class IntegrationScheme(MDComponent):
 
         Notes
         -----
-        该方法应当：
-        1. 按照特定的Trotter分解顺序调用Propagator
-        2. 确保分解的对称性和物理正确性
-        3. 处理不同物理过程间的耦合
-        4. 在必要时计算和更新力
+        1. 按既定 Trotter 顺序调用各传播子
+        2. 保持对称性与物理正确性
+        3. 处理不同物理过程的耦合
+        4. 在必要位置计算与更新力
         """
         pass
 

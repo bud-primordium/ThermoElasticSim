@@ -1,18 +1,19 @@
-"""积分方案实现
+r"""积分方案实现
 
-本模块实现了各种MD积分方案，通过Trotter分解组合基础传播子。
-每个方案对应一个特定的统计力学系综。
+基于刘维尔算符的对称 Trotter 分解，组合基础传播子形成不同系综的积分方案。
 
-已实现的方案：
-- NVEScheme: 微正则系综的Velocity-Verlet算法
+已实现的方案
+--------------
 
-设计要点：
-1. 基于对称Trotter分解保证时间可逆性
-2. 复用基础传播子，避免代码重复
-3. 每个方案负责特定系综的物理正确性
-4. 支持延迟初始化以处理循环依赖
+NVEScheme
+    微正则系综的 Velocity-Verlet 算法实现。
 
-Created: 2025-08-18
+设计要点
+--------
+1. 基于对称 Trotter 分解保持时间可逆性与稳定性
+2. 复用基础传播子，避免重复力计算
+3. 每个方案保证其对应系综的物理正确性
+4. 支持延迟初始化以处理势函数依赖
 """
 
 import numpy as np
@@ -32,38 +33,33 @@ from .propagators import (
 
 
 class NVEScheme(IntegrationScheme):
-    """微正则系综(NVE)的Velocity-Verlet积分方案
+    r"""微正则系综 (NVE) 的 Velocity-Verlet 积分方案
 
-    实现经典的Velocity-Verlet算法，采用算符分离的对称分解：
-    exp(iL*dt) ≈ exp(iL_v*dt/2)·exp(iL_r*dt)·exp(iL_v*dt/2)
+    对称算符分离形式：
 
-    其中：
-    - iL_v: 速度传播算符 (力对动量的作用)
-    - iL_r: 位置传播算符 (动量对位置的作用)
+    .. math::
+        \exp(iL\,\Delta t) \approx \exp(iL_v\,\tfrac{\Delta t}{2})\,\exp(iL_r\,\Delta t)\,\exp(iL_v\,\tfrac{\Delta t}{2})
 
-    算法步骤：
-    1. v(t+dt/2) = v(t) + F(t)/m * dt/2     [半步速度更新]
-    2. r(t+dt) = r(t) + v(t+dt/2) * dt      [整步位置更新]
-    3. 计算新位置的力 F(t+dt)               [力重新计算]
-    4. v(t+dt) = v(t+dt/2) + F(t+dt)/m * dt/2 [半步速度更新]
+    其中
 
-    优点：
-    - 二阶精度 O(dt²)
-    - 辛积分器，长期稳定
-    - 时间可逆
-    - 能量守恒精度高
+    :math:`iL_v`
+        速度传播算符（力对动量的作用）
 
-    适用系统：
-    - 保守哈密顿系统
-    - 不含耗散或随机过程
-    - 粒子数N、体积V、总能量E固定
+    :math:`iL_r`
+        位置传播算符（动量对位置的作用）
+
+    Notes
+    -----
+    基本步骤（v-半步，r-整步，再 v-半步）：
+
+    1. :math:`\mathbf{v}(t+\tfrac{\Delta t}{2}) = \mathbf{v}(t) + \mathbf{F}(t)\,\Delta t/(2m)`
+    2. :math:`\mathbf{r}(t+\Delta t) = \mathbf{r}(t) + \mathbf{v}(t+\tfrac{\Delta t}{2})\,\Delta t`
+    3. 计算 :math:`\mathbf{F}(t+\Delta t)`
+    4. :math:`\mathbf{v}(t+\Delta t) = \mathbf{v}(t+\tfrac{\Delta t}{2}) + \mathbf{F}(t+\Delta t)\,\Delta t/(2m)`
     """
 
     def __init__(self):
-        """初始化NVE积分方案
-
-        创建所需的传播子，使用延迟初始化处理势函数依赖。
-        """
+        """初始化 NVE 积分方案（延迟创建力传播子）"""
         self.r_prop = PositionPropagator()
         self.v_prop = VelocityPropagator()
         self.f_prop: ForcePropagator | None = None  # 延迟初始化，第一次调用step时创建
@@ -137,10 +133,16 @@ class NVEScheme(IntegrationScheme):
         Returns
         -------
         dict
-            包含积分统计的字典:
-            - 'step_count': 已执行的积分步数
-            - 'total_time': 总积分时间 (fs)
-            - 'average_dt': 平均时间步长 (fs)
+            统计信息字典：
+
+            step_count
+                已执行的积分步数
+
+            total_time
+                总积分时间 (fs)
+
+            average_dt
+                平均时间步长 (fs)
         """
         avg_dt = self._total_time / self._step_count if self._step_count > 0 else 0.0
 
@@ -157,30 +159,14 @@ class NVEScheme(IntegrationScheme):
 
 
 class BerendsenNVTScheme(IntegrationScheme):
-    """Berendsen NVT积分方案
+    """Berendsen NVT 积分方案（NVE + 速度缩放恒温器）
 
-    组合Velocity-Verlet积分和Berendsen恒温器，实现恒温正则系综模拟。
-    这是一个后处理方案：先进行标准NVE积分，然后应用温度调节。
+    Notes
+    -----
+    两阶段流程：
 
-    算法步骤：
-    1. 执行标准Velocity-Verlet积分步骤（NVE部分）
-    2. 应用Berendsen恒温器调节温度（NVT部分）
-
-    特点：
-    - 基于现有NVE传播子的模块化设计
-    - 快速温度收敛
-    - 实现简单，计算高效
-    - 适合温度平衡和预处理
-
-    限制：
-    - 不产生严格的正则系综分布
-    - 抑制温度涨落
-    - 不适合精确的热力学采样
-
-    适用场景：
-    - 系统温度平衡
-    - 恒温MD预处理
-    - 温度控制要求不严格的模拟
+    1. NVE：标准 Velocity-Verlet 积分
+    2. NVT：应用 Berendsen 恒温器进行速度缩放
     """
 
     def __init__(self, target_temperature: float, tau: float = 100.0):
@@ -286,18 +272,30 @@ class BerendsenNVTScheme(IntegrationScheme):
             raise RuntimeError(f"Berendsen NVT积分步骤失败: {str(e)}") from e
 
     def get_statistics(self) -> dict:
-        """获取积分和恒温器统计信息
+        """获取积分与恒温器统计信息
 
         Returns
         -------
         dict
-            包含完整统计的字典:
-            - 'step_count': 已执行的积分步数
-            - 'total_time': 总积分时间 (fs)
-            - 'average_dt': 平均时间步长 (fs)
-            - 'target_temperature': 目标温度 (K)
-            - 'tau': 恒温器时间常数 (fs)
-            - 'thermostat_stats': 恒温器详细统计
+            统计信息字典：
+
+            step_count
+                已执行的积分步数
+
+            total_time
+                总积分时间 (fs)
+
+            average_dt
+                平均时间步长 (fs)
+
+            target_temperature
+                目标温度 (K)
+
+            tau
+                恒温器时间常数 (fs)
+
+            thermostat_stats
+                恒温器详细统计
         """
         avg_dt = self._total_time / self._step_count if self._step_count > 0 else 0.0
 
@@ -333,30 +331,14 @@ class BerendsenNVTScheme(IntegrationScheme):
 
 
 class AndersenNVTScheme(IntegrationScheme):
-    """Andersen NVT积分方案
+    """Andersen NVT 积分方案（NVE + 随机碰撞恒温器）
 
-    组合Velocity-Verlet积分和Andersen恒温器，实现随机碰撞正则系综模拟。
-    这是一个后处理方案：先进行标准NVE积分，然后应用随机碰撞调节。
+    Notes
+    -----
+    两阶段流程：
 
-    算法步骤：
-    1. 执行标准Velocity-Verlet积分步骤（NVE部分）
-    2. 应用Andersen随机碰撞恒温器（NVT部分）
-
-    特点：
-    - 产生正确的正则系综分布
-    - 理论基础严格，符合统计力学
-    - 温度涨落符合理论预期
-    - 实现简单，数值稳定
-
-    限制：
-    - 破坏动力学连续性
-    - 不保持速度自相关函数
-    - 随机性较强，影响某些分析
-
-    适用场景：
-    - 平衡态性质计算
-    - 需要正确温度涨落的模拟
-    - 热力学性质计算
+    1. NVE：标准 Velocity-Verlet 积分
+    2. NVT：按碰撞概率重新采样 Maxwell 速度
     """
 
     def __init__(self, target_temperature: float, collision_frequency: float = 0.01):
@@ -519,37 +501,12 @@ class AndersenNVTScheme(IntegrationScheme):
 
 
 class NoseHooverNVTScheme(IntegrationScheme):
-    """Nose-Hoover NVT积分方案
+    r"""Nose–Hoover NVT 积分方案（算符分离）
 
-    实现真正的算符分离Nose-Hoover恒温器，组合Velocity-Verlet积分和Nose-Hoover算符分离。
-    与Berendsen和Andersen的后处理方案不同，这是严格的算符分离方法。
+    基于对称分解：
 
-    算法步骤（基于Suzuki-Trotter分解）：
-    1. Nose-Hoover恒温器半步：exp(iL_NH*dt/2)
-    2. 标准Velocity-Verlet积分：exp(iL_v*dt/2)·exp(iL_r*dt)·exp(iL_v*dt/2)
-    3. Nose-Hoover恒温器半步：exp(iL_NH*dt/2)
-
-    特点：
-    - 严格的算符分离，保持辛性质
-    - 产生正确的正则系综分布
-    - 时间可逆的确定性演化
-    - 热浴变量ξ的自洽演化
-
-    优点：
-    - 理论基础严格
-    - 长时间数值稳定
-    - 动力学性质保持良好
-    - 温度涨落符合理论预期
-
-    缺点：
-    - 参数调节较复杂（Q的选择）
-    - 可能出现长周期振荡
-    - 对初始条件敏感
-
-    适用场景：
-    - 需要严格正则系综的模拟
-    - 动力学性质计算
-    - 长时间平衡态模拟
+    .. math::
+        \exp(iL\,\Delta t) \approx \exp(iL_{NH}\,\tfrac{\Delta t}{2})\,\exp(iL_v\,\tfrac{\Delta t}{2})\,\exp(iL_r\,\Delta t)\,\exp(iL_v\,\tfrac{\Delta t}{2})\,\exp(iL_{NH}\,\tfrac{\Delta t}{2})
     """
 
     def __init__(
@@ -672,20 +629,36 @@ class NoseHooverNVTScheme(IntegrationScheme):
             raise RuntimeError(f"Nose-Hoover NVT积分步骤失败: {str(e)}") from e
 
     def get_statistics(self) -> dict:
-        """获取积分和恒温器统计信息
+        """获取积分与恒温器统计信息
 
         Returns
         -------
         dict
-            包含完整统计的字典:
-            - 'step_count': 已执行的积分步数
-            - 'total_time': 总积分时间 (fs)
-            - 'average_dt': 平均时间步长 (fs)
-            - 'target_temperature': 目标温度 (K)
-            - 'tdamp': 时间常数 (fs)
-            - 'tchain': 热浴链长度
-            - 'tloop': 循环次数
-            - 'thermostat_stats': 恒温器详细统计
+            统计信息字典：
+
+            step_count
+                已执行的积分步数
+
+            total_time
+                总积分时间 (fs)
+
+            average_dt
+                平均时间步长 (fs)
+
+            target_temperature
+                目标温度 (K)
+
+            tdamp
+                时间常数 (fs)
+
+            tchain
+                热浴链长度
+
+            tloop
+                Suzuki–Yoshida 循环次数
+
+            thermostat_stats
+                恒温器详细统计
         """
         avg_dt = self._total_time / self._step_count if self._step_count > 0 else 0.0
 
@@ -748,56 +721,7 @@ class NoseHooverNVTScheme(IntegrationScheme):
 
 
 class LangevinNVTScheme(IntegrationScheme):
-    """Langevin NVT积分方案
-
-    基于Brunger-Brooks-Karplus (BBK)积分算法实现Langevin动力学恒温器。
-    该方案组合Velocity-Verlet积分和Langevin恒温器，提供基于物理模型的随机恒温。
-
-    算法步骤（BBK积分）：
-
-    1. 标准Velocity-Verlet积分（NVE部分）：
-
-       - v(t+dt/2) = v(t) + F(t)/m * dt/2
-       - r(t+dt) = r(t) + v(t+dt/2) * dt
-       - F(t+dt) = -∇U(r(t+dt))
-       - v_det(t+dt) = v(t+dt/2) + F(t+dt)/m * dt/2
-
-    2. Langevin恒温器修正（NVT部分）：
-
-       - 计算BBK常数：c1 = exp(-γ*dt), σ = sqrt(k_B*T*(1-c1²)/m)
-       - 应用随机-摩擦修正：v(t+dt) = c1*v_det(t+dt) + σ*R
-
-    核心特点：
-    - 基于涨落-耗散定理的严格恒温
-    - 同时包含摩擦阻力和随机力
-    - 数值稳定性好，无遍历性问题
-    - 特别适合生物分子和隐式溶剂系统
-
-    参数选择指南：
-    - 平衡阶段：γ ~ 1-10 ps⁻¹（快速温度控制）
-    - 生产阶段：γ ~ 0.1-5 ps⁻¹（保持动力学真实性）
-    - 过阻尼极限：γ >> 系统振动频率（布朗动力学）
-
-    优点：
-    - 严格的正则系综采样
-    - 无长周期振荡问题（vs Nose-Hoover）
-    - 数值稳定性优秀
-    - 允许较大时间步长
-    - 物理模型清晰直观
-
-    缺点：
-    - 随机性影响动力学性质
-    - 摩擦项系统性减慢运动
-    - 破坏速度自相关函数
-    - 非确定性演化
-
-    适用场景：
-    - 生物分子模拟
-    - 隐式溶剂系统
-    - 需要鲁棒NVT采样
-    - 平衡和生产阶段模拟
-    - 高分子等弛豫时间长的体系
-    """
+    """Langevin NVT 积分方案（Velocity-Verlet + BBK 速度修正）"""
 
     def __init__(self, target_temperature: float, friction: float = 1.0):
         """初始化Langevin NVT积分方案
@@ -908,19 +832,33 @@ class LangevinNVTScheme(IntegrationScheme):
             raise RuntimeError(f"Langevin NVT积分步骤失败: {str(e)}") from e
 
     def get_statistics(self) -> dict:
-        """获取积分和恒温器统计信息
+        """获取积分与恒温器统计信息
 
         Returns
         -------
         dict
-            包含完整统计的字典:
-            - 'step_count': 已执行的积分步数
-            - 'total_time': 总积分时间 (fs)
-            - 'average_dt': 平均时间步长 (fs)
-            - 'target_temperature': 目标温度 (K)
-            - 'friction': 摩擦系数 (ps⁻¹)
-            - 'damping_time': 阻尼时间 (ps)
-            - 'thermostat_stats': 恒温器详细统计
+            统计信息字典：
+
+            step_count
+                已执行的积分步数
+
+            total_time
+                总积分时间 (fs)
+
+            average_dt
+                平均时间步长 (fs)
+
+            target_temperature
+                目标温度 (K)
+
+            friction
+                摩擦系数 (ps⁻¹)
+
+            damping_time
+                阻尼时间 (ps)
+
+            thermostat_stats
+                恒温器详细统计
         """
         avg_dt = self._total_time / self._step_count if self._step_count > 0 else 0.0
 
@@ -1185,41 +1123,23 @@ def create_nve_scheme() -> NVEScheme:
 
 
 class MTKNPTScheme(IntegrationScheme):
-    """
-    MTK-NPT (等温等压)积分方案
+    r"""MTK–NPT 积分方案（Nose–Hoover 链 + MTK 恒压器）
 
-    实现基于Nose-Hoover链恒温器和MTK恒压器的完整NPT系综，
-    支持同时控制温度和压力，允许体积和晶格形状变化。
+    Notes
+    -----
+    对称分解示意：
 
-    理论基础:
-    基于Martyna-Tobias-Klein扩展系统方法，将Nose-Hoover链恒温器
-    与各向同性恒压器相结合，确保产生正确的NPT系综分布。
+    .. math::
+        \exp(iL\,\Delta t) \approx \exp(iL_{baro}\tfrac{\Delta t}{2})\,\exp(iL_{thermo}\tfrac{\Delta t}{2})\,\exp(iL_{p\_cell}\tfrac{\Delta t}{2})\,\exp(iL_p\tfrac{\Delta t}{2})\,\exp(iL_q\,\Delta t)\,\exp(iL_p\tfrac{\Delta t}{2})\,\exp(iL_{p\_cell}\tfrac{\Delta t}{2})\,\exp(iL_{thermo}\tfrac{\Delta t}{2})\,\exp(iL_{baro}\tfrac{\Delta t}{2})
 
-    算法实现:
-    采用对称Trotter分解，将复杂的耦合运动方程分解为：
+    功能要点：
 
-    exp(iL*dt) ≈
-      exp(iL_baro*dt/2) ·        # 恒压器链传播
-      exp(iL_thermo*dt/2) ·      # 恒温器链传播
-      exp(iL_p_cell*dt/2) ·      # 晶格动量更新
-      exp(iL_p*dt/2) ·           # 粒子动量更新
-      exp(iL_q*dt) ·             # 粒子和晶格位置更新
-      exp(iL_p*dt/2) ·           # 粒子动量更新
-      exp(iL_p_cell*dt/2) ·      # 晶格动量更新
-      exp(iL_thermo*dt/2) ·      # 恒温器链传播
-      exp(iL_baro*dt/2)          # 恒压器链传播
+    温度控制
+        :class:`~thermoelasticsim.md.propagators.NoseHooverChainPropagator`
 
-    主要功能:
-    1. 温度控制: 保持系统平均动能对应目标温度
-    2. 压力控制: 调节体积使内部压力等于外压
-    3. 晶格变化: 支持各向同性体积和形状变化
-    4. 守恒量: 监控扩展哈密顿量的守恒性
+    压力控制
+        :class:`~thermoelasticsim.md.propagators.MTKBarostatPropagator`
 
-    适用场景:
-    - 需要同时控制温度和压力的模拟
-    - 研究相变和密度变化
-    - 制备有限温平衡态结构
-    - 消除残余应力的系统弛豫
 
     注意事项:
     - 比NVE和NVT积分需要更多计算时间
@@ -1452,10 +1372,11 @@ class MTKNPTScheme(IntegrationScheme):
             ]
 
     def _calculate_conserved_energy(self, cell: Cell, potential) -> float:
-        """
+        r"""
         计算扩展系统的守恒哈密顿量
 
-        H_extended = E_kinetic + E_potential + E_thermostat + E_barostat + P_ext*V
+        .. math::
+            H_{\mathrm{ext}} = E_{\mathrm{kin}} + E_{\mathrm{pot}} + E_{\mathrm{thermo}} + E_{\mathrm{baro}} + P_{\mathrm{ext}}\,V
 
         Returns
         -------
