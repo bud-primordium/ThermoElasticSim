@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
-"""
+r"""
 ThermoElasticSim - Lennard-Jones 势模块
 
 .. moduleauthor:: Gilbert Young
-.. created:: 2024-10-14
-.. modified:: 2025-07-07
-.. version:: 4.0.0
+
+Lennard–Jones (12–6) 势用于近似描述惰性原子间的范德华作用：
+
+.. math::
+   V(r) = 4\,\varepsilon\Big[\Big(\frac{\sigma}{r}\Big)^{12} - \Big(\frac{\sigma}{r}\Big)^6\Big]
+
+其中 :math:`\varepsilon` 为势阱深度（eV），:math:`\sigma` 为零势能点对应长度（Å）。
+
+References
+----------
+- J. E. Jones (1924), On the Determination of Molecular Fields.
+  I. From the Variation of the Viscosity of a Gas with Temperature.
+  Proceedings of the Royal Society A, 106(738), 441–462. doi:10.1098/rspa.1924.0081
 """
 
 import logging
@@ -22,15 +32,21 @@ logger = logging.getLogger(__name__)
 
 
 class LennardJonesPotential(Potential):
-    """
-    Lennard-Jones (LJ) 对势的实现。
+    r"""Lennard–Jones (12–6) 对势实现。
 
-    LJ势常用于模拟惰性气体原子间的相互作用。
+    Parameters
+    ----------
+    epsilon : float
+        势阱深度 epsilon（eV）。
+    sigma : float
+        零势能点对应长度 sigma（Å）。
+    cutoff : float
+        截断距离（Å）。
 
-    Args:
-        epsilon (float): 势阱深度，单位为 eV。
-        sigma (float): 零势能点对应的原子间距，单位为 Å。
-        cutoff (float): 截断距离，单位为 Å。
+    Notes
+    -----
+    - 势函数见模块 References 中的 Jones (1924)。
+    - 单位：能量 eV，长度 Å，力 eV/Å。
     """
 
     def __init__(self, epsilon: float, sigma: float, cutoff: float):
@@ -42,12 +58,14 @@ class LennardJonesPotential(Potential):
         )
 
     def calculate_forces(self, cell: Cell, neighbor_list: NeighborList) -> None:
-        """
-        使用LJ势计算系统中所有原子的作用力。
+        """计算作用力并写入 :code:`cell.atoms[i].force` （eV/Å）。
 
-        Args:
-            cell (Cell): 包含原子信息的晶胞对象。
-            neighbor_list (NeighborList): 预先构建的邻居列表。
+        Parameters
+        ----------
+        cell : Cell
+            晶胞与原子集合。
+        neighbor_list : NeighborList
+            预先构建的邻居列表。
         """
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
@@ -84,16 +102,19 @@ class LennardJonesPotential(Potential):
             atom.force = forces[i]
 
     def calculate_energy(self, cell: Cell, neighbor_list: NeighborList) -> float:
-        """
-        使用LJ势计算系统的总势能。
+        """计算系统总势能（eV）。
 
-        Args:
-            cell (Cell): 包含原子信息的晶胞对象。
-            neighbor_list (NeighborList): 预先构建的邻居列表。
+        Parameters
+        ----------
+        cell : Cell
+            晶胞与原子集合。
+        neighbor_list : NeighborList
+            预先构建的邻居列表。
 
         Returns
         -------
-            float: 系统的总势能，单位为 eV。
+        float
+            系统总势能（eV）。
         """
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(

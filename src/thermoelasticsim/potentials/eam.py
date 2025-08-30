@@ -3,9 +3,6 @@ r"""
 ThermoElasticSim - EAM 势模块
 
 .. moduleauthor:: Gilbert Young
-.. created:: 2024-11-01
-.. modified:: 2025-07-07
-.. version:: 4.0.0
 
 该模块实现了嵌入式原子方法 (Embedded Atom Method, EAM) 势，
 特别是基于 Mendelev et al. (2008) 参数化的铝 (Al) 势。
@@ -33,10 +30,16 @@ EAM势将系统的总能量表示为对势项和嵌入能的总和。每个原�
 .. math::
     \\mathbf{F}_i = -\\nabla_i E = -\\sum_{j \\neq i} \\left[ \\phi'(r_{ij}) + F'(\\rho_i) \\psi'(r_{ij}) + F'(\\rho_j) \\psi'(r_{ji}) \\right] \\frac{\\mathbf{r}_{ij}}{r_{ij}}
 
-参考文献：
-    Mendelev, M. I., Srolovitz, D. J., Ackland, G. J., & Asta, M. (2008).
-    Development of new interatomic potentials for the Al-Mg system.
-    Journal of Materials Research, 23(10), 2707-2721.
+References
+----------
+- Daw, M. S., & Baskes, M. I. (1984). Embedded-atom method: Derivation and application
+  to impurities, surfaces, and other defects in metals. Phys. Rev. B 29, 6443.
+  doi:10.1103/PhysRevB.29.6443
+- Daw, M. S., & Baskes, M. I. (1986). Semiempirical, quantum mechanical calculation of
+  hydrogen embrittlement in metals. Phys. Rev. B 33, 7983. doi:10.1103/PhysRevB.33.7983
+- Mendelev, M. I., Srolovitz, D. J., Ackland, G. J., & Asta, M. (2008). Development of
+  new interatomic potentials for the Al–Mg system. Journal of Materials Research,
+  23(10), 2707–2721. (DOI 请确认)
 
 Classes:
     EAMAl1Potential: 铝的EAM势能实现。
@@ -57,13 +60,17 @@ logger = logging.getLogger(__name__)
 
 
 class EAMAl1Potential(Potential):
-    """
-    铝的嵌入式原子方法 (EAM) 势的实现。
+    """铝的嵌入式原子方法 (EAM) 势实现（Mendelev Al–Mg 族参数化）。
 
-    基于 Mendelev et al. (2008) 的参数化。
+    Parameters
+    ----------
+    cutoff : float, optional
+        截断距离（Å），默认 6.5。
 
-    Args:
-        cutoff (float, optional): 截断距离，单位为 Å。默认为 6.5。
+    Notes
+    -----
+    - 绑定 C++ 后端 ``eam_al1``；单位：能量 eV，长度 Å，力 eV/Å。
+    - 理论背景与方法见模块“References”。
     """
 
     def __init__(self, cutoff: float = 6.5):
@@ -73,12 +80,14 @@ class EAMAl1Potential(Potential):
         logger.debug(f"EAM Al1 Potential initialized with cutoff={cutoff}.")
 
     def calculate_forces(self, cell: Cell, neighbor_list: NeighborList = None) -> None:
-        """
-        使用EAM势计算系统中所有原子的作用力。
+        """使用EAM势计算系统中所有原子的作用力。
 
-        Args:
-            cell (Cell): 包含原子信息的晶胞对象。
-            neighbor_list (NeighborList, optional): 在此实现中未使用，但为保持接口一致性而保留。
+        Parameters
+        ----------
+        cell : Cell
+            包含原子信息的晶胞对象。
+        neighbor_list : NeighborList, optional
+            在此实现中未使用，但为保持接口一致性而保留。
         """
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
@@ -101,16 +110,19 @@ class EAMAl1Potential(Potential):
             atom.force = -forces[i]
 
     def calculate_energy(self, cell: Cell, neighbor_list: NeighborList = None) -> float:
-        """
-        使用EAM势计算系统的总势能。
+        """使用EAM势计算系统的总势能。
 
-        Args:
-            cell (Cell): 包含原子信息的晶胞对象。
-            neighbor_list (NeighborList, optional): 在此实现中未使用，但为保持接口一致性而保留。
+        Parameters
+        ----------
+        cell : Cell
+            包含原子信息的晶胞对象。
+        neighbor_list : NeighborList, optional
+            在此实现中未使用，但为保持接口一致性而保留。
 
         Returns
         -------
-            float: 系统的总势能，单位为 eV。
+        float
+            系统的总势能，单位 eV。
         """
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
@@ -129,13 +141,17 @@ class EAMAl1Potential(Potential):
 
 
 class EAMCu1Potential(Potential):
-    """
-    铜的嵌入式原子方法 (EAM) 势的实现。
+    """铜的嵌入式原子方法 (EAM) 势实现（Mendelev 族参数化）。
 
-    基于 Mendelev et al. (2008) 的参数化。
+    Parameters
+    ----------
+    cutoff : float, optional
+        截断距离（Å），默认 6.0。
 
-    Args:
-        cutoff (float, optional): 截断距离，单位为 Å。默认为 6.0。
+    Notes
+    -----
+    - 绑定 C++ 后端 ``eam_cu1``；单位：能量 eV，长度 Å，力 eV/Å。
+    - 理论背景与方法见模块“References”。
     """
 
     def __init__(self, cutoff: float = 6.0):
@@ -145,12 +161,14 @@ class EAMCu1Potential(Potential):
         logger.debug(f"EAM Cu1 Potential initialized with cutoff={cutoff}.")
 
     def calculate_forces(self, cell: Cell, neighbor_list: NeighborList = None) -> None:
-        """
-        使用EAM Cu1势计算系统中所有原子的作用力。
+        """使用EAM Cu1势计算系统中所有原子的作用力。
 
-        Args:
-            cell (Cell): 包含原子信息的晶胞对象。
-            neighbor_list (NeighborList, optional): 在此实现中未使用，但为保持接口一致性而保留。
+        Parameters
+        ----------
+        cell : Cell
+            包含原子信息的晶胞对象。
+        neighbor_list : NeighborList, optional
+            在此实现中未使用，但为保持接口一致性而保留。
         """
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
@@ -172,16 +190,19 @@ class EAMCu1Potential(Potential):
             atom.force = -forces[i]
 
     def calculate_energy(self, cell: Cell, neighbor_list: NeighborList = None) -> float:
-        """
-        使用EAM Cu1势计算系统的总势能。
+        """使用EAM Cu1势计算系统的总势能。
 
-        Args:
-            cell (Cell): 包含原子信息的晶胞对象。
-            neighbor_list (NeighborList, optional): 在此实现中未使用，但为保持接口一致性而保留。
+        Parameters
+        ----------
+        cell : Cell
+            包含原子信息的晶胞对象。
+        neighbor_list : NeighborList, optional
+            在此实现中未使用，但为保持接口一致性而保留。
 
         Returns
         -------
-            float: 系统的总势能，单位为 eV。
+        float
+            系统的总势能，单位 eV。
         """
         num_atoms = cell.num_atoms
         positions = np.ascontiguousarray(
