@@ -64,12 +64,12 @@
 - **适用范围**：晶体和液体铜的结构和动力学性质
 - **验证精度**：零温C44误差0.23%，单轴弹性常数偏高，正在进一步完善中
 
-### 碳（C，diamond）势函数（Tersoff 1988）
+### 碳（C，diamond）势函数
 
 **Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004**
 
-- **OpenKIM数据库收录**：<https://openkim.org/id/Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004>
-- **理论基础**：Tersoff J. Empirical Interatomic Potential for Carbon, with Applications to Amorphous Carbon. Phys. Rev. Lett. 61, 2879 (1988). doi:10.1103/PhysRevLett.61.2879
+- **OpenKIM数据库收录**：[MO_579868029681_004](https://openkim.org/id/Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004)
+- **理论基础**：Tersoff J. *Empirical Interatomic Potential for Carbon, with Applications to Amorphous Carbon*. Phys. Rev. Lett. 61, 2879 (1988). [doi:10.1103/PhysRevLett.61.2879](https://doi.org/10.1103/PhysRevLett.61.2879)
 - **适用范围（摘要）**：以经验势准确刻画碳的结构与能量学（含金刚石、石墨的弹性、声子、多型体、缺陷与迁移势垒），并用于多种路径形成的非晶碳研究。
 - **模型特性**：C++ 后端解析实现（能量/力/三体维里）；三元簇分解的 virial 记账；张拉为正的应力约定。
 - **零温平衡晶格常数**：a0 = 3.5656 Å（与参考一致）
@@ -171,11 +171,13 @@ python -m pytest
 ### 运行示例
 
 **零温弹性常数计算**：
+
 ```bash
 uv run python examples/zero_temp_al_benchmark.py
 ```
 
 **有限温弹性常数计算**：
+
 ```bash
 uv run python examples/finite_temp_al_benchmark.py
 ```

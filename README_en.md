@@ -15,6 +15,8 @@ The project implements multiple MD ensembles using an operator splitting archite
 ### Implemented Features
 
 1. **Zero-Temperature Elastic Constants (FCC metals + Diamond)**
+   - Support for Aluminum (Al) and Copper (Cu) materials
+   - Support for Diamond (C, diamond, Tersoff 1988)
    - Determination of equilibrium lattice configuration
    - Independent strain application and stress response calculation
    - Elastic constants calculation (C11, C12, C44)
@@ -44,25 +46,36 @@ The project implements multiple MD ensembles using an operator splitting archite
 
 ## Potential Models and Benchmark Accuracy
 
-The project employs a validated EAM (Embedded Atom Method) potential for aluminum molecular dynamics simulations:
+The project employs validated EAM (Embedded Atom Method) potentials for FCC metals molecular dynamics simulations:
+
+### Aluminum (Al) Potential
 
 **EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006**
 
 - **OpenKIM Database**: [MO_106969701023_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Al__MO_106969701023_006)
 - **Theoretical Basis**: Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. [doi:10.1080/14786430802206482](https://doi.org/10.1080/14786430802206482)
 - **Applicable Range**: Structural and dynamic properties of crystalline and liquid aluminum
-- **Validation Accuracy**: Zero-temperature elastic constants error < 1% compared to literature values, good agreement with experimental values at finite temperatures
+- **Validation Accuracy**: Zero-temperature elastic constants error < 1.3% compared to literature values, good agreement with experimental values at finite temperatures
 
-### Carbon (diamond) Potential (Tersoff 1988)
+### Copper (Cu) Potential
+
+**EAM_Dynamo_MendelevKramerBecker_2008_Cu__MO_945691923444_006**
+
+- **OpenKIM Database**: [MO_945691923444_006](https://openkim.org/id/EAM_Dynamo_MendelevKramerBecker_2008_Cu__MO_945691923444_006)
+- **Theoretical Basis**: Same as above, Mendelev et al. 2008
+- **Applicable Range**: Structural and dynamic properties of crystalline and liquid copper
+- **Validation Accuracy**: Zero-temperature C44 error 0.23%, uniaxial elastic constants slightly high, under further refinement
+
+### Carbon (diamond) Potential
 
 **Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004**
 
-- **OpenKIM**: <https://openkim.org/id/Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004>
-- **Theory**: Tersoff J. Empirical Interatomic Potential for Carbon, with Applications to Amorphous Carbon. Phys. Rev. Lett. 61, 2879 (1988). doi:10.1103/PhysRevLett.61.2879
-- **Scope (abstract)**: Empirical potential accurately capturing carbon’s structural/energetic features (elasticity, phonons, polytypes, defects, migration barriers in diamond/graphite), applied to amorphous carbon formation via multiple routes.
-- **Model traits**: C++ backend (analytic energy/forces/three-body virial); triplet-cluster virial tally; tension-positive stress convention.
-- **0 K equilibrium**: a0 = 3.5656 Å (matches reference)
-- **Benchmark accuracy (vs OpenKIM)**:
+- **OpenKIM Database**: [MO_579868029681_004](https://openkim.org/id/Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004)
+- **Theoretical Basis**: Tersoff J. *Empirical Interatomic Potential for Carbon, with Applications to Amorphous Carbon*. Phys. Rev. Lett. 61, 2879 (1988). [doi:10.1103/PhysRevLett.61.2879](https://doi.org/10.1103/PhysRevLett.61.2879)
+- **Applicable Range (Abstract)**: Empirical potential accurately capturing carbon's structural and energetic features (including elasticity, phonons, polytypes, defects, and migration barriers in diamond/graphite), applied to amorphous carbon formation via multiple routes.
+- **Model Features**: C++ backend analytical implementation (energy/forces/three-body virial); triplet-cluster virial accounting; tension-positive stress convention.
+- **Zero-Temperature Equilibrium Lattice Constant**: a0 = 3.5656 Å (consistent with reference)
+- **Validation Accuracy (vs OpenKIM reference)**:
   - Uniaxial (C11, C12): ≤ 0.02% error
   - Shear (C44): ≈ 4.6% error
 
@@ -161,11 +174,13 @@ venv's interpreter and dependencies are used.
 ### Running Examples
 
 **Zero-Temperature Elastic Constants Calculation**:
+
 ```bash
 uv run python examples/zero_temp_al_benchmark.py
 ```
 
 **Finite-Temperature Elastic Constants Calculation**:
+
 ```bash
 uv run python examples/finite_temp_al_benchmark.py
 ```
