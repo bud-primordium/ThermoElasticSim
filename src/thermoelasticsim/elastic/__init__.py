@@ -5,15 +5,17 @@ from .benchmark import (
     calculate_c11_c12_robust,
     calculate_c11_c12_traditional,
     calculate_c44_lammps_shear,
-    run_aluminum_benchmark,
     run_size_sweep,
     run_zero_temp_benchmark,
 )
 from .deformation import Deformer
 from .deformation_method import (
+    ElasticConstantsSolver,
     ElasticConstantsWorkflow,
     FiniteTempElasticityWorkflow,
     ShearDeformationMethod,
+    StructureRelaxer,
+    ZeroTempDeformationCalculator,
 )
 from .materials import (
     ALUMINUM_FCC,
@@ -33,6 +35,9 @@ __all__ = [
     "StressCalculator",
     # 工作流程
     "ElasticConstantsWorkflow",
+    "ElasticConstantsSolver",
+    "StructureRelaxer",
+    "ZeroTempDeformationCalculator",
     "FiniteTempElasticityWorkflow",
     "ShearDeformationMethod",
     # 材料参数
@@ -49,6 +54,5 @@ __all__ = [
     "calculate_c11_c12_robust",
     "calculate_c44_lammps_shear",
     "run_zero_temp_benchmark",
-    "run_aluminum_benchmark",
     "run_size_sweep",
 ]

@@ -212,18 +212,11 @@ class StructureRelaxer:
         .. math::
             \min_{r,h} E(r,h) \quad \text{s.t.} \quad \sigma = 0
 
-        其中：
-        :math:`r`
-            原子位置
-
-        :math:`h`
-            晶胞参数
-
-        :math:`E`
-            总能量
-
-        :math:`\sigma`
-            应力张量
+        符号说明：
+        - :math:`r` 原子位置
+        - :math:`h` 晶胞参数
+        - :math:`E` 总能量
+        - :math:`\sigma` 应力张量
 
         Examples
         --------
@@ -307,15 +300,10 @@ class StructureRelaxer:
         .. math::
             \min_{r} E(r,h_{\text{fixed}}) \quad \text{s.t.} \quad h = \text{const}
 
-        其中：
-        :math:`r`
-            原子位置（优化变量）
-
-        :math:`h_{\text{fixed}}`
-            固定的晶胞参数
-
-        :math:`E`
-            总能量
+        符号说明：
+        - :math:`r` 原子位置（优化变量）
+        - :math:`h_{\text{fixed}}` 固定的晶胞参数
+        - :math:`E` 总能量
 
         Examples
         --------
@@ -453,18 +441,11 @@ class StructureRelaxer:
         .. math::
             \min_{s} E(r_{\text{scaled}}, s \cdot L) \quad \text{其中} \quad r_{\text{scaled}} = s \cdot r_{\text{frac}} \cdot L
 
-        其中：
-        :math:`s`
-            等比例缩放因子（唯一优化变量）
-
-        :math:`r_{\text{frac}}`
-            固定的分数坐标
-
-        :math:`L`
-            原始晶格矢量矩阵
-
-        :math:`E`
-            总能量
+        符号说明：
+        - :math:`s` 等比例缩放因子（唯一优化变量）
+        - :math:`r_{\text{frac}}` 固定的分数坐标
+        - :math:`L` 原始晶格矢量矩阵
+        - :math:`E` 总能量
 
         优势：
         1. 自由度仅为 1，计算极快
@@ -579,65 +560,26 @@ class StructureRelaxer:
 
 class ZeroTempDeformationCalculator:
     r"""
-    零温显式形变法计算器
+    零温显式形变法计算器。
 
-    管理从基态制备到弹性常数求解的完整计算流程。
-    实现标准的显式形变法：制备基态→施加形变→内部弛豫→测量应力→线性拟合。
+    负责从基态制备到弹性常数求解的完整流程管理。
 
     Parameters
     ----------
     cell : Cell
-        待计算的晶胞对象
+        待计算的晶胞对象。
     potential : Potential
-        势能函数对象
+        势能函数对象。
     delta : float, optional
-        应变幅度，默认0.005 (0.5%)
+        应变幅度，默认 0.005 (0.5%)。
     num_steps : int, optional
-        每个应变分量的步数，默认5（教学模式）
+        每个应变分量的步数，默认 5（教学模式）。
     relaxer_params : dict, optional
-        结构弛豫器参数
-
-    Attributes
-    ----------
-    cell : Cell
-        原始晶胞对象
-    potential : Potential
-        势能函数对象
-    delta : float
-        应变幅度
-    num_steps : int
-        形变步数
-    relaxer : StructureRelaxer
-        结构弛豫器实例
-    reference_stress : numpy.ndarray
-        基态参考应力张量
-
-    Notes
-    -----
-    计算流程包含5个步骤：
-
-    1. **基态制备**：完全弛豫获得无应力基态
-    2. **形变生成**：生成6个Voigt分量的形变矩阵序列
-    3. **应力计算**：对每个形变施加内部弛豫并测量应力
-    4. **数据收集**：收集所有应力-应变数据对
-    5. **线性拟合**：通过最小二乘法求解弹性常数矩阵
-
-    应变生成策略：
-    对称应变
-        :math:`\varepsilon_{11}, \varepsilon_{22}, \varepsilon_{33}`
-
-    剪切应变
-        :math:`\varepsilon_{23}, \varepsilon_{13}, \varepsilon_{12}`
-
-    应变范围
-        :math:`[-\delta, +\delta]`，均匀分布
-
-    Examples
-    --------
-    >>> calculator = ZeroTempDeformationCalculator(cell, potential, delta=0.005)
-    >>> elastic_matrix, r2_score = calculator.calculate()
-    >>> print(f"弹性常数矩阵 (GPa):\\n{elastic_matrix}")
-    >>> print(f"拟合优度 R²: {r2_score:.6f}")
+        结构弛豫器参数。
+    supercell_dims : tuple[int, int, int], optional
+        超胞维度 (nx, ny, nz)。
+    base_relax_mode : {"uniform", "full"}, optional
+        基态制备模式，等比例缩放或变胞+位置。
     """
 
     def __init__(
@@ -730,43 +672,12 @@ class ZeroTempDeformationCalculator:
 
     def calculate(self) -> tuple[np.ndarray, float]:
         """
-        执行完整的零温弹性常数计算
+        执行完整的零温弹性常数计算。
 
         Returns
         -------
         tuple[numpy.ndarray, float]
-            弹性常数矩阵(GPa)和拟合优度R²的元组
-
-        Notes
-        -----
-        该方法执行5步计算流程：
-
-        1. 制备无应力基态
-        2. 生成形变矩阵序列
-        3. 计算每个形变的应力响应
-        4. 收集应力-应变数据
-        5. 线性拟合求解弹性常数
-
-        拟合质量评估：
-        R² > 0.999
-            优秀
-
-        R² > 0.99
-            良好
-
-        R² < 0.99
-            需改进
-
-        Examples
-        --------
-        >>> calculator = ZeroTempDeformationCalculator(cell, potential)
-        >>> C_matrix, r2 = calculator.calculate()
-        >>>
-        >>> # 检查拟合质量
-        >>> if r2 > 0.999:
-        ...     print("拟合质量优秀")
-        >>> else:
-        ...     print(f"拟合质量R²={r2:.6f}，可能需要调整参数")
+            弹性常数矩阵 (GPa) 和拟合优度 R^2。
         """
         logger.info("开始零温弹性常数计算")
 
@@ -1921,68 +1832,25 @@ class ShearDeformationMethod:
         include_base_state: bool = True,
     ) -> dict[str, Any]:
         r"""
-        计算C44剪切响应
-
-        使用LAMMPS风格剪切方法计算三个剪切弹性常数(C44, C55, C66)的应力响应。
-        该方法对每个剪切方向施加一系列应变，通过内部弛豫消除原子间力，
-        然后测量相应的剪切应力。
+        计算 C44 剪切响应。
 
         Parameters
         ----------
         cell : Cell
-            基态晶胞对象
+            基态晶胞对象。
         potential : Potential
-            势能函数
+            势能函数实现。
         strain_amplitudes : numpy.ndarray
-            应变幅度数组，建议范围[-0.005, 0.005]
+            应变幅度数组，建议范围 [-0.005, 0.005]。
         relaxer : StructureRelaxer
-            结构弛豫器实例
+            结构弛豫器实例。
         include_base_state : bool, optional
-            是否包含零应变基态点，默认True
+            是否包含零应变基态点，默认 True。
 
         Returns
         -------
         dict
-            包含以下键的计算结果：
-            'directions'
-                剪切方向信息
-
-            'detailed_results'
-                每个方向的详细数据
-
-            'summary'
-                拟合结果汇总
-
-        Notes
-        -----
-        计算流程：
-
-        1. **基态制备**：确保从无应力基态开始
-        2. **多方向扫描**：对三个剪切方向分别计算
-        3. **应变序列**：对每个方向施加应变序列
-        4. **内部弛豫**：固定晶胞形状，优化原子位置
-        5. **应力测量**：计算剪切分量应力响应
-        6. **线性拟合**：通过最小二乘法求解弹性常数
-
-        立方晶系的剪切弹性常数：
-
-        .. math::
-            C_{44} = C_{55} = C_{66} = \frac{\partial\sigma_{ij}}{\partial\gamma_{ij}}
-
-        其中 :math:`\sigma` 为剪切应力，:math:`\gamma` 为工程剪切应变。
-
-        Examples
-        --------
-        >>> shear_method = ShearDeformationMethod()
-        >>> strain_points = np.linspace(-0.004, 0.004, 9)
-        >>>
-        >>> results = shear_method.calculate_c44_response(
-        ...     base_cell, potential, strain_points, relaxer
-        ... )
-        >>>
-        >>> # 查看结果
-        >>> print(f"C44 = {results['summary']['C44']:.2f} GPa")
-        >>> print(f"拟合优度 R² = {results['summary']['r2_score']:.6f}")
+            含方向列表、每方向详细数据与汇总拟合结果。
         """
         logger.info("开始C44剪切响应计算")
 
@@ -2041,11 +1909,41 @@ class ShearDeformationMethod:
 
                     # 计算应力响应
                     stress_tensor = deformed_cell.calculate_stress_tensor(potential)
+                    # 调试：完整应力张量输出（eV/Å³ 与 GPa）
+                    try:
+                        _gpa = stress_tensor * 160.2176634
+                        logger.debug(
+                            "    应力张量 (eV/Å³): [[% .3e, % .3e, % .3e], [% .3e, % .3e, % .3e], [% .3e, % .3e, % .3e]]",
+                            stress_tensor[0, 0],
+                            stress_tensor[0, 1],
+                            stress_tensor[0, 2],
+                            stress_tensor[1, 0],
+                            stress_tensor[1, 1],
+                            stress_tensor[1, 2],
+                            stress_tensor[2, 0],
+                            stress_tensor[2, 1],
+                            stress_tensor[2, 2],
+                        )
+                        logger.debug(
+                            "    应力张量 (GPa): [[% .3f, % .3f, % .3f], [% .3f, % .3f, % .3f], [% .3f, % .3f, % .3f]]",
+                            _gpa[0, 0],
+                            _gpa[0, 1],
+                            _gpa[0, 2],
+                            _gpa[1, 0],
+                            _gpa[1, 1],
+                            _gpa[1, 2],
+                            _gpa[2, 0],
+                            _gpa[2, 1],
+                            _gpa[2, 2],
+                        )
+                    except Exception:
+                        pass
                     # 与示例脚本保持一致：不做基态差分，直接使用总应力分量
                     stress_value = stress_tensor[stress_i, stress_j] * EV_TO_GPA
+                    # 直接使用virial应力（张拉为正），对应工程剪切γ，无需额外因子
 
                     logger.debug(
-                        f"    相对应力: {stress_value:.6f} GPa, 收敛: {converged}"
+                        f"    相对应力[{stress_i}{stress_j}]: {stress_value:.6f} GPa, 收敛: {converged}"
                     )
 
                 strains.append(strain_amp)

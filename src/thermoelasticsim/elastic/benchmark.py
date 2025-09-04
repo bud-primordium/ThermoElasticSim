@@ -8,9 +8,8 @@
 3. 尽可能保持输出与绘图一致（可视化与 CSV 导出可选）
 
 主要接口：
-1. run_aluminum_benchmark(supercell_size) → dict
-2. calculate_c11_c12_traditional(cell, potential, relaxer, mat)
-3. calculate_c44_lammps_shear(cell, potential, relaxer, mat)
+1. calculate_c11_c12_traditional(cell, potential, relaxer, mat)
+2. calculate_c44_lammps_shear(cell, potential, relaxer, mat)
 
 注意：
 本模块不负责日志目录管理，调用方可按需配置日志与输出目录。
@@ -34,12 +33,52 @@ from thermoelasticsim.elastic.deformation_method.zero_temp import (
     ShearDeformationMethod,
     StructureRelaxer,
 )
-from thermoelasticsim.elastic.materials import ALUMINUM_FCC, MaterialParameters
+from thermoelasticsim.elastic.materials import (
+    ALUMINUM_FCC,
+    MaterialParameters,
+)
 from thermoelasticsim.potentials.eam import EAMAl1Potential
 from thermoelasticsim.utils.utils import EV_TO_GPA
 from thermoelasticsim.visualization.elastic.response_plotter import ResponsePlotter
 
 logger = logging.getLogger(__name__)
+
+
+def _setup_logging(output_dir: str | None = None, level: int = logging.INFO) -> None:
+    root = logging.getLogger()
+    root.setLevel(level)
+    fmt = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    # 控制台 handler：若不存在则添加，存在则调到期望级别
+    has_stream = any(
+        isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        for h in root.handlers
+    )
+    if not has_stream:
+        sh = logging.StreamHandler()
+        sh.setLevel(level)
+        sh.setFormatter(fmt)
+        root.addHandler(sh)
+    else:
+        for h in root.handlers:
+            if isinstance(h, logging.StreamHandler) and not isinstance(
+                h, logging.FileHandler
+            ):
+                h.setLevel(level)
+    # 文件 handler：总是追加一个新的 run.log（如提供输出目录）
+    if output_dir:
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+            fh = logging.FileHandler(
+                os.path.join(output_dir, "run.log"), mode="w", encoding="utf-8"
+            )
+            fh.setLevel(logging.DEBUG)
+            fh.setFormatter(fmt)
+            root.addHandler(fh)
+        except Exception:
+            logger.warning("无法创建日志文件处理器，继续仅输出到控制台。")
 
 
 @dataclass(frozen=True)
@@ -131,11 +170,25 @@ def _generate_uniaxial_joint(
     c12_rows: list[dict] = []
 
     base = base_cell.copy()
+    logger.info("制备无应力基态（优先等比例晶格弛豫）...")
     ok = relaxer.uniform_lattice_relax(base, potential)
     if not ok:
+        logger.warning("等比例晶格弛豫未收敛，回退到完全弛豫（变胞+位置）")
         relaxer.full_relax(base, potential)
 
     base_stress = base.calculate_stress_tensor(potential) * EV_TO_GPA
+    logger.info(
+        "基态应力(GPa): [%.6f, %.6f, %.6f; %.6f, %.6f, %.6f; %.6f, %.6f, %.6f]",
+        base_stress[0, 0],
+        base_stress[0, 1],
+        base_stress[0, 2],
+        base_stress[1, 0],
+        base_stress[1, 1],
+        base_stress[1, 2],
+        base_stress[2, 0],
+        base_stress[2, 1],
+        base_stress[2, 2],
+    )
 
     for e in strain_points:
         if abs(e) < 1e-15:
@@ -151,6 +204,13 @@ def _generate_uniaxial_joint(
             else:
                 converged = True
             stress = cell_e.calculate_stress_tensor(potential) * EV_TO_GPA
+        logger.info(
+            "单轴应变 εxx=%.6e → σxx=%.6f GPa, σyy=%.6f GPa（收敛=%s）",
+            e,
+            float(stress[0, 0]),
+            float(stress[1, 1]),
+            bool(converged),
+        )
 
         # C11: σxx vs εxx
         c11_rows.append(
@@ -450,6 +510,7 @@ def calculate_c11_c12_biaxial_orthorhombic(
 
     - 正交: F = diag(1+δ, 1-δ, 1) → 斜率 Δ = C11 - C12
     - 双轴: F = diag(1+ε, 1+ε, 1) → 斜率 Σ = C11 + C12
+
     最终：C11 = (Σ+Δ)/2, C12 = (Σ-Δ)/2
     避免直接使用等压路径对体积敏感的数值漂移。
     """
@@ -617,20 +678,29 @@ def run_zero_temp_benchmark(
     output_dir: str | None = None,
     save_json: bool = True,
     precision: bool = False,
+    log_level: int | None = None,
 ) -> dict:
-    """运行通用零温弹性基准（FCC材料）。
+    """运行通用零温弹性基准（结构自适应）。
 
-    参数化运行流程，支持传入任意FCC材料参数与势函数，实现最大代码复用。
-    与原 run_aluminum_benchmark 输出结构保持一致。
+    - 根据 `material_params.structure` 自动生成晶体结构（当前支持 fcc、diamond）。
+    - 其它流程保持与铝基准一致：弛豫、C11/C12 单轴、C44 剪切、绘图与CSV/JSON。
     """
     mat = material_params
     nx, ny, nz = supercell_size
 
     # 结构与势
     builder = CrystallineStructureBuilder()
-    cell = builder.create_fcc(mat.symbol, mat.lattice_constant, supercell_size)
+    if mat.structure == "fcc":
+        cell = builder.create_fcc(mat.symbol, mat.lattice_constant, supercell_size)
+    elif mat.structure == "diamond":
+        cell = builder.create_diamond(mat.symbol, mat.lattice_constant, supercell_size)
+    else:
+        raise NotImplementedError(f"暂不支持的晶体结构: {mat.structure}")
     total_atoms = cell.num_atoms
 
+    _setup_logging(
+        output_dir, level=(log_level if log_level is not None else logging.INFO)
+    )
     logger.info(
         f"开始{mat.symbol}弹性常数基准：超胞={supercell_size}（原子数={total_atoms}）"
     )
@@ -874,20 +944,7 @@ def run_zero_temp_benchmark(
     return results
 
 
-def run_aluminum_benchmark(
-    supercell_size: tuple[int, int, int] = (3, 3, 3),
-    output_dir: str | None = None,
-    save_json: bool = True,
-) -> dict:
-    """保持向后兼容：调用通用零温基准，材料=Al，势=EAMAl1。"""
-    potential = EAMAl1Potential()
-    return run_zero_temp_benchmark(
-        material_params=ALUMINUM_FCC,
-        potential=potential,
-        supercell_size=supercell_size,
-        output_dir=output_dir,
-        save_json=save_json,
-    )
+## 统一入口为 run_zero_temp_benchmark；冗余包装已移除。
 
 
 def run_size_sweep(
