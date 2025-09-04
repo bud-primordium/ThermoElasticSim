@@ -14,7 +14,7 @@ The project implements multiple MD ensembles using an operator splitting archite
 
 ### Implemented Features
 
-1. **Zero-Temperature Elastic Constants (FCC Aluminum)**
+1. **Zero-Temperature Elastic Constants (FCC metals + Diamond)**
    - Determination of equilibrium lattice configuration
    - Independent strain application and stress response calculation
    - Elastic constants calculation (C11, C12, C44)
@@ -40,9 +40,9 @@ The project implements multiple MD ensembles using an operator splitting archite
 
 - Configuration file system (YAML format)
 - Elastic wave propagation simulation
-- Diamond material support
+- (none)
 
-## Potential Model
+## Potential Models and Benchmark Accuracy
 
 The project employs a validated EAM (Embedded Atom Method) potential for aluminum molecular dynamics simulations:
 
@@ -52,6 +52,19 @@ The project employs a validated EAM (Embedded Atom Method) potential for aluminu
 - **Theoretical Basis**: Mendelev MI, Kramer MJ, Becker CA, Asta M. *Analysis of semi-empirical interatomic potentials appropriate for simulation of crystalline and liquid Al and Cu*. Philosophical Magazine. 2008;88(12):1723–50. [doi:10.1080/14786430802206482](https://doi.org/10.1080/14786430802206482)
 - **Applicable Range**: Structural and dynamic properties of crystalline and liquid aluminum
 - **Validation Accuracy**: Zero-temperature elastic constants error < 1% compared to literature values, good agreement with experimental values at finite temperatures
+
+### Carbon (diamond) Potential (Tersoff 1988)
+
+**Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004**
+
+- **OpenKIM**: <https://openkim.org/id/Tersoff_LAMMPS_Tersoff_1988_C__MO_579868029681_004>
+- **Theory**: Tersoff J. Empirical Interatomic Potential for Carbon, with Applications to Amorphous Carbon. Phys. Rev. Lett. 61, 2879 (1988). doi:10.1103/PhysRevLett.61.2879
+- **Scope (abstract)**: Empirical potential accurately capturing carbon’s structural/energetic features (elasticity, phonons, polytypes, defects, migration barriers in diamond/graphite), applied to amorphous carbon formation via multiple routes.
+- **Model traits**: C++ backend (analytic energy/forces/three-body virial); triplet-cluster virial tally; tension-positive stress convention.
+- **0 K equilibrium**: a0 = 3.5656 Å (matches reference)
+- **Benchmark accuracy (vs OpenKIM)**:
+  - Uniaxial (C11, C12): ≤ 0.02% error
+  - Shear (C44): ≈ 4.6% error
 
 ## Directory Structure
 

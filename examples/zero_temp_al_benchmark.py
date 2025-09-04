@@ -26,9 +26,10 @@ from datetime import datetime
 from thermoelasticsim.elastic import (
     ALUMINUM_FCC,
     BenchmarkConfig,
-    run_aluminum_benchmark,
     run_size_sweep,
+    run_zero_temp_benchmark,
 )
+from thermoelasticsim.potentials.eam import EAMAl1Potential
 
 
 def setup_logging(test_name: str = "al_benchmark") -> str:
@@ -102,8 +103,13 @@ def run_aluminum_benchmark_local(
 
     # 使用库内统一工作流运行，保持示例脚本轻量化
     cfg = BenchmarkConfig(supercell_size=supercell_size)
-    results = run_aluminum_benchmark(
-        supercell_size=cfg.supercell_size, output_dir=output_dir
+    results = run_zero_temp_benchmark(
+        material_params=ALUMINUM_FCC,
+        potential=EAMAl1Potential(),
+        supercell_size=cfg.supercell_size,
+        output_dir=output_dir,
+        save_json=True,
+        precision=False,
     )
 
     # 输出最终结果（与原示例风格相近）
