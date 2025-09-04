@@ -151,3 +151,38 @@ class TestCrystallineStructureBuilder:
             distances = np.linalg.norm(actual_positions - expected_pos, axis=1)
             min_distance = np.min(distances)
             assert min_distance < 1e-10, f"未找到期望位置 {expected_pos} 的原子"
+
+
+class TestCrystallineStructureBuilderDiamond:
+    """金刚石（diamond）结构相关测试"""
+
+    def test_diamond_basic_unit_cell(self):
+        a = 3.5656
+        builder = CrystallineStructureBuilder()
+        cell = builder.create_diamond("C", a, (1, 1, 1))
+        assert cell.num_atoms == 8
+        assert cell.pbc_enabled is True
+
+        L = cell.lattice_vectors
+        assert np.allclose(np.diag(L), [a, a, a], atol=1e-8)
+        assert np.allclose(L - np.diag(np.diag(L)), 0.0, atol=1e-12)
+
+    def test_diamond_supercell_222(self):
+        a = 3.5656
+        builder = CrystallineStructureBuilder()
+        cell = builder.create_diamond("C", a, (2, 2, 2))
+        assert cell.num_atoms == 64
+
+    def test_diamond_nearest_neighbor_distance(self):
+        a = 3.5656
+        builder = CrystallineStructureBuilder()
+        cell = builder.create_diamond("C", a, (1, 1, 1))
+        d_ref = a * np.sqrt(3.0) / 4.0
+        pos = cell.get_positions()
+        d_min = 1e9
+        for i in range(cell.num_atoms):
+            for j in range(i + 1, cell.num_atoms):
+                d = np.linalg.norm(pos[i] - pos[j])
+                if d < d_min:
+                    d_min = d
+        assert abs(d_min - d_ref) < 0.1

@@ -7,6 +7,7 @@ import pytest
 
 from thermoelasticsim.elastic.materials import (
     ALUMINUM_FCC,
+    CARBON_DIAMOND,
     COPPER_FCC,
     GOLD_FCC,
     MaterialParameters,
@@ -190,7 +191,7 @@ class TestMaterialUtilities:
         materials = get_all_materials()
 
         assert isinstance(materials, dict)
-        assert len(materials) == 3
+        assert len(materials) >= 3
 
         assert "Aluminum" in materials
         assert "Copper" in materials
@@ -199,6 +200,35 @@ class TestMaterialUtilities:
         assert materials["Aluminum"] is ALUMINUM_FCC
         assert materials["Copper"] is COPPER_FCC
         assert materials["Gold"] is GOLD_FCC
+
+
+class TestMaterialDiamond:
+    """针对 Carbon (diamond) 材料的参数与工具函数补充测试"""
+
+    def test_carbon_diamond_parameters(self):
+        mat = CARBON_DIAMOND
+        assert mat.symbol == "C"
+        assert mat.structure == "diamond"
+        assert 3.5 < mat.lattice_constant < 3.7
+        for k in ("C11", "C12", "C44"):
+            assert k in mat.literature_elastic_constants
+
+    def test_carbon_diamond_cubic_symmetry(self):
+        c = CARBON_DIAMOND.literature_elastic_constants
+        assert c["C22"] == c["C11"]
+        assert c["C33"] == c["C11"]
+        assert c["C55"] == c["C44"]
+        assert c["C66"] == c["C44"]
+        assert c["C13"] == c["C12"]
+        assert c["C23"] == c["C12"]
+
+    def test_get_material_by_symbol_includes_carbon(self):
+        mat = get_material_by_symbol("C")
+        assert mat is not None and mat.name.startswith("Carbon")
+
+    def test_get_all_materials_includes_carbon(self):
+        mats = get_all_materials()
+        assert any(name.startswith("Carbon") for name in mats)
 
     def test_compare_elastic_constants(self):
         """测试弹性常数比较"""
