@@ -32,7 +32,7 @@ extensions = [
     "sphinx.ext.intersphinx",  # 链接到其他项目文档
     "sphinx.ext.coverage",  # 文档覆盖率检查
     "sphinx.ext.todo",  # TODO标记支持
-    "numpydoc",  # NumPy文档风格支持
+    # "numpydoc",  # 使用napoleon即可解析NumPy风格；去除以减少噪声告警
     "sphinxcontrib.bibtex",  # BibTeX文献引用支持
 ]
 
@@ -68,6 +68,7 @@ autodoc_default_options = {
     "show-inheritance": True,  # 显示继承关系
     "inherited-members": False,  # 不显示继承的成员
     "private-members": False,  # 不显示私有成员
+    "imported-members": False,  # 不默认包含导入成员，避免重复
 }
 
 # Mock导入（对于C扩展等）
@@ -90,13 +91,14 @@ autodoc_mock_imports = [
     "sklearn",
     "yaml",
     # Project subpackages that trigger heavy runtime side-effects
-    "thermoelasticsim.visualization",
-    "thermoelasticsim.visualization.elastic",
-    "thermoelasticsim.visualization.web",
+    # Note: we need to be careful not to mock modules that are used by API docs
+    # "thermoelasticsim.visualization",  # Don't mock the whole package
+    # "thermoelasticsim.visualization.elastic",  # benchmark module needs this
+    "thermoelasticsim.visualization.web",  # Only mock web visualization
     "thermoelasticsim.utils.plot_config",
     "thermoelasticsim.utils.visualization",
     "thermoelasticsim.utils.modern_visualization",
-    "thermoelasticsim.elastic.benchmark",
+    # Note: benchmark module should NOT be mocked - it contains API we need to document
 ]
 
 # 类型提示配置
@@ -118,7 +120,13 @@ napoleon_use_admonition_for_references = True
 napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
-napoleon_type_aliases = None
+napoleon_type_aliases = {
+    # 解决常见类型的交叉引用歧义（映射到唯一目标）
+    "Cell": "thermoelasticsim.core.structure.Cell",
+    "Atom": "thermoelasticsim.core.structure.Atom",
+    "Potential": "thermoelasticsim.potentials.base.Potential",
+    "NeighborList": "thermoelasticsim.potentials.base.NeighborList",
+}
 
 # NumPy文档参数
 napoleon_attr_annotations = True
@@ -126,7 +134,7 @@ napoleon_custom_sections = [
     "Theory",  # 理论基础
     "Algorithm",  # 算法说明
 ]
-numpydoc_show_class_members = False
+# 若启用 numpydoc，可恢复：numpydoc_show_class_members = False
 
 # -- MathJax配置 (数学公式) --------------------------------------------------
 
@@ -191,7 +199,34 @@ nitpicky = True
 
 # 忽略某些已知问题的引用（如果需要）
 nitpick_ignore = [
-    # 示例：('py:class', 'numpy.ndarray'),
+    # 常见类型/占位名（不作为交叉引用目标）
+    ("py:class", "array_like"),
+    ("py:class", "optional"),
+    ("py:class", "np.ndarray"),
+    ("py:class", "numpy.ndarray"),
+    ("py:class", "typing.Optional"),
+    ("py:class", "Integrator"),
+    ("py:class", "ElasticTrajectoryRecorder"),
+    ("py:class", "optimizer"),
+    # Internal optimizer cross-refs
+    ("py:class", "thermoelasticsim.utils.optimizers.Optimizer"),
+    ("py:class", "thermoelasticsim.utils.optimizers.LBFGSOptimizer"),
+    # 外部异常类型
+    ("py:exc", "yaml.YAMLError"),
+    # 文档中使用的占位对象名
+    ("py:obj", "dt"),
+    ("py:obj", "target_temperature"),
+    ("py:obj", "mode"),
+    ("py:obj", "{'disp': True}"),
+    ("py:obj", "cell"),
+    # 常见基础类型名在不同子包下重复定义，避免歧义告警
+    ("py:class", "Cell"),
+    ("py:class", "Atom"),
+    ("py:class", "Potential"),
+    ("py:class", "NeighborList"),
+    # 全限定名（当对应模块被 :noindex: 时，避免链接失败告警）
+    ("py:class", "thermoelasticsim.core.structure.Cell"),
+    ("py:class", "thermoelasticsim.core.structure.Atom"),
 ]
 html_copy_source = True
 
@@ -204,9 +239,15 @@ latex_elements = {
     "preamble": r"""
 \usepackage{amsmath,amssymb}
 \usepackage{physics}
+% 注释掉字体设置，让Sphinx使用默认字体避免冲突
+% 如果需要特定字体，请确保系统已安装
+% \setmainfont{Times New Roman}
+% \setsansfont{Arial}
+% 或使用更通用的字体设置
+\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+% 中文字体设置（使用系统默认）
 \usepackage[UTF8]{ctex}
-\setmainfont{Times New Roman}
-\setsansfont{Arial}
 """,
     "fncychap": r"\usepackage[Bjornstrup]{fncychap}",
     "printindex": r"\footnotesize\raggedright\printindex",
@@ -244,14 +285,45 @@ pygments_style = "sphinx"
 autodoc_member_order = "bysource"
 
 # 忽略的警告
-suppress_warnings = ["autodoc.import_error"]
+suppress_warnings = ["autodoc.import_error", "ref.citation"]
 
 # 默认角色
-default_role = "py:obj"
+# 不设置默认角色，避免将普通词语当作交叉引用解析
+# default_role = "py:obj"
 
 
 # 添加自定义CSS（如果需要）
 def setup(app):
     """Sphinx应用设置钩子"""
-    # app.add_css_file('custom.css')
     pass
+
+
+# -- SimplePDF配置 ------------------------------------------------------------
+# Sphinx-SimplePDF配置（如果扩展可用）
+simplepdf_vars = {
+    "primary-color": "#3498db",
+    "secondary-color": "#2c3e50",
+    "cover": True,
+    "cover-title": "ThermoElasticSim 文档",
+    "cover-subtitle": f"版本 {version}",
+    "cover-author": author,
+}
+
+simplepdf_file_name = "ThermoElasticSim.pdf"
+simplepdf_debug = False
+
+
+# -- rst2pdf配置 --------------------------------------------------------------
+# rst2pdf配置（轻量级PDF生成器，无需系统依赖）
+pdf_documents = [
+    ("index", "ThermoElasticSim", "ThermoElasticSim Documentation", author),
+]
+
+# rst2pdf样式配置
+pdf_stylesheets = ["sphinx"]
+pdf_language = "zh_CN"
+pdf_fit_mode = "shrink"
+pdf_break_level = 1
+pdf_use_index = True
+pdf_use_modindex = True
+pdf_use_coverpage = True

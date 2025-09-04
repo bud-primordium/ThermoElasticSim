@@ -42,13 +42,14 @@ jobs:
         enable-cache: true
         cache-dependency-glob: "**/pyproject.toml"
 
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         uv venv
         uv pip install -e .
-        uv pip install sphinx sphinx-rtd-theme numpydoc
+        # 使用[docs]依赖组
+        uv pip install -e ".[docs]"
 
-    - name: Build documentation
+    - name: Build HTML documentation
       run: |
         cd docs && uv run sphinx-build -b html source build/html
 

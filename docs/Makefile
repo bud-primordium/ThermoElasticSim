@@ -1,7 +1,3 @@
-"""
-自动生成API文档的Make文件
-"""
-
 # Minimal makefile for Sphinx documentation
 
 # You can set these variables from the command line.
