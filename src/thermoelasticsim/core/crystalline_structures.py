@@ -62,6 +62,7 @@ class CrystallineStructureBuilder:
     ATOMIC_MASSES = {
         "Al": 26.9815,
         "Cu": 63.546,
+        "C": 12.0107,
         "Au": 196.966569,
         "Ag": 107.8682,
         "Fe": 55.845,
@@ -72,6 +73,7 @@ class CrystallineStructureBuilder:
         "Zn": 65.38,
         "Ti": 47.867,
         "V": 50.9415,
+        "Ar": 39.95,
     }
 
     def __init__(self):
@@ -198,6 +200,83 @@ class CrystallineStructureBuilder:
         )
 
         return cell
+
+    def create_diamond(
+        self, element: str, lattice_constant: float, supercell: tuple[int, int, int]
+    ) -> Cell:
+        """
+        创建金刚石（diamond cubic）结构的常规立方胞（8原子/胞）并复制成超胞。
+
+        Parameters
+        ----------
+        element : str
+            元素符号，例如 "C"、"Si"。
+        lattice_constant : float
+            常规立方胞边长 a（Å）。
+        supercell : tuple[int,int,int]
+            超胞复制 (nx, ny, nz)。
+
+        Returns
+        -------
+        Cell
+            周期性金刚石结构晶胞。
+        """
+        if not isinstance(element, str) or element not in self.ATOMIC_MASSES:
+            raise ValueError(
+                f"不支持的元素: {element}. 支持: {list(self.ATOMIC_MASSES.keys())}"
+            )
+        if not isinstance(lattice_constant, int | float) or lattice_constant <= 0:
+            raise ValueError(f"晶格常数必须为正数，得到: {lattice_constant}")
+        if (
+            not isinstance(supercell, tuple)
+            or len(supercell) != 3
+            or not all(isinstance(n, int) and n > 0 for n in supercell)
+        ):
+            raise TypeError(f"超胞尺寸必须为正整数三元组，得到: {supercell}")
+
+        nx, ny, nz = supercell
+        mass_amu = self.ATOMIC_MASSES[element]
+
+        # 金刚石基原子（常规立方胞，分数坐标）
+        base = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.0, 0.5, 0.5],
+                [0.5, 0.0, 0.5],
+                [0.5, 0.5, 0.0],
+                [0.25, 0.25, 0.25],
+                [0.25, 0.75, 0.75],
+                [0.75, 0.25, 0.75],
+                [0.75, 0.75, 0.25],
+            ],
+            dtype=float,
+        )
+
+        lattice_vectors = (
+            np.eye(3) * lattice_constant * np.array([nx, ny, nz], dtype=float)
+        )
+
+        atoms = []
+        atom_id = 0
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+                    for b in base:
+                        frac = (np.array([i, j, k], dtype=float) + b) / np.array(
+                            [nx, ny, nz], dtype=float
+                        )
+                        pos = frac @ lattice_vectors
+                        atoms.append(
+                            Atom(
+                                id=atom_id,
+                                symbol=element,
+                                mass_amu=mass_amu,
+                                position=pos,
+                            )
+                        )
+                        atom_id += 1
+
+        return Cell(lattice_vectors=lattice_vectors, atoms=atoms, pbc_enabled=True)
 
     def create_bcc(
         self, element: str, lattice_constant: float, supercell: tuple[int, int, int]

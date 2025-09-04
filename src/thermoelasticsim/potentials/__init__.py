@@ -6,9 +6,7 @@ ThermoElasticSim - 势能模块
 采用延迟导入模式以避免循环依赖并提高加载性能。
 
 .. moduleauthor:: Gilbert Young
-.. created:: 2024-10-14
-.. modified:: 2025-07-07
-.. version:: 4.0.0
+.. versionadded:: 4.0.0
 """
 
 # 1. 定义公开接口
@@ -17,7 +15,7 @@ __all__ = [
     "LennardJonesPotential",
     "EAMAl1Potential",
     "EAMCu1Potential",
-    "TersoffPotential",
+    "TersoffC1988Potential",
     "MLPotential",
 ]
 
@@ -40,10 +38,10 @@ def __getattr__(name):
         from .eam import EAMCu1Potential
 
         return EAMCu1Potential
-    elif name == "TersoffPotential":
-        from .tersoff import TersoffPotential
+    elif name == "TersoffC1988Potential":
+        from .tersoff import TersoffC1988Potential
 
-        return TersoffPotential
+        return TersoffC1988Potential
     elif name == "MLPotential":
         from .mlp import MLPotential
 

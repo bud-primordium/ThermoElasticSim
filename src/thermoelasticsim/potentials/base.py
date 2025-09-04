@@ -5,13 +5,13 @@ ThermoElasticSim - 势能基类模块
 .. moduleauthor:: Gilbert Young
 """
 
-from abc import ABC, abstractmethod
+import abc
 
 from thermoelasticsim.core.structure import Cell
 from thermoelasticsim.utils.utils import NeighborList
 
 
-class Potential(ABC):
+class Potential(abc.ABC):
     """势能计算的抽象基类。
 
     提供原子间势能模型的统一接口，约定最小方法集以支持分子动力学 (MD)
@@ -34,7 +34,7 @@ class Potential(ABC):
         self.parameters = parameters
         self.cutoff = cutoff
 
-    @abstractmethod
+    @abc.abstractmethod
     def calculate_forces(self, cell: Cell, neighbor_list: "NeighborList") -> None:
         """计算系统中所有原子的作用力。
 
@@ -52,7 +52,7 @@ class Potential(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
+    @abc.abstractmethod
     def calculate_energy(self, cell: Cell, neighbor_list: "NeighborList") -> float:
         """计算系统的总势能。
 

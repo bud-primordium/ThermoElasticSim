@@ -67,6 +67,15 @@ class CppInterface:
             ):
                 raise RuntimeError("EAM Cu1 functions not available in pybind11 module")
             logger.debug("Using pybind11 backend for EAM Cu1")
+        elif lib_name == "tersoff_c1988":
+            need = (
+                hasattr(_cpp_core, "calculate_tersoff_c1988_energy")
+                and hasattr(_cpp_core, "calculate_tersoff_c1988_forces")
+                and hasattr(_cpp_core, "calculate_tersoff_c1988_virial")
+            )
+            if not need:
+                raise RuntimeError("Tersoff functions not available in pybind11 module")
+            logger.debug("Using pybind11 backend for Tersoff C1988")
         elif lib_name == "stress_calculator":
             if not hasattr(_cpp_core, "compute_stress"):
                 raise RuntimeError(
@@ -358,6 +367,205 @@ class CppInterface:
                 np.ascontiguousarray(lattice_vectors, dtype=np.float64),
             )
         )
+
+    def calculate_tersoff_energy(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        *,
+        A: float,
+        B: float,
+        lambda1: float,
+        lambda2: float,
+        lambda3: float,
+        beta: float,
+        n: float,
+        c: float,
+        d: float,
+        h: float,
+        R: float,
+        D: float,
+        m: int = 3,
+        shift_flag: bool = False,
+        delta: float = 0.0,
+    ) -> float:
+        """计算Tersoff势能量。"""
+        return float(
+            self._cpp.calculate_tersoff_energy(
+                int(num_atoms),
+                np.ascontiguousarray(positions, dtype=np.float64),
+                np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+                float(A),
+                float(B),
+                float(lambda1),
+                float(lambda2),
+                float(lambda3),
+                float(beta),
+                float(n),
+                float(c),
+                float(d),
+                float(h),
+                float(R),
+                float(D),
+                int(m),
+                bool(shift_flag),
+                float(delta),
+            )
+        )
+
+    def calculate_tersoff_forces(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        forces: np.ndarray,
+        *,
+        A: float,
+        B: float,
+        lambda1: float,
+        lambda2: float,
+        lambda3: float,
+        beta: float,
+        n: float,
+        c: float,
+        d: float,
+        h: float,
+        R: float,
+        D: float,
+        m: int = 3,
+        shift_flag: bool = False,
+        delta: float = 0.0,
+    ) -> None:
+        """计算Tersoff势力。"""
+        self._cpp.calculate_tersoff_forces(
+            int(num_atoms),
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+            float(A),
+            float(B),
+            float(lambda1),
+            float(lambda2),
+            float(lambda3),
+            float(beta),
+            float(n),
+            float(c),
+            float(d),
+            float(h),
+            float(R),
+            float(D),
+            int(m),
+            bool(shift_flag),
+            float(delta),
+        )
+
+    def calculate_tersoff_virial(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        *,
+        A: float,
+        B: float,
+        lambda1: float,
+        lambda2: float,
+        lambda3: float,
+        beta: float,
+        n: float,
+        c: float,
+        d: float,
+        h: float,
+        R: float,
+        D: float,
+        m: int = 3,
+        shift_flag: bool = False,
+        delta: float = 0.0,
+    ) -> np.ndarray:
+        """计算Tersoff势维里张量。"""
+        vir = self._cpp.calculate_tersoff_virial(
+            int(num_atoms),
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            float(A),
+            float(B),
+            float(lambda1),
+            float(lambda2),
+            float(lambda3),
+            float(beta),
+            float(n),
+            float(c),
+            float(d),
+            float(h),
+            float(R),
+            float(D),
+            int(m),
+            bool(shift_flag),
+            float(delta),
+        )
+        vir = np.ascontiguousarray(vir, dtype=np.float64)
+        return vir.reshape(3, 3)
+
+    # 默认 C(1988) 参数版本（不传参数）
+    def calculate_tersoff_c1988_energy(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        *,
+        shift_flag: bool = False,
+        delta: float = 0.0,
+    ) -> float:
+        """计算Tersoff C(1988)势能量。"""
+        return float(
+            self._cpp.calculate_tersoff_c1988_energy(
+                int(num_atoms),
+                np.ascontiguousarray(positions, dtype=np.float64),
+                np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+                bool(shift_flag),
+                float(delta),
+            )
+        )
+
+    def calculate_tersoff_c1988_forces(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        forces: np.ndarray,
+        *,
+        shift_flag: bool = False,
+        delta: float = 0.0,
+    ) -> None:
+        """计算Tersoff C(1988)势力。"""
+        self._cpp.calculate_tersoff_c1988_forces(
+            int(num_atoms),
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            np.ascontiguousarray(forces, dtype=np.float64),
+            bool(shift_flag),
+            float(delta),
+        )
+
+    def calculate_tersoff_c1988_virial(
+        self,
+        num_atoms: int,
+        positions: np.ndarray,
+        lattice_vectors: np.ndarray,
+        *,
+        shift_flag: bool = False,
+        delta: float = 0.0,
+    ) -> np.ndarray:
+        """计算Tersoff C(1988)势维里张量。"""
+        vir = self._cpp.calculate_tersoff_c1988_virial(
+            int(num_atoms),
+            np.ascontiguousarray(positions, dtype=np.float64),
+            np.ascontiguousarray(lattice_vectors, dtype=np.float64),
+            bool(shift_flag),
+            float(delta),
+        )
+        vir = np.ascontiguousarray(vir, dtype=np.float64)
+        return vir.reshape(3, 3)
 
     def calculate_eam_al1_virial(
         self, num_atoms: int, positions: np.ndarray, lattice_vectors: np.ndarray

@@ -3,6 +3,7 @@
 # 修改日期: 2025-08-12
 # 文件描述: 实现应力和应变计算器，包括基于 Lennard-Jones 势和EAM势的应力计算器。
 
+import contextlib
 import logging
 
 import matplotlib as mpl
@@ -153,15 +154,26 @@ class StressCalculator:
                                 num_atoms, positions, lattice.flatten()
                             )
                         )
+                    elif libname == "tersoff_c1988" and hasattr(
+                        potential, "_calculate_virial_tensor"
+                    ):
+                        virial_tensor = potential._calculate_virial_tensor(cell)
             except Exception as e_cpp:
                 logger.debug(
                     f"C++ EAM virial not available, fallback to Python: {e_cpp}"
                 )
 
             if virial_tensor is None:
-                # 回退到Python实现（较慢）。注意：当前Python实现只实现了Al1参数。
-                # 对非Al1势（如Cu1）应优先启用C++后端；否则结果将不可靠。
-                virial_tensor = self._calculate_eam_virial_contribution(cell, potential)
+                # 通用回退：-Σ_i ri ⊗ Fi（无需成对分解，适用于多体势）
+                # 先确保力为最新
+                with contextlib.suppress(Exception):
+                    potential.calculate_forces(cell)
+                vir = np.zeros((3, 3), dtype=np.float64)
+                pos = cell.get_positions()
+                frc = cell.get_forces()
+                for i in range(pos.shape[0]):
+                    vir -= np.outer(pos[i], frc[i])
+                virial_tensor = vir
 
             virial_stress = virial_tensor / volume
             return virial_stress
@@ -498,72 +510,10 @@ class StressCalculator:
     def calculate_finite_difference_stress(
         self, cell, potential, dr=1e-6
     ) -> np.ndarray:
-        r"""计算有限差分应力张量（基于能量对胞矩的导数）
+        """已移除：有限差分应力路径不再提供，避免误用。"""
+        raise RuntimeError("Finite-difference stress path has been removed.")
 
-        思路：在小形变量 :math:`d` 下，用中心差分近似 :math:`\partial U/\partial h_{ij}`，
-        并换算为应力。
-
-        Notes
-        -----
-        - 这是与维里等价的另一种应力计算策略，常用于数值验证；
-          并不与 :meth:`calculate_virial_stress` 相加。
-
-        Parameters
-        ----------
-        cell : Cell
-            包含原子的晶胞对象
-        potential : Potential
-            势能对象，用于计算能量
-        dr : float, optional
-            形变量步长，默认 1e-6
-
-        Returns
-        -------
-        np.ndarray
-            有限差分应力张量 (3, 3)，单位 eV/Å³
-        """
-        try:
-            # 初始化能量导数矩阵
-            dUdh = np.zeros((3, 3), dtype=np.float64)
-
-            # 保存原始状态的深拷贝
-            original_cell = cell.copy()
-
-            for i in range(3):
-                for j in range(3):
-                    # 正向形变矩阵
-                    deformation = np.eye(3)
-                    deformation[i, j] += dr
-
-                    # 负向形变矩阵
-                    deformation_negative = np.eye(3)
-                    deformation_negative[i, j] -= dr
-
-                    # 应用正向形变到原始_cell的副本
-                    deformed_cell_plus = original_cell.copy()
-                    deformed_cell_plus.apply_deformation(deformation)
-                    energy_plus = potential.calculate_energy(deformed_cell_plus)
-
-                    # 应用负向形变到原始_cell的副本
-                    deformed_cell_minus = original_cell.copy()
-                    deformed_cell_minus.apply_deformation(deformation_negative)
-                    energy_minus = potential.calculate_energy(deformed_cell_minus)
-
-                    # 计算能量导数
-                    dUdh[i, j] = (energy_plus - energy_minus) / (2 * dr)
-
-            # 转换为应力张量
-            finite_diff_stress = dUdh / original_cell.volume
-
-            return finite_diff_stress
-
-        except Exception as e:
-            logger.error(f"Error in finite difference stress calculation: {e}")
-            raise
-
-    def calculate_lattice_stress(self, cell, potential, dr=1e-6) -> np.ndarray:
-        """为保持向后兼容性的别名方法 - 指向有限差分应力方法"""
-        return self.calculate_finite_difference_stress(cell, potential, dr)
+    # 已移除能量有限差分路径，避免误用。
 
     def get_all_stress_components(self, cell, potential) -> dict[str, np.ndarray]:
         """
@@ -583,7 +533,7 @@ class StressCalculator:
             - "kinetic": 动能应力张量
             - "virial": 维里应力张量
             - "total": 总应力张量（kinetic + virial）
-            - "finite_diff": 有限差分应力张量（用于验证）
+
         """
         try:
             components = {}
@@ -592,15 +542,11 @@ class StressCalculator:
             kinetic_stress = self.calculate_kinetic_stress(cell)
             virial_stress = self.calculate_virial_stress(cell, potential)
             total_stress = self.calculate_total_stress(cell, potential)
-            finite_diff_stress = self.calculate_finite_difference_stress(
-                cell, potential
-            )
 
             # 标准键名
             components["kinetic"] = kinetic_stress
             components["virial"] = virial_stress
             components["total"] = total_stress
-            components["finite_diff"] = finite_diff_stress
 
             return components
 

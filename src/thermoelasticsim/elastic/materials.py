@@ -108,7 +108,7 @@ class MaterialParameters:
         if self.lattice_constant <= 0:
             raise ValueError(f"晶格常数必须为正数，得到: {self.lattice_constant}")
 
-        if self.structure not in ["fcc", "bcc", "hcp"]:
+        if self.structure not in ["fcc", "bcc", "hcp", "diamond"]:
             raise ValueError(f"不支持的晶体结构: {self.structure}")
 
         if not isinstance(self.literature_elastic_constants, dict):
@@ -259,6 +259,30 @@ GOLD_FCC = MaterialParameters(
     description="实验弹性常数，室温数据",
 )
 
+# 碳（Diamond 结构）- Tersoff C(1988) 参考值（0 K）
+CARBON_DIAMOND = MaterialParameters(
+    name="Carbon (diamond)",
+    symbol="C",
+    mass_amu=12.0107,
+    lattice_constant=3.5656,  # Å，OpenKIM 0 K 平衡晶格常数
+    structure="diamond",
+    literature_elastic_constants={
+        # OpenKIM (0 K) 参考值
+        "C11": 1074.08,
+        "C12": 101.73,
+        "C44": 641.54,
+        # 立方对称性展开（便于工具复用）
+        "C22": 1074.08,
+        "C33": 1074.08,
+        "C55": 641.54,
+        "C66": 641.54,
+        "C13": 101.73,
+        "C23": 101.73,
+    },
+    temperature=0.0,
+    description="Tersoff C(1988) OpenKIM 0 K 参考",
+)
+
 
 # ==================== 工具函数 ====================
 
@@ -288,6 +312,7 @@ def get_material_by_symbol(symbol: str) -> MaterialParameters | None:
         "Al": ALUMINUM_FCC,
         "Cu": COPPER_FCC,
         "Au": GOLD_FCC,
+        "C": CARBON_DIAMOND,
     }
 
     return material_registry.get(symbol)
@@ -315,6 +340,7 @@ def get_all_materials() -> dict[str, MaterialParameters]:
         "Aluminum": ALUMINUM_FCC,
         "Copper": COPPER_FCC,
         "Gold": GOLD_FCC,
+        "Carbon (diamond)": CARBON_DIAMOND,
     }
 
 
