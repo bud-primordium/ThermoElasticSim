@@ -105,6 +105,9 @@ autodoc_mock_imports = [
 autodoc_typehints = "description"
 autodoc_type_aliases = {
     "ArrayLike": "array_like",
+    "Cell": "thermoelasticsim.core.structure.Cell",
+    "Potential": "thermoelasticsim.potentials.base.Potential",
+    "NeighborList": "thermoelasticsim.core.neighbor_list.NeighborList",
 }
 
 # -- Napoleon配置 (NumPy文档风格) --------------------------------------------
@@ -285,7 +288,7 @@ pygments_style = "sphinx"
 autodoc_member_order = "bysource"
 
 # 忽略的警告
-suppress_warnings = ["autodoc.import_error", "ref.citation"]
+suppress_warnings = ["autodoc.import_error", "ref.citation", "ref.python"]
 
 # 默认角色
 # 不设置默认角色，避免将普通词语当作交叉引用解析

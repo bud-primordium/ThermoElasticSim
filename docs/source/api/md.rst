@@ -20,6 +20,7 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: Cell, Any
 
 积分方案
 --------
@@ -28,6 +29,7 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: Cell
 
 恒温器
 ------
@@ -36,6 +38,7 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :noindex:
 
 恒压器
 ------
@@ -44,6 +47,7 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :noindex:
 
 MD模拟器
 --------

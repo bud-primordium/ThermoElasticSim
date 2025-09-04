@@ -13,6 +13,15 @@
    :undoc-members:
    :show-inheritance:
 
+结构构建器
+----------
+
+.. automodule:: thermoelasticsim.core.crystalline_structures
+   :members: CrystallineStructureBuilder, create_fcc, create_bcc, create_hcp, create_diamond
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: Cell, Atom
+
 配置模块
 --------
 

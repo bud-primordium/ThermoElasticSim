@@ -12,6 +12,14 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: EV_TO_GPA, KB_IN_EV, AMU_TO_EVFSA2
+
+常量
+----
+
+.. autodata:: thermoelasticsim.utils.utils.EV_TO_GPA
+.. autodata:: thermoelasticsim.utils.utils.KB_IN_EV
+.. autodata:: thermoelasticsim.utils.utils.AMU_TO_EVFSA2
 
 优化器
 ------
@@ -20,6 +28,7 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :noindex:
 
 轨迹记录
 --------
@@ -28,29 +37,16 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :noindex:
 
 .. automodule:: thermoelasticsim.utils.trajectory_recorder
    :members:
    :undoc-members:
    :show-inheritance:
+   :noindex:
 
-可视化
-------
+绘图与可视化（可选）
+--------------------
 
-.. automodule:: thermoelasticsim.utils.visualization
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: thermoelasticsim.utils.modern_visualization
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-绘图配置
---------
-
-.. automodule:: thermoelasticsim.utils.plot_config
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   可视化相关模块依赖较多第三方库，且与文档构建关系不大。为降低构建复杂度，本节默认不自动展开 API。需要详细说明时，可在本地环境中查看源码注释或启用相应模块文档。

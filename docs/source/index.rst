@@ -4,11 +4,13 @@
 ThermoElasticSim 文档
 ===========================================
 
-.. image:: https://img.shields.io/badge/version-4.0.0-blue
-   :alt: Version
+.. only:: html
 
-.. image:: https://img.shields.io/badge/license-GPL--3.0-green
-   :alt: License
+   .. image:: https://img.shields.io/badge/version-4.0.0-blue
+      :alt: Version
+
+   .. image:: https://img.shields.io/badge/license-GPL--3.0-green
+      :alt: License
 
 欢迎使用ThermoElasticSim文档！
 
@@ -16,30 +18,29 @@ ThermoElasticSim 文档
 它提供了零温和有限温度下的弹性常数计算功能，支持多种系综和恒温器算法。
 
 .. toctree::
-   :maxdepth: 2
-   :caption: 快速开始
+   :maxdepth: 1
+   :caption: 快速入门
 
-   quickstart/installation
-   quickstart/first_simulation
-   quickstart/examples
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 用户指南
-
-   guide/basic_concepts
-   guide/elastic_calculation
-   guide/temperature_control
-   guide/advanced_features
+   quickstart
+   conventions
 
 .. toctree::
    :maxdepth: 2
-   :caption: 理论背景
+   :numbered:
+   :caption: 理论与方法
 
-   theory/md_fundamentals
-   theory/ensemble_theory
-   theory/elastic_theory
-   theory/integrators
+   01_elastic_fundamentals
+   02_zero_temperature_elastic
+   03_md_and_ensembles
+   04_finite_temperature_elastic
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 拓展内容
+
+   05_potential_extensions
+   06_advanced_topics
+   07_howto
 
 .. toctree::
    :maxdepth: 3
@@ -49,15 +50,8 @@ ThermoElasticSim 文档
    api/elastic
    api/md
    api/potentials
+   api/interfaces
    api/utils
-
-.. toctree::
-   :maxdepth: 1
-   :caption: 开发指南
-
-   development/contributing
-   development/code_style
-   development/testing
 
 特性概览
 ========
@@ -76,8 +70,9 @@ ThermoElasticSim 文档
    - NPT等温等压系综（MTK算法）
 
 * **势函数支持**
-   - EAM嵌入原子势（铝）
+   - EAM嵌入原子势（铝、铜）
    - Lennard-Jones势
+   - Tersoff势
    - 可扩展势函数接口
 
 * **恒温器算法**
@@ -100,27 +95,21 @@ ThermoElasticSim 文档
 
 计算FCC铝的弹性常数::
 
-    from thermoelasticsim.core.structure import Cell
-    from thermoelasticsim.elastic.deformation_method import ZeroTempElasticCalculator
-    from thermoelasticsim.potentials import EAMAl1Potential
-    import numpy as np
+    from thermoelasticsim.elastic.benchmark import run_zero_temp_benchmark
+    from thermoelasticsim.elastic.materials import ALUMINUM_FCC
+    from thermoelasticsim.potentials.eam import EAMAl1Potential
 
-    # 创建FCC铝晶胞
-    a = 4.05  # 晶格常数
-    lattice = a * np.eye(3)
-    atoms = create_fcc_atoms("Al", a)
-    cell = Cell(lattice, atoms)
+    # 一键计算
+    results = run_zero_temp_benchmark(
+        material_params=ALUMINUM_FCC,
+        potential=EAMAl1Potential(),
+        supercell_size=(3, 3, 3)
+    )
 
-    # 设置势函数
-    potential = EAMAl1Potential()
-
-    # 计算弹性常数
-    calculator = ZeroTempElasticCalculator(potential)
-    C11, C12, C44 = calculator.calculate(cell)
-
-    print(f"C11 = {C11:.1f} GPa")
-    print(f"C12 = {C12:.1f} GPa")
-    print(f"C44 = {C44:.1f} GPa")
+    # 输出结果
+    print(f"C11 = {results['elastic_constants']['C11']:.1f} GPa")
+    print(f"C12 = {results['elastic_constants']['C12']:.1f} GPa")
+    print(f"C44 = {results['elastic_constants']['C44']:.1f} GPa")
 
 获取帮助
 ========
@@ -135,3 +124,10 @@ ThermoElasticSim 文档
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+参考文献
+========
+
+.. bibliography:: references.bib
+   :style: unsrt
+   :all:
