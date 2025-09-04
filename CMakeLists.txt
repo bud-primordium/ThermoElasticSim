@@ -8,6 +8,7 @@ pybind11_add_module(_cpp_core MODULE
     src/thermoelasticsim/_cpp/bindings/bind_lennard_jones.cpp
     src/thermoelasticsim/_cpp/bindings/bind_eam_al1.cpp
     src/thermoelasticsim/_cpp/bindings/bind_eam_cu1.cpp
+    src/thermoelasticsim/_cpp/bindings/bind_tersoff_c1988.cpp
     src/thermoelasticsim/_cpp/bindings/bind_stress_calculator.cpp
     src/thermoelasticsim/_cpp/bindings/bind_nose_hoover.cpp
     src/thermoelasticsim/_cpp/bindings/bind_nose_hoover_chain.cpp
@@ -15,6 +16,7 @@ pybind11_add_module(_cpp_core MODULE
     src/thermoelasticsim/_cpp/lennard_jones.cpp
     src/thermoelasticsim/_cpp/eam_al1.cpp
     src/thermoelasticsim/_cpp/eam_cu1.cpp
+    src/thermoelasticsim/_cpp/tersoff_c1988.cpp
     src/thermoelasticsim/_cpp/nose_hoover.cpp
     src/thermoelasticsim/_cpp/nose_hoover_chain.cpp
     src/thermoelasticsim/_cpp/stress_calculator.cpp

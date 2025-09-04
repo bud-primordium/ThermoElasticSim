@@ -6,6 +6,7 @@ namespace py = pybind11;
 void bind_lennard_jones(py::module_ &m);
 void bind_eam_al1(py::module_ &m);
 void bind_eam_cu1(py::module_ &m);
+void bind_tersoff_c1988(py::module_ &m);
 void bind_stress_calculator(py::module_ &m);
 void bind_nose_hoover(py::module_ &m);
 void bind_nose_hoover_chain(py::module_ &m);
@@ -18,6 +19,7 @@ PYBIND11_MODULE(_cpp_core, m) {
     bind_lennard_jones(m);
     bind_eam_al1(m);
     bind_eam_cu1(m);
+    bind_tersoff_c1988(m);
 
     // 绑定计算工具模块
     bind_stress_calculator(m);
