@@ -5,7 +5,7 @@ ThermoElasticSim - EAM 势模块
 .. moduleauthor:: Gilbert Young
 
 该模块实现了嵌入式原子方法 (Embedded Atom Method, EAM) 势，
-特别是基于 Mendelev et al. (2008) 参数化的铝 (Al) 势。
+特别是基于 Mendelev et al. (2008) 参数化的铝 (Al) 和铜 (Cu) 势。
 
 EAM势将系统的总能量表示为对势项和嵌入能的总和。每个原子的嵌入能
 取决于其所处位置的局部电子密度，而局部电子密度则由周围原子贡献的电子密度叠加而成。
@@ -35,11 +35,10 @@ References
 - Daw, M. S., & Baskes, M. I. (1984). Embedded-atom method: Derivation and application
   to impurities, surfaces, and other defects in metals. Phys. Rev. B 29, 6443.
   doi:10.1103/PhysRevB.29.6443
-- Daw, M. S., & Baskes, M. I. (1986). Semiempirical, quantum mechanical calculation of
-  hydrogen embrittlement in metals. Phys. Rev. B 33, 7983. doi:10.1103/PhysRevB.33.7983
-- Mendelev, M. I., Srolovitz, D. J., Ackland, G. J., & Asta, M. (2008). Development of
-  new interatomic potentials for the Al–Mg system. Journal of Materials Research,
-  23(10), 2707–2721. (DOI 请确认)
+- Mendelev, M. I., Kramer, M. J., Becker, C. A., & Asta, M. (2008). Analysis of
+  semi-empirical interatomic potentials appropriate for simulation of crystalline and
+  liquid Al and Cu. Philosophical Magazine, 88(12), 1723–1750.
+  doi:10.1080/14786430802206482
 
 Classes:
     EAMAl1Potential: 铝的EAM势能实现。
@@ -60,7 +59,9 @@ logger = logging.getLogger(__name__)
 
 
 class EAMAl1Potential(Potential):
-    """铝的嵌入式原子方法 (EAM) 势实现（Mendelev Al–Mg 族参数化）。
+    """铝的嵌入式原子方法 (EAM) 势实现。
+
+    基于 Mendelev et al. (2008) Phil. Mag. 88(12) 的Al参数化。
 
     Parameters
     ----------

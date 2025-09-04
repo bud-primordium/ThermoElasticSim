@@ -71,10 +71,9 @@ class Barostat:
 class ParrinelloRahmanHooverBarostat(Barostat):
     r"""Parrinello–Rahman–Hoover 恒压器（已弃用）
 
-    Deprecated
-    ---------
-    该旧架构恒压器已弃用；请使用新架构中的
-    :class:`thermoelasticsim.md.propagators.MTKBarostatPropagator`。
+    .. deprecated:: 4.0
+       该旧架构恒压器已弃用；请使用新架构中的
+       :class:`thermoelasticsim.md.propagators.MTKBarostatPropagator`。
 
     Parameters
     ----------
@@ -242,10 +241,9 @@ class ParrinelloRahmanHooverBarostat(Barostat):
 class BerendsenBarostat(Barostat):
     r"""Berendsen 恒压器（已弃用）
 
-    Deprecated
-    ---------
-    该旧架构恒压器已弃用；请使用新架构中的
-    :class:`thermoelasticsim.md.propagators.MTKBarostatPropagator`。
+    .. deprecated:: 4.0
+       该旧架构恒压器已弃用；请使用新架构中的
+       :class:`thermoelasticsim.md.propagators.MTKBarostatPropagator`。
 
     Parameters
     ----------
@@ -299,10 +297,9 @@ class BerendsenBarostat(Barostat):
 class AndersenBarostat(Barostat):
     r"""Andersen 恒压器（已弃用）
 
-    Deprecated
-    ---------
-    该旧架构恒压器已弃用；请使用新架构中的
-    :class:`thermoelasticsim.md.propagators.MTKBarostatPropagator`。
+    .. deprecated:: 4.0
+       该旧架构恒压器已弃用；请使用新架构中的
+       :class:`thermoelasticsim.md.propagators.MTKBarostatPropagator`。
 
     Parameters
     ----------

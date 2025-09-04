@@ -716,13 +716,8 @@ class NoseHooverChainPropagator(Propagator):
     -----
     链式热浴变量自洽演化，时间可逆对称分解，保证正则系综采样质量。
 
-    References
-    ----------
-    .. [1] Martyna, G. J.; Klein, M. L.; Tuckerman, M. E. (1992).
-           Nosé–Hoover chains: The canonical ensemble via continuous dynamics.
-           The Journal of Chemical Physics, 97(4), 2635–2643. https://doi.org/10.1063/1.463940
-    .. [2] Yoshida, H. (1990). Construction of higher order symplectic integrators.
-           Physics Letters A, 150(5–7), 262–268. https://doi.org/10.1016/0375-9601(90)90092-3
+    参考文献：
+        Martyna et al., J. Chem. Phys. 97, 2635 (1992); Yoshida, Phys. Lett. A 150, 262 (1990).
     """
 
     def __init__(
@@ -1139,6 +1134,8 @@ def create_nve_propagators(potential):
 class LangevinThermostatPropagator(Propagator):
     r"""Langevin 动力学恒温器传播子（BBK 积分）
 
+    通过阻尼力和随机力模拟热浴作用，实现温度控制。
+
     Notes
     -----
     Langevin 运动方程：
@@ -1146,65 +1143,35 @@ class LangevinThermostatPropagator(Propagator):
     .. math::
         m_i \frac{d^2\mathbf{r}_i}{dt^2} = \mathbf{F}_i(\mathbf{r}) - \gamma m_i \frac{d\mathbf{r}_i}{dt} + \mathbf{R}_i(t)
 
-    符号说明：
+    其中：
 
-    :math:`\mathbf{F}_i(\mathbf{r})`
-        保守力
+    - :math:`\mathbf{F}_i(\mathbf{r})` - 保守力
+    - :math:`\gamma` - 摩擦系数（friction coefficient）
+    - :math:`\mathbf{R}_i(t)` - 随机力，满足涨落–耗散定理
 
-    :math:`\gamma`
-        摩擦系数（friction coefficient）
+    BBK 积分常数：
 
-    :math:`\mathbf{R}_i(t)`
-        随机力，满足涨落–耗散定理
+    - :math:`c_1 = \exp(-\gamma\,\Delta t)` - 速度阻尼因子
+    - :math:`\sigma = \sqrt{k_B T\,(1-c_1^2)/m}` - 随机力标准差
 
-    BBK 常数：
-
-    :math:`c_1`
-        :math:`\exp(-\gamma\,\Delta t)`
-
-    :math:`\sigma`
-        :math:`\sqrt{k_B T\,(1-c_1^2)/m}`
-
-    References
-    ----------
-    Brünger, A.; Brooks, C. L.; Karplus, M. (1984). Stochastic boundary conditions
-    for molecular dynamics simulations of ST2 water. Chemical Physics Letters, 105(5), 495–500.
-    https://doi.org/10.1016/0009-2614(84)80098-6
+    参考文献：
+        Brünger, Brooks & Karplus, Chem. Phys. Lett. 105, 495 (1984).
     """
 
     def __init__(self, target_temperature: float, friction: float = 1.0):
-        r"""初始化 Langevin 恒温器
+        r"""初始化 Langevin 恒温器。
 
         Parameters
         ----------
         target_temperature : float
-            目标温度 (K)，必须为正数
+            目标温度 (K)，必须为正数。
         friction : float, optional
-            摩擦系数 :math:`\gamma` (ps⁻¹)，默认值 1.0 ps⁻¹。
-
-            大值
-                强耦合，快速温度控制，动力学扰动较大
-
-            小值
-                弱耦合，温度控制慢，动力学保持较好
+            摩擦系数 gamma (ps⁻¹)，默认值 1.0 ps⁻¹。
 
         Raises
         ------
         ValueError
-            如果target_temperature或friction为非正数
-
-        Notes
-        -----
-        摩擦系数相关：
-
-        :math:`\gamma`
-            系统与热浴的耦合强度；可理解为背景溶剂的粘性效应
-
-        :code:`damp`（LAMMPS）
-            :math:`\mathrm{damp} = 1/\gamma`
-
-        :math:`\tau_{\mathrm{damp}}`
-            阻尼时间，:math:`\tau_{\mathrm{damp}} = 1/\gamma`
+            如果 target_temperature 或 friction 为非正数。
         """
         if target_temperature <= 0:
             raise ValueError(f"目标温度必须为正数，得到 {target_temperature} K")
@@ -1227,43 +1194,23 @@ class LangevinThermostatPropagator(Propagator):
         )
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
-        r"""执行 Langevin 恒温器传播（BBK 速度更新）
-
-        仅处理 Langevin 的速度更新部分（在标准速度-Verlet后附加摩擦与随机力）。
-
-        BBK 核心常数：
-
-        :math:`c_1 = \exp(-\gamma\,\Delta t)`,
-        :math:`\sigma = \sqrt{k_B T\,(1-c_1^2)/m}`
-
-        速度更新：
-
-        .. math::
-            \mathbf{v}(t+\Delta t) = c_1\,\mathbf{v}_{\mathrm{det}}(t+\Delta t) + \sigma\,\boldsymbol{\xi}
+        r"""执行 Langevin 恒温器传播（BBK 速度更新）。
 
         Parameters
         ----------
         cell : Cell
-            晶胞对象，将修改其中所有原子的速度
+            晶胞对象，将修改其中所有原子的速度。
         dt : float
-            时间步长 (fs)
+            时间步长 (fs)。
         **kwargs : Any
-            额外参数，当前版本未使用
-
-        Notes
-        -----
-        步骤概述：
-
-        1. 计算 :math:`c_1, \sigma`（见上式）
-        2. 为每个原子生成独立的高斯随机向量 :math:`\boldsymbol{\xi}`
-        3. 按上式更新 :math:`\mathbf{v}(t+\Delta t)`（满足涨落–耗散定理）
+            额外参数，当前版本未使用。
 
         Raises
         ------
         ValueError
-            如果dt <= 0
+            如果 dt <= 0。
         RuntimeError
-            如果温度计算或随机数生成失败
+            如果温度计算或随机数生成失败。
         """
         if dt <= 0:
             raise ValueError(f"时间步长必须为正数，得到 dt={dt} fs")

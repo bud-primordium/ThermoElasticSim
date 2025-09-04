@@ -267,10 +267,9 @@ class AndersenThermostat(Thermostat):
 class NoseHooverThermostat(Thermostat):
     r"""Nosé–Hoover 恒温器（已弃用）
 
-    Deprecated
-    ---------
-    该旧架构实现已弃用；请使用新架构中的
-    :class:`thermoelasticsim.md.propagators.NoseHooverChainPropagator`。
+    .. deprecated:: 4.0
+       该旧架构实现已弃用；请使用新架构中的
+       :class:`thermoelasticsim.md.propagators.NoseHooverChainPropagator`。
 
     Notes
     -----
@@ -410,10 +409,9 @@ class NoseHooverThermostat(Thermostat):
 class NoseHooverChainThermostat(Thermostat):
     r"""Nosé–Hoover 链恒温器（已弃用）
 
-    Deprecated
-    ---------
-    该旧架构实现已弃用；请使用新架构中的
-    :class:`thermoelasticsim.md.propagators.NoseHooverChainPropagator`。
+    .. deprecated:: 4.0
+       该旧架构实现已弃用；请使用新架构中的
+       :class:`thermoelasticsim.md.propagators.NoseHooverChainPropagator`。
 
     Notes
     -----

@@ -47,7 +47,7 @@ class Potential(abc.ABC):
 
         Notes
         -----
-        - 需就地写入 :code:`cell.atoms[i].force` （单位 eV/Å）。
+        - 需就地写入 :py:attr:`~thermoelasticsim.core.structure.Atom.force` （单位 eV/Å）。
         - 抽象方法，必须由子类实现。
         """
         raise NotImplementedError

@@ -10,8 +10,8 @@
 及一些常用的单位转换常量
 """
 
+import concurrent.futures as _cf
 import logging
-from concurrent.futures import ThreadPoolExecutor
 
 import h5py
 import numpy as np
@@ -19,9 +19,14 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # 保持原有的单位转换常量
-AMU_TO_EVFSA2 = 104.3968445
-EV_TO_GPA = 160.2176634
-KB_IN_EV = 8.617332385e-5
+AMU_TO_EVFSA2: float = 104.3968445
+"""原子质量单位 (amu) 转换为 eV·fs²/Å² 的系数。"""
+
+EV_TO_GPA: float = 160.2176634
+"""应力单位换算系数：eV/Å³ → GPa。"""
+
+KB_IN_EV: float = 8.617332385e-5
+"""玻尔兹曼常数 kB（单位 eV/K）。"""
 
 
 class TensorConverter:
@@ -138,7 +143,7 @@ class DataCollector:
         self.save_interval = save_interval
         self.use_threading = use_threading
         self.output_file = output_file
-        self._executor = ThreadPoolExecutor() if use_threading else None
+        self._executor = _cf.ThreadPoolExecutor() if use_threading else None
 
         # 初始化统计数据
         self.stats = {
