@@ -26,6 +26,8 @@ MaterialParameters
 
 from dataclasses import dataclass
 
+from thermoelasticsim.utils.utils import AMU_TO_GRAM, ANGSTROM_TO_CM
+
 
 @dataclass(frozen=True)
 class MaterialParameters:
@@ -183,6 +185,43 @@ class MaterialParameters:
         K = self.bulk_modulus
         G = self.shear_modulus
         return (3 * K - 2 * G) / (6 * K + 2 * G)
+
+    @property
+    def theoretical_density(self) -> float:
+        """
+        基于晶体学参数估算材料密度（g/cm³）。
+
+        对立方晶系/金刚石结构，使用常规晶胞的原子数与晶格常数估算：
+
+        ρ = (N_atoms × m_atom) / V_cell
+
+        其中 m_atom = mass_amu × 1.66053906660e-24 g，
+        V_cell = (a[Å] × 1e-8 cm/Å)^3。
+
+        Returns
+        -------
+        float
+            理论密度（g/cm³）。
+
+        Notes
+        -----
+        - 仅在结构为 "fcc" 或 "diamond" 时使用该公式；
+          其他结构返回 NotImplementedError。
+        - 结果为近似理论值，忽略温度导致的体膨胀与缺陷等因素。
+        """
+        structure = self.structure.lower()
+        if structure == "fcc":
+            n_atoms = 4  # 常规立方晶胞
+        elif structure == "diamond":
+            n_atoms = 8  # 常规立方晶胞
+        else:
+            raise NotImplementedError(f"暂不支持结构{self.structure}的理论密度估算")
+
+        mass_cell_g = self.mass_amu * n_atoms * AMU_TO_GRAM
+        a_cm = self.lattice_constant * ANGSTROM_TO_CM
+        vol_cell_cm3 = a_cm**3
+        rho = mass_cell_g / vol_cell_cm3
+        return float(rho)
 
 
 # ==================== 预定义材料参数 ====================

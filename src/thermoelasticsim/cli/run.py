@@ -21,6 +21,7 @@ from thermoelasticsim.elastic.benchmark import (
     _setup_logging as _setup_benchmark_logging,
 )
 
+from .pipelines.elastic_wave import run_elastic_wave_pipeline
 from .pipelines.finite_temp import run_finite_temp_pipeline
 from .pipelines.npt import run_npt_pipeline
 from .pipelines.nve import run_nve_pipeline
@@ -116,6 +117,19 @@ def main(argv: list[str] | None = None) -> int:
         run_nvt_pipeline(cfg, outdir, material_symbol, potential_kind)
     elif scenario in ("npt",):
         run_npt_pipeline(cfg, outdir, material_symbol, potential_kind)
+    elif scenario in ("elastic_wave", "wave", "acoustic"):
+        # 写入更完整的有效配置，包含 wave.*
+        try:
+            import yaml
+
+            effective["wave"] = cfg.get("wave", {})
+            with open(
+                os.path.join(outdir, "effective_config.yaml"), "w", encoding="utf-8"
+            ) as f:
+                yaml.safe_dump(effective, f, allow_unicode=True, sort_keys=True)
+        except Exception:
+            pass
+        run_elastic_wave_pipeline(cfg, outdir, material_symbol, potential_kind)
     else:
         raise ValueError(f"未知场景类型 scenario: {scenario}")
 

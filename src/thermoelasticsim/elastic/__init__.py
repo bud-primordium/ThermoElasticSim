@@ -28,6 +28,7 @@ from .materials import (
     get_material_by_symbol,
 )
 from .mechanics import StrainCalculator, StressCalculator
+from .wave import ElasticWaveAnalyzer
 
 __all__ = [
     # 形变与力学
@@ -57,4 +58,6 @@ __all__ = [
     "calculate_c44_lammps_shear",
     "run_zero_temp_benchmark",
     "run_size_sweep",
+    # 弹性波（阶段A）
+    "ElasticWaveAnalyzer",
 ]

@@ -28,6 +28,12 @@ EV_TO_GPA: float = 160.2176634
 KB_IN_EV: float = 8.617332385e-5
 """玻尔兹曼常数 kB（单位 eV/K）。"""
 
+AMU_TO_GRAM: float = 1.66053904020e-24
+"""原子质量单位 amu → 克 g 的换算系数。"""
+
+ANGSTROM_TO_CM: float = 1.0e-8
+"""长度单位换算系数：Å → cm。"""
+
 
 class TensorConverter:
     """张量转换工具类，支持应力和应变张量的 Voigt 与 3x3 矩阵表示之间的相互转换。"""

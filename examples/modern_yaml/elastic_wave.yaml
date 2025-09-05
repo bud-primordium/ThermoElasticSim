@@ -1,0 +1,49 @@
+## 弹性波解析计算（阶段A）
+##
+## 本场景基于已有弹性常数（C11/C12/C44）与密度，解析计算声学波速，
+## 并绘制各向异性极图（可选）。
+##
+## 与其他场景的区别：
+## - scenario: elastic_wave  → 解析波速（无需MD），用于理论验证与教学演示
+## - scenario: zero_temp     → 零温弹性常数（形变-应力拟合），用于生成/验证Cij
+## - scenario: finite_temp   → 有限温下弹性常数（NPT/NVT采样），用于温度效应演示
+## - scenario: relax         → 结构弛豫（能量最小化）
+## - scenario: nve/nvt/npt   → 纯动力学（守恒/恒温/恒压），侧重轨迹与热力学量
+##
+## 使用建议：
+## 1) 先用 zero_temp/finite_temp 得到可信Cij；
+## 2) 再用 elastic_wave 计算 v_L/v_T 并绘图；
+## 3) 如需波传播动画，则进入后续阶段B（MD波源+提取）。
+
+scenario: elastic_wave
+
+# 材料与结构（Cij 从材料库读取）
+material: { symbol: Al, structure: fcc }
+
+# 波速计算参数
+wave:
+  # 密度（单位 g/cm^3）。
+  # - 若省略，将从材料理论密度推导（基于 amu、晶格常数与结构）；
+  # - 亦可显式设置覆盖（如 2.70 对Al）。
+  density: 2.70
+
+  # 可视化配置（可选）
+  visualization:
+    enabled: true          # 是否生成方向极图
+    # 支持单个平面或多个平面（默认演示三个高对称平面）：
+    planes: ["001", "110", "111"]  # 如设置此项将忽略 plane
+    # plane: "001"           # 单平面示例（注释掉上行以启用本行）
+    n_angles: 360          # 角度采样数（越大越平滑，耗时略增）
+    dpi: 300               # 保存图像DPI
+    output: analytic_anisotropy_polar.png  # 单平面时有效；多平面时自动命名为 analytic_anisotropy_{plane}.png
+
+    # 3D 速度面（plotly生成交互HTML；PNG 可选导出）
+    surface3d:
+      enabled: true
+      n_theta: 60
+      n_phi: 120
+      export_png: true   # 设为 true 则额外导出 PNG（三张）
+      # 将一次性输出三个HTML：analytic_velocity_surface_L/Tmin/Tmax.html
+
+run:
+  name: elastic_wave_demo

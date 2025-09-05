@@ -306,3 +306,16 @@ class TestMaterialProperties:
             cu.literature_elastic_constants["C44"]
             > al.literature_elastic_constants["C44"]
         )
+
+
+class TestMaterialTheoreticalDensity:
+    """测试理论密度估算属性。"""
+
+    def test_fcc_al_cu_density(self):
+        # 立方晶胞估算，应与常识接近（允许一定误差）
+        assert ALUMINUM_FCC.theoretical_density == pytest.approx(2.70, rel=0.05)
+        assert COPPER_FCC.theoretical_density == pytest.approx(8.96, rel=0.05)
+
+    def test_diamond_c_density(self):
+        # 金刚石结构（8原子/常规立方晶胞）
+        assert CARBON_DIAMOND.theoretical_density == pytest.approx(3.51, rel=0.05)
