@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-零温弹性常数基准工作流（反哺自 examples/zero_temp_al_benchmark.py）
+零温弹性常数基准工作流
 
 目标：
 1. 将示例脚本中经过验证的计算流程沉淀为可复用 API
@@ -679,6 +679,11 @@ def run_zero_temp_benchmark(
     save_json: bool = True,
     precision: bool = False,
     log_level: int | None = None,
+    *,
+    optimizer_type: str | None = None,
+    uniaxial_strains: list[float] | tuple[float, ...] | None = None,
+    shear_strains: list[float] | tuple[float, ...] | None = None,
+    optimizer_params: dict[str, Any] | None = None,
 ) -> dict:
     """运行通用零温弹性基准（结构自适应）。
 
@@ -706,7 +711,12 @@ def run_zero_temp_benchmark(
     )
 
     # 弛豫器
-    cfg = BenchmarkConfig(supercell_size=supercell_size, precision_mode=precision)
+    cfg = BenchmarkConfig(
+        supercell_size=supercell_size,
+        precision_mode=precision,
+        optimizer_type=(optimizer_type or "L-BFGS"),
+        optimizer_params=optimizer_params,
+    )
     relaxer = cfg.build_relaxer()
 
     # 不做额外基态强化弛豫：遵循默认流程，避免多余耗时与日志噪声
@@ -728,19 +738,29 @@ def run_zero_temp_benchmark(
         pass
     if libname == "eam_cu1":
         # 为避免图意义混淆，Cu 统一采用传统单轴法（斜率即为 C11/C12）
-        if precision:
+        if uniaxial_strains is not None:
             c11_c12 = calculate_c11_c12_traditional(
                 cell,
                 potential,
                 relaxer,
                 mat,
-                strain_points=list(cfg.small_linear_strains),
+                strain_points=list(uniaxial_strains),
                 do_internal_relax=True,
             )
         else:
-            c11_c12 = calculate_c11_c12_traditional(
-                cell, potential, relaxer, mat, strain_points=None
-            )
+            if precision:
+                c11_c12 = calculate_c11_c12_traditional(
+                    cell,
+                    potential,
+                    relaxer,
+                    mat,
+                    strain_points=list(cfg.small_linear_strains),
+                    do_internal_relax=True,
+                )
+            else:
+                c11_c12 = calculate_c11_c12_traditional(
+                    cell, potential, relaxer, mat, strain_points=None
+                )
     else:
         if precision:
             c11_c12 = calculate_c11_c12_traditional(
@@ -757,7 +777,11 @@ def run_zero_temp_benchmark(
             )
 
     # 计算C44
-    c44_strains = cfg.small_shear_strains if precision else cfg.shear_strains
+    c44_strains = (
+        list(shear_strains)
+        if shear_strains is not None
+        else (cfg.small_shear_strains if precision else cfg.shear_strains)
+    )
     c44 = calculate_c44_lammps_shear(
         cell, potential, relaxer, mat, strain_points=c44_strains
     )

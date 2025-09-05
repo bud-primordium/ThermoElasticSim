@@ -22,6 +22,7 @@ ThermoElasticSim 文档
    :caption: 快速入门
 
    quickstart
+   yaml_scenarios
    conventions
 
 .. toctree::

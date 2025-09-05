@@ -1,0 +1,47 @@
+## 零温弹性常数计算（完整流程）
+## - 注释可切换材料、尺寸与应变点配置
+## - 输出与最新 benchmark 一致：图/CSV/JSON + 根目录合并CSV
+
+scenario: zero_temp
+
+# 选择材料与结构（取消注释其中一组）
+material: { symbol: Al, structure: fcc }
+# material: { symbol: Cu, structure: fcc }
+# material: { symbol: C,  structure: diamond }
+
+# 选择势函数（与材料匹配）
+potential: EAM_Al1      # 可选: EAM_Cu1, Tersoff_C1988
+
+run:
+  name: zero_temp_elastic_demo
+
+rng:
+  global_seed: 42
+
+elastic:
+  # 尺寸扫描（多选其一）：
+  sizes: [[2,2,2],[3,3,3],[4,4,4]]   # 多尺寸扫描
+  # supercell: [3,3,3]               # 单一尺寸
+
+  # 形变点配置（两种方式二选一）：
+  # A) 显式给定点集（包含0即代表包含基态点）：
+  # uniaxial_strains: [-0.003,-0.002,-0.001,-0.0005,0.0,0.0005,0.001,0.002,0.003]
+  # shear_strains:    [-0.004,-0.003,-0.002,-0.0015,-0.001,-0.0005,0.0,0.0005,0.001,0.0015,0.002,0.003,0.004]
+  # B) 由幅值与点数自动生成（对称分布）：
+  strain_amplitude: 0.003
+  num_points: 9
+  include_zero: true
+  shear_amplitude: 0.004
+  shear_num_points: 13
+  shear_include_zero: true
+
+  # 优化器可选覆盖（不写即用默认/精度模式）
+  # optimizer:
+  #   type: L-BFGS   # 可选: L-BFGS, BFGS, GD（完全弛豫仍自动使用L-BFGS）
+  #   params:
+  #     ftol: 1e-9
+  #     gtol: 1e-7
+  #     maxiter: 200000
+
+# 精度模式（更小形变，耗时更久）
+precision: false

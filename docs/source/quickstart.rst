@@ -47,7 +47,6 @@
     INFO:thermoelasticsim.elastic.deformation_method.zero_temp:等比例晶格弛豫成功
     INFO:thermoelasticsim.elastic.benchmark:基态应力(GPa): [-0.000003, 0.002750, 0.002750; 0.002750, -0.000003, 0.002750; 0.002750, 0.002750, -0.000003]
     INFO:thermoelasticsim.elastic.benchmark:单轴应变 εxx=-3.000000e-03 → σxx=-0.300064 GPa, σyy=-0.181577 GPa（收敛=True）
-    INFO: 字体配置成功，优先使用: Arial Unicode MS
     INFO:thermoelasticsim.elastic.benchmark:单轴应变 εxx=-2.000000e-03 → σxx=-0.198274 GPa, σyy=-0.120700 GPa（收敛=True）
     INFO:thermoelasticsim.elastic.benchmark:单轴应变 εxx=-1.000000e-03 → σxx=-0.098262 GPa, σyy=-0.060181 GPa（收敛=True）
     INFO:thermoelasticsim.elastic.benchmark:单轴应变 εxx=-5.000000e-04 → σxx=-0.048915 GPa, σyy=-0.030050 GPa（收敛=True）
@@ -112,7 +111,8 @@ A: 一般建议：
 **Q: 计算需要多长时间？**
 
 A: 在标准桌面CPU上：
-零温Al弹性常数计算（:code:`examples/zero_temp_al_benchmark.py`）
+零温Al弹性常数计算（:code:`examples/legacy_py/zero_temp_al_benchmark.py`）
+
 - (2, 2, 2) 超胞：约 1.3 秒
 - (3, 3, 3) 超胞：约 7.8 秒
 - (4, 4, 4) 超胞：约 15.3 秒

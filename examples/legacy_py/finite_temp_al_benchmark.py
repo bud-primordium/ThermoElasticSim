@@ -42,6 +42,7 @@ SRC = os.path.join(ROOT, "..", "src")
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
+from thermoelasticsim.core.config import ConfigManager
 from thermoelasticsim.core.structure import Atom, Cell
 from thermoelasticsim.elastic.deformation_method.zero_temp import StructureRelaxer
 from thermoelasticsim.elastic.mechanics import StressCalculator
@@ -55,11 +56,12 @@ from thermoelasticsim.utils.utils import EV_TO_GPA, KB_IN_EV
 # ============================
 
 
-def setup_logging(tag: str) -> tuple[str, str]:
+def setup_logging(tag: str, run_dir: str | None = None) -> tuple[str, str]:
     base_logs_dir = os.path.join(os.path.dirname(__file__), "logs")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base_logs_dir, f"{tag}_{timestamp}")
-    os.makedirs(run_dir, exist_ok=True)
+    if run_dir is None:
+        run_dir = os.path.join(base_logs_dir, f"{tag}_{timestamp}")
+        os.makedirs(run_dir, exist_ok=True)
 
     log_filepath = os.path.join(run_dir, f"{tag}_{timestamp}.log")
 
@@ -152,13 +154,18 @@ def zero_temp_relax(cell: Cell, pot: EAMAl1Potential, logger: logging.Logger) ->
 
 
 def run_langevin_preheat(
-    cell: Cell, pot: EAMAl1Potential, T: float, logger: logging.Logger
+    cell: Cell,
+    pot: EAMAl1Potential,
+    T: float,
+    logger: logging.Logger,
+    *,
+    dt: float = 0.5,
+    steps: int = 10000,
+    friction: float = 3.0,
 ) -> dict[str, list[float]]:
     from thermoelasticsim.md.schemes import LangevinNVTScheme
 
-    dt = 0.5  # fs
-    gamma = 3.0  # ps^-1 强耦合快速升温
-    steps = 10000  # 5 ps
+    gamma = friction  # ps^-1 强耦合快速升温
 
     initialize_maxwell(cell, 20.0)
     scheme = LangevinNVTScheme(target_temperature=T, friction=gamma)
@@ -392,7 +399,16 @@ def fit_elastic_constant(
 
 
 def main():
-    log_path, run_dir = setup_logging("finite_temp_elastic_mtk_complete")
+    # 配置与种子
+    cfg = ConfigManager()
+    cfg.set_global_seed()
+
+    # 输出目录按配置生成
+    run_name = cfg.get("run.name", "finite_temp_elastic_mtk_complete")
+    run_dir = cfg.make_output_dir(run_name)
+    cfg.snapshot(run_dir)
+
+    log_path, run_dir = setup_logging(run_name, run_dir)
     logger = logging.getLogger(__name__)
     logger.info("=" * 88)
     logger.info("有限温弹性常数 - MTK-NPT 完整流程 (C11/C12/C44)")
@@ -400,8 +416,8 @@ def main():
     logger.info(f"输出: {run_dir}")
     logger.info("=" * 88)
 
-    target_T = 300.0  # K
-    target_P = 0.0  # GPa (常压)
+    target_T = float(cfg.get("md.temperature", 300.0))  # K
+    target_P = float(cfg.get("md.pressure", 0.0))  # GPa (常压)
 
     # 1) 构建体系与零温基态
     cell = create_aluminum_fcc_4x4x4()
@@ -412,7 +428,17 @@ def main():
     # base_cell = cell.copy()  # 备份原始晶胞（暂未使用）
 
     # 2) 预热 + MTK-NPT 预平衡（带压力演化图）
-    _ = run_langevin_preheat(cell, pot, target_T, logger)
+    pre_dt = float(cfg.get("finite_temp.preheat.dt", 0.5))
+    pre_steps = int(cfg.get("finite_temp.preheat.steps", 10000))
+    pre_gamma = float(
+        cfg.get(
+            "finite_temp.preheat.friction",
+            cfg.get("thermostats.langevin.friction", 3.0),
+        )
+    )
+    _ = run_langevin_preheat(
+        cell, pot, target_T, logger, dt=pre_dt, steps=pre_steps, friction=pre_gamma
+    )
     npt_stats = run_mtk_npt(
         cell,
         pot,
@@ -420,12 +446,18 @@ def main():
         target_P,
         logger,
         run_dir,
-        dt=0.15,
-        tdamp=50.0,
-        pdamp=150.0,
-        steps=20000,
-        sample_every=50,
-        ma_window_ps=0.5,
+        dt=float(cfg.get("finite_temp.npt.dt", 0.15)),
+        tdamp=float(
+            cfg.get(
+                "finite_temp.npt.tdamp", cfg.get("thermostats.nose_hoover.tdamp", 50.0)
+            )
+        ),
+        pdamp=float(
+            cfg.get("finite_temp.npt.pdamp", cfg.get("barostats.mtk.pdamp", 150.0))
+        ),
+        steps=int(cfg.get("finite_temp.npt.steps", 20000)),
+        sample_every=int(cfg.get("finite_temp.npt.sample_every", 50)),
+        ma_window_ps=float(cfg.get("finite_temp.npt.ma_window_ps", 0.5)),
     )
     logger.info(
         f"NPT 结果: <P>={npt_stats['avg_pressure_GPa']:+.3f}±{npt_stats['std_pressure_GPa']:.3f} GPa, V={npt_stats['final_volume']:.2f} Å³"
@@ -490,11 +522,16 @@ def main():
                 dcell,
                 pot,
                 target_T,
-                dt=0.5,
-                tdamp=50.0,
-                pre_steps=6000,
-                prod_steps=20000,
-                sample_every=50,
+                dt=float(cfg.get("finite_temp.nhc.dt", 0.5)),
+                tdamp=float(
+                    cfg.get(
+                        "finite_temp.nhc.tdamp",
+                        cfg.get("thermostats.nose_hoover.tdamp", 50.0),
+                    )
+                ),
+                pre_steps=int(cfg.get("finite_temp.nhc.pre_steps", 6000)),
+                prod_steps=int(cfg.get("finite_temp.nhc.prod_steps", 20000)),
+                sample_every=int(cfg.get("finite_temp.nhc.sample_every", 50)),
             )
             if not stat.get("success", False):
                 logger.error(f"{name} {m:+.2%} 采样失败")

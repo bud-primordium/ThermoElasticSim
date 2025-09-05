@@ -1,0 +1,25 @@
+## NVE 场景（能量守恒演示）
+## - 输出 thermo.csv（step, time_ps, T_K, KE_eV, PE_eV, E_eV）
+## - 生成 temperature_evolution.png 与 energy_evolution.png
+
+scenario: nve
+
+# 材料与结构
+material: { symbol: Al, structure: fcc }
+
+# 势函数
+potential: EAM_Al1
+
+run:
+  name: nve_demo
+
+# 晶胞尺寸
+supercell: [3,3,3]
+
+md:
+  temperature: 300.0   # 初始Maxwell抽样温度
+
+nve:
+  dt: 0.5              # 时间步长 (fs)
+  steps: 5000          # 积分步数
+  sample_every: 50     # 采样间隔

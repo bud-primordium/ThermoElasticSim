@@ -1,0 +1,22 @@
+## NVT 场景（Andersen 随机碰撞）
+## - 通过碰撞频率控制与热浴的耦合强度
+
+scenario: nvt
+
+material: { symbol: Al, structure: fcc }
+potential: EAM_Al1
+
+run:
+  name: nvt_andersen_demo
+
+supercell: [3,3,3]
+
+md:
+  temperature: 300.0
+
+nvt:
+  type: andersen
+  dt: 0.5
+  steps: 8000
+  sample_every: 50
+  collision_frequency: 0.02   # fs^-1 碰撞频率

@@ -1,0 +1,19 @@
+scenario: finite_temp
+material: { symbol: Al, structure: fcc }
+potential: EAM_Al1
+run:
+  name: finite_temp_small
+supercell: [3,3,3]
+md:
+  temperature: 300.0
+  pressure: 0.0
+finite_temp:
+  preheat: { dt: 0.5, steps: 1000, friction: 3.0 }
+  npt: { dt: 0.15, tdamp: 50.0, pdamp: 150.0, steps: 1000, sample_every: 50, ma_window_ps: 0.5, tchain: 3, pchain: 3 }
+  nhc: { dt: 0.5, tdamp: 50.0, pre_steps: 200, prod_steps: 500, sample_every: 50, tchain: 3, tloop: 1 }
+  # 较少应变点以加快测试
+  # 直接指定拟合用的应变点（示例用四个点以更稳定的斜率）
+  strains:
+    C11: [-0.004, -0.002, 0.002, 0.004]
+    C12: [-0.004, -0.002, 0.002, 0.004]
+    C44: [-0.004, -0.002, 0.002, 0.004]

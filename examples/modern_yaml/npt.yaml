@@ -1,0 +1,27 @@
+## NPT 场景（MTK 算法）
+## - 输出 pressure.csv 与 npt_pressure_evolution.png
+## - 打印阶段 T/P 近似到目标值
+
+scenario: npt
+
+material: { symbol: Al, structure: fcc }
+potential: EAM_Al1
+
+run:
+  name: npt_demo
+
+supercell: [2,2,2]
+
+md:
+  temperature: 300.0
+  pressure: 10.0 # GPa
+
+npt:
+  dt: 0.2
+  tdamp: 50.0
+  pdamp: 30.0
+  steps: 10000
+  sample_every: 100
+  ma_window_ps: 1.0
+  tchain: 3
+  pchain: 3

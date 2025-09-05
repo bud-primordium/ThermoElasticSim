@@ -1,0 +1,59 @@
+## 有限温弹性常数计算（MTK-NPT + NHC 生产）
+## - 预热（Langevin）→ NPT（MTK）→ NHC 生产拟合 C11/C12/C44
+## - 产物：npt_pressure_evolution.png、C11/C12/C44 拟合图、finite_temp_elastic_mtk_complete.json
+
+scenario: finite_temp
+
+# 材料与结构（取消注释切换）
+material: { symbol: Al, structure: fcc }
+# material: { symbol: Cu, structure: fcc }
+# material: { symbol: C,  structure: diamond }
+
+# 势函数（与材料匹配）
+potential: EAM_Al1      # 可选: EAM_Cu1, Tersoff_C1988
+
+run:
+  name: finite_temp_elastic_demo
+
+rng:
+  global_seed: 42
+
+# 晶胞尺寸
+supercell: [4,4,4]
+
+md:
+  temperature: 300.0
+  pressure: 0.0
+
+finite_temp:
+  # 预热（Langevin）
+  preheat:
+    dt: 0.5
+    steps: 10000
+    friction: 3.0   # ps^-1
+  # NPT 预平衡（MTK）
+  npt:
+    dt: 0.15
+    tdamp: 50.0
+    pdamp: 150.0
+    # 链长度（可选）
+    tchain: 3
+    pchain: 3
+    steps: 20000
+    sample_every: 50
+    ma_window_ps: 0.5
+  # NHC 生产采样
+  nhc:
+    dt: 0.5
+    tdamp: 50.0
+    # 链长度与Suzuki–Yoshida循环（可选）
+    tchain: 3
+    tloop: 1
+    pre_steps: 6000
+    prod_steps: 20000
+    sample_every: 50
+  # 可选：直接指定有限温拟合用的应变点（不指定则用默认±0.5%共8点）
+  # strains:
+  #   C11: [-0.005,-0.004,-0.003,-0.002,0.002,0.003,0.004,0.005]
+  #   C12: [-0.005,-0.004,-0.003,-0.002,0.002,0.003,0.004,0.005]
+  #   C44: [-0.005,-0.004,-0.003,-0.002,0.002,0.003,0.004,0.005]

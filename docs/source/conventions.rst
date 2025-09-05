@@ -7,7 +7,7 @@
 小应变线性化前提
 ================
 
-本软件采用 **小应变线性化**（非保体积）作为全局假设：
+本软件采用 **小应变线性化** （非保体积）作为全局假设：
 
 .. math::
    \mathbf{F} = \mathbf{I} + \boldsymbol{\varepsilon}
@@ -181,6 +181,7 @@ Voigt记号约定
 Cell对象
 --------
 :py:class:`~thermoelasticsim.core.structure.Cell`
+
 .. code-block:: python
 
     cell.lattice_vectors  # 3×3矩阵，行向量
@@ -191,6 +192,7 @@ Cell对象
 Atom对象
 --------
 :py:class:`~thermoelasticsim.core.structure.Atom`
+
 .. code-block:: python
 
     atom.position         # 3D向量（Å）

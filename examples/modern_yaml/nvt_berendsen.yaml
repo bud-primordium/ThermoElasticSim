@@ -1,0 +1,22 @@
+## NVT 场景（Berendsen 速度缩放）
+## - 简单易用，适合预热与快速靠拢目标温度
+
+scenario: nvt
+
+material: { symbol: Al, structure: fcc }
+potential: EAM_Al1
+
+run:
+  name: nvt_berendsen_demo
+
+supercell: [3,3,3]
+
+md:
+  temperature: 300.0
+
+nvt:
+  type: berendsen
+  dt: 0.5
+  steps: 8000
+  sample_every: 50
+  tau: 100.0          # fs 时间常数（越小耦合越强）

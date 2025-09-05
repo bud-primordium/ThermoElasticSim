@@ -1,0 +1,27 @@
+## 零温弛豫（单元教学示例）
+## - 只进行结构弛豫（不做弹性拟合/MD）
+## - 导出 relax_results.json（能量/体积/应力/晶格和坐标快照）
+## - 生成 E–V 与 E–s 曲线图（围绕最终晶格的等比例缩放）
+
+scenario: relax
+
+# 材料与结构（从下行取消注释切换不同材料）
+material: { symbol: Al, structure: fcc }
+# material: { symbol: Cu, structure: fcc }
+# material: { symbol: C,  structure: diamond }
+
+# 势函数（需与材料匹配）
+potential: EAM_Al1  # 可选: EAM_Cu1, Tersoff_C1988
+
+run:
+  name: relax_demo
+
+# 晶胞尺寸
+supercell: [3,3,3]
+
+# 弛豫模式：
+# - uniform: 等比例缩放晶格常数（保持分数坐标不变），速度快，适合高对称结构
+# - full   : 变胞 + 原子位置联合优化，鲁棒但更耗时
+# - auto   : 先尝试 uniform，不收敛时回退 full（默认推荐）
+relax:
+  mode: auto

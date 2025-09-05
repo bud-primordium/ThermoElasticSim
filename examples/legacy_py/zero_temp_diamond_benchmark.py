@@ -1,52 +1,53 @@
 #!/usr/bin/env python3
 """
-零温铜弹性常数基准测试 - 新组件版本
+零温金刚石（C, diamond）弹性常数基准测试 - 新组件版本（Tersoff C1988）
 
-使用重构后的统一组件进行Cu弹性常数计算，展示通用API在FCC材料上的复用。
-与铝示例保持输出/绘图风格一致，但使用铜的文献值与势函数。
+按铝示例的结构与日志风格实现完整端到端流程：
+- 使用 CrystallineStructureBuilder 生成 diamond 结构
+- 使用 CARBON_DIAMOND 文献常数
+- 使用 run_diamond_benchmark 工作流（内部采用 TersoffC1988Potential）
+- 提供尺寸扫描（2×2×2, 3×3×3, 4×4×4）与结果汇总/日志
 
-功能特点:
-- 复用 CrystallineStructureBuilder 生成FCC结构
-- 复用通用 run_zero_temp_benchmark 工作流
-- 使用 EAMCu1Potential 与 COPPER_FCC 文献常数
-- 提供尺寸扫描与汇总输出（2×2×2, 3×3×3, 4×4×4）
-
-.. moduleauthor:: Gilbert Young
-.. created:: 2025-08-24
-.. version:: 4.0.0
 """
 
+import json
 import logging
 import os
 import sys
 from datetime import datetime
 
-from thermoelasticsim.elastic import COPPER_FCC, run_zero_temp_benchmark
-from thermoelasticsim.potentials.eam import EAMCu1Potential
+from thermoelasticsim.core.config import ConfigManager
+from thermoelasticsim.elastic.benchmark import run_zero_temp_benchmark
+from thermoelasticsim.elastic.materials import CARBON_DIAMOND
+from thermoelasticsim.potentials.tersoff import TersoffC1988Potential
 
 
-def setup_logging(test_name: str = "cu_benchmark") -> str:
+def setup_logging(
+    test_name: str = "diamond_benchmark", run_dir: str | None = None
+) -> str:
     """设置日志系统并创建运行目录"""
     base_logs_dir = os.path.join(os.path.dirname(__file__), "logs")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base_logs_dir, f"{test_name}_{timestamp}")
-    os.makedirs(run_dir, exist_ok=True)
+    if run_dir is None:
+        run_dir = os.path.join(base_logs_dir, f"{test_name}_{timestamp}")
+        os.makedirs(run_dir, exist_ok=True)
 
     log_filename = f"{test_name}_{timestamp}.log"
     log_filepath = os.path.join(run_dir, log_filename)
 
+    # 清除现有handlers，保持与铝示例一致
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
     file_handler = logging.FileHandler(log_filepath, encoding="utf-8")
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
 
     console_handler = logging.StreamHandler(sys.stdout)
@@ -59,31 +60,35 @@ def setup_logging(test_name: str = "cu_benchmark") -> str:
     return run_dir
 
 
-def run_copper_benchmark_local(
-    supercell_size: tuple[int, int, int] = (3, 3, 3), output_dir: str | None = None
+def run_diamond_benchmark_local(
+    supercell_size: tuple[int, int, int] = (3, 3, 3),
+    output_dir: str | None = None,
+    precision: bool = False,
 ) -> dict:
-    """运行完整的铜弹性常数基准测试"""
+    """
+    运行完整的金刚石（C）弹性常数基准测试（Tersoff C1988）
+    """
     logger = logging.getLogger(__name__)
     logger.info("=" * 80)
-    logger.info("铜弹性常数基准测试 - 新组件版本")
+    logger.info("金刚石(C)弹性常数基准测试 - 新组件版本（Tersoff 1988）")
     nx, ny, nz = supercell_size
     logger.info(f"超胞尺寸: {nx}×{ny}×{nz}")
     logger.info("=" * 80)
 
     results = run_zero_temp_benchmark(
-        material_params=COPPER_FCC,
-        potential=EAMCu1Potential(),
+        material_params=CARBON_DIAMOND,
+        potential=TersoffC1988Potential(delta=0.0),
         supercell_size=supercell_size,
         output_dir=output_dir,
         save_json=True,
-        precision=True,
+        precision=precision,
     )
 
-    # 输出最终结果（与铝示例风格一致）
+    # 输出最终结果（与铝/铜示例风格一致）
+    mat = CARBON_DIAMOND
     logger.info("\n" + "=" * 60)
     logger.info("最终结果汇总")
     logger.info("=" * 60)
-    mat = COPPER_FCC
     logger.info("弹性常数 (GPa):")
     logger.info(f"  实际原子数: {results['total_atoms']}")
     logger.info(
@@ -125,32 +130,40 @@ def run_copper_benchmark_local(
 
 
 def main():
-    run_dir = setup_logging("cu_benchmark")
+    # 设置日志与运行目录
+    cfg = ConfigManager()
+    seed = cfg.set_global_seed()
+    run_name = cfg.get("run.name", "diamond_benchmark")
+    run_dir = cfg.make_output_dir(run_name)
+    cfg.snapshot(run_dir)
+    run_dir = setup_logging(run_name, run_dir)
     logger = logging.getLogger(__name__)
+    logger.info(f"随机数种子: {seed}")
+
     try:
-        sizes = [(2, 2, 2), (3, 3, 3), (4, 4, 4)]
-        # 走统一入口：对size逐一用run_zero_temp_benchmark
+        # 尺寸扫描：与铝/铜示例保持一致
+        sizes = [(1, 1, 1), (2, 2, 2), (3, 3, 3)]
         results_list = []
         for s in sizes:
             outdir = os.path.join(run_dir, f"{s[0]}x{s[1]}x{s[2]}")
             os.makedirs(outdir, exist_ok=True)
             res = run_zero_temp_benchmark(
-                material_params=COPPER_FCC,
-                potential=EAMCu1Potential(),
+                material_params=CARBON_DIAMOND,
+                potential=TersoffC1988Potential(delta=0.0),
                 supercell_size=s,
                 output_dir=outdir,
                 save_json=True,
-                precision=True,
+                precision=False,
+                log_level=logging.INFO,
             )
             results_list.append(res)
 
-        # 保存合并结果
-        import json
-
+        # 保存合并结果到文件
         results_file = os.path.join(run_dir, "size_sweep_results.json")
         with open(results_file, "w", encoding="utf-8") as f:
             json.dump(results_list, f, indent=2, ensure_ascii=False)
 
+        # 屏幕输出最终汇总对比
         logger.info("\n尺寸汇总对比：")
         for res in results_list:
             nx, ny, nz = res["supercell_size"]
@@ -162,19 +175,19 @@ def main():
             e44 = res["errors"]["C44_error_percent"]
             r2c = res["quality_metrics"].get("c11_c12_r2", 0.0)
             r2s = res["quality_metrics"].get("c44_r2", 0.0)
-            dur = res.get("duration_sec", 0.0)
             logger.info(
                 f"尺寸 {nx}×{ny}×{nz}: C11={C11:.2f} GPa (误差 {e11:.2f}%), "
                 f"C12={C12:.2f} GPa (误差 {e12:.2f}%), C44={C44:.2f} GPa (误差 {e44:.2f}%), "
-                f"R²(C11/C12)={r2c:.3f}, R²(C44)={r2s:.3f}, 用时 {dur:.2f}s"
+                f"R²(C11/C12)={r2c:.3f}, R²(C44)={r2s:.3f}"
             )
 
         logger.info("\n尺寸扫描完成！")
         logger.info(f"结果保存到: {run_dir}")
-        logger.info(f"详细日志: {os.path.join(run_dir, 'cu_benchmark_*.log')}")
+        logger.info(f"详细日志: {os.path.join(run_dir, 'diamond_benchmark_*.log')}")
         logger.info(f"合并结果: {results_file}")
 
         return results_list
+
     except Exception as e:
         logger.error(f"基准测试失败: {e}", exc_info=True)
         raise

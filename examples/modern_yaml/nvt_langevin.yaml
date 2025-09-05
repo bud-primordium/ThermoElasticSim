@@ -1,0 +1,23 @@
+## NVT 场景（Langevin 恒温器）
+## - 输出 thermo.csv 与温度演化图
+## - Langevin 能量平衡统计打印（摩擦/随机做功）
+
+scenario: nvt
+
+material: { symbol: Al, structure: fcc }
+potential: EAM_Al1
+
+run:
+  name: nvt_langevin_demo
+
+supercell: [3,3,3]
+
+md:
+  temperature: 300.0
+
+nvt:
+  type: langevin       # 恒温器类型: langevin | nhc
+  dt: 0.5
+  steps: 8000
+  sample_every: 50
+  friction: 3.0        # ps^-1 摩擦系数

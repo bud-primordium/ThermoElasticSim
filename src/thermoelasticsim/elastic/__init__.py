@@ -19,6 +19,7 @@ from .deformation_method import (
 )
 from .materials import (
     ALUMINUM_FCC,
+    CARBON_DIAMOND,
     COPPER_FCC,
     GOLD_FCC,
     MaterialParameters,
@@ -45,6 +46,7 @@ __all__ = [
     "ALUMINUM_FCC",
     "COPPER_FCC",
     "GOLD_FCC",
+    "CARBON_DIAMOND",
     "get_material_by_symbol",
     "get_all_materials",
     "compare_elastic_constants",

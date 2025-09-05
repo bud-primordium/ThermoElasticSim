@@ -40,9 +40,8 @@ The project implements multiple MD ensembles using an operator splitting archite
 
 ### Features in Development
 
-- Configuration file system (YAML format)
 - Elastic wave propagation simulation
-- (none)
+- More teaching scenarios and visualization bindings (trajectory/energy/stress)
 
 ## Potential Models and Benchmark Accuracy
 
@@ -169,62 +168,42 @@ venv's interpreter and dependencies are used.
   - If your mirror provides sdists and you end up without wheels, force wheel install:
     `uv pip install -U --only-binary=:all: "numpy>=2" "numba>=0.60" "scipy>=1.11"`.
 
-## Usage Instructions
+## Usage
 
-### Running Examples
+### YAML scenarios (recommended)
 
-**Zero-Temperature Elastic Constants Calculation**:
-
-```bash
-uv run python examples/zero_temp_al_benchmark.py
-```
-
-**Finite-Temperature Elastic Constants Calculation**:
+Drive the program with a single YAML file; outputs match benchmark style:
 
 ```bash
-uv run python examples/finite_temp_al_benchmark.py
+# Zero-temperature (multi-size sweep)
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/zero_temp_elastic.yaml
+
+# Finite-temperature (preheat → NPT → NHC production)
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/finite_temp_elastic.yaml
+
+# Teaching units
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/relax.yaml          # zero-T relaxation (E–V/E–s curves)
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nve.yaml            # NVE (temperature/energy)
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_langevin.yaml   # NVT-Langevin
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_nhc.yaml        # NVT-NHC
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_andersen.yaml   # NVT-Andersen
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_berendsen.yaml  # NVT-Berendsen
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/npt.yaml            # NPT-MTK
 ```
 
-## Configuration Files
+Each YAML is documented (Chinese comments), including material/structure, potential, timestep/steps/sampling, thermostat/barostat parameters, and zero-T strain options.
 
-The project uses YAML format configuration files `tests/config.yaml` for parameter management. Here's an example configuration (**currently under testing**):
+### Legacy Python examples (kept for reference)
 
-```yaml
-# config.yaml
-
-unit_cell:
-  lattice_vectors:
-    - [3.615, 0.0, 0.0]
-    - [0.0, 3.615, 0.0]
-    - [0.0, 0.0, 3.615]
-  atoms:
-    - {symbol: 'Al', mass: 26.9815, position: [0.0, 0.0, 0.0]}
-    - {symbol: 'Al', mass: 26.9815, position: [1.8075, 1.8075, 1.8075]}
-
-potential:
-  type: 'LennardJones'
-  parameters:
-    epsilon: 0.0103
-    sigma: 3.405
-  cutoff: 5.0
-
-optimizer:
-  method: 'ConjugateGradient'
-
-deformation:
-  delta: 0.01
-
-stress_evaluator:
-  type: 'LennardJones'
-
-md_simulation:
-  temperature: 300
-  pressure: 0.0
-  timestep: 1.0e-3
-  thermostat: 'Nosé-Hoover'
-  barostat: 'NoBarostat'
-  steps: 10000
+```bash
+uv run python examples/legacy_py/zero_temp_al_benchmark.py
+uv run python examples/legacy_py/finite_temp_al_benchmark.py
 ```
+
+## Configuration
+
+All YAML examples live under `examples/modern_yaml/`, covering full workflows and modular teaching scenarios.
+Each YAML contains human-friendly comments for quick adaptation.
 
 ## Contributing
 

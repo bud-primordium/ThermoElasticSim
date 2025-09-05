@@ -40,9 +40,8 @@
 
 ### 开发中功能
 
-- 配置文件系统（YAML格式）
 - 弹性波传播模拟
-- （空）
+- 更多教学场景与可视化绑定（轨迹/能量/应力）
 
 ## 势函数模型与基准精度
 
@@ -168,60 +167,40 @@ python -m pytest
 
 ## 使用说明
 
-### 运行示例
+### YAML 场景运行（推荐）
 
-**零温弹性常数计算**：
-
-```bash
-uv run python examples/zero_temp_al_benchmark.py
-```
-
-**有限温弹性常数计算**：
+直接用 YAML 驱动程序，产物与 benchmark 一致：
 
 ```bash
-uv run python examples/finite_temp_al_benchmark.py
+# 零温完整（多尺寸扫描）
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/zero_temp_elastic.yaml
+
+# 有限温完整（预热→NPT→NHC 生产）
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/finite_temp_elastic.yaml
+
+# 教学拆分单元
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/relax.yaml          # 零温弛豫（含 E–V/E–s 曲线）
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nve.yaml            # NVE（温度/能量演化）
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_langevin.yaml   # NVT-Langevin
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_nhc.yaml        # NVT-NHC
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_andersen.yaml   # NVT-Andersen
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_berendsen.yaml  # NVT-Berendsen
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/npt.yaml            # NPT-MTK
 ```
 
-## 配置文件
+所有 YAML 都有中文注释，解释材料/结构、势函数、步数/步长/采样、恒温/恒压参数，零温应变点等。
 
-项目使用 `YAML` 格式的配置文件 `tests/config.yaml` 来管理参数。以下是一个示例配置（**尚在测试中**）：
+### 旧版 Python 脚本（保留参考）
 
-```yaml
-# config.yaml
-
-unit_cell:
-  lattice_vectors:
-    - [3.615, 0.0, 0.0]
-    - [0.0, 3.615, 0.0]
-    - [0.0, 0.0, 3.615]
-  atoms:
-    - {symbol: 'Al', mass: 26.9815, position: [0.0, 0.0, 0.0]}
-    - {symbol: 'Al', mass: 26.9815, position: [1.8075, 1.8075, 1.8075]}
-
-potential:
-  type: 'LennardJones'
-  parameters:
-    epsilon: 0.0103
-    sigma: 3.405
-  cutoff: 5.0
-
-optimizer:
-  method: 'ConjugateGradient'
-
-deformation:
-  delta: 0.01
-
-stress_evaluator:
-  type: 'LennardJones'
-
-md_simulation:
-  temperature: 300
-  pressure: 0.0
-  timestep: 1.0e-3
-  thermostat: 'Nosé-Hoover'
-  barostat: 'NoBarostat'
-  steps: 10000
+```bash
+uv run python examples/legacy_py/zero_temp_al_benchmark.py
+uv run python examples/legacy_py/finite_temp_al_benchmark.py
 ```
+
+## 配置说明
+
+示例 YAML 已放在 `examples/modern_yaml/`，包含零温/有限温完整流程与若干教学拆分场景。
+每个 YAML 都有中文注释说明可调参数与选择方式。
 
 ## 贡献指南
 

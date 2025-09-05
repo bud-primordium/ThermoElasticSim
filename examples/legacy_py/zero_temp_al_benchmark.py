@@ -22,6 +22,8 @@ import os
 import sys
 from datetime import datetime
 
+from thermoelasticsim.core.config import ConfigManager
+
 # 核心组件
 from thermoelasticsim.elastic import (
     ALUMINUM_FCC,
@@ -32,7 +34,7 @@ from thermoelasticsim.elastic import (
 from thermoelasticsim.potentials.eam import EAMAl1Potential
 
 
-def setup_logging(test_name: str = "al_benchmark") -> str:
+def setup_logging(test_name: str = "al_benchmark", run_dir: str | None = None) -> str:
     """
     设置日志系统并创建运行目录
 
@@ -41,11 +43,12 @@ def setup_logging(test_name: str = "al_benchmark") -> str:
     str
         运行目录路径
     """
-    # 创建独立的运行目录
-    base_logs_dir = os.path.join(os.path.dirname(__file__), "logs")
+    # 创建独立的运行目录（允许外部传入以供配置控制）
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base_logs_dir, f"{test_name}_{timestamp}")
-    os.makedirs(run_dir, exist_ok=True)
+    if run_dir is None:
+        base_logs_dir = os.path.join(os.path.dirname(__file__), "logs")
+        run_dir = os.path.join(base_logs_dir, f"{test_name}_{timestamp}")
+        os.makedirs(run_dir, exist_ok=True)
 
     log_filename = f"{test_name}_{timestamp}.log"
     log_filepath = os.path.join(run_dir, log_filename)
@@ -166,13 +169,23 @@ def run_aluminum_benchmark_local(
 
 def main():
     """主函数：运行基准测试"""
-    # 设置日志
-    run_dir = setup_logging("al_benchmark")
+    # 读取配置与统一种子
+    cfg = ConfigManager()
+    seed = cfg.set_global_seed()
+
+    # 输出目录按配置生成
+    run_name = cfg.get("run.name", "al_benchmark")
+    run_dir = cfg.make_output_dir(run_name)
+    cfg.snapshot(run_dir)
+
+    # 设置日志（使用已创建的目录）
+    run_dir = setup_logging(run_name, run_dir)
     logger = logging.getLogger(__name__)
+    logger.info(f"随机数种子: {seed}")
 
     try:
         # 尺寸扫描：2x2x2, 3x3x3, 4x4x4（与旧版保持一致）
-        sizes = [(2, 2, 2), (3, 3, 3), (4, 4, 4)]
+        sizes = cfg.get("elastic.sizes", [(2, 2, 2), (3, 3, 3), (4, 4, 4)])
         results_list = run_size_sweep(sizes=sizes, output_root=run_dir)
 
         # 保存合并结果到文件
