@@ -568,19 +568,31 @@ class AndersenThermostatPropagator(Propagator):
         # 限制碰撞概率在合理范围内
         system_collision_probability = min(system_collision_probability, 0.5)  # 最多50%
 
-        # 按照研究报告的算法步骤：遵历所有原子
-        step_collisions = 0
-        # total_expected_collisions = system_collision_probability  # 用于监控，暂未使用
+        # 向量化判定每个原子是否发生碰撞
+        per_atom_collision_probability = system_collision_probability / num_atoms
+        if per_atom_collision_probability < 0:
+            per_atom_collision_probability = 0.0
+        elif per_atom_collision_probability > 1.0:
+            per_atom_collision_probability = 1.0
 
-        for atom in cell.atoms:
-            # 对每个原子，使用平均碰撞概率 = 系统碰撞概率 / 原子数
-            per_atom_collision_probability = system_collision_probability / num_atoms
+        # 生成碰撞掩码
+        rand = np.random.random(num_atoms)
+        mask = rand < per_atom_collision_probability
+        step_collisions = int(np.count_nonzero(mask))
 
-            # 随机判断是否碰撞
-            if np.random.random() < per_atom_collision_probability:
-                # 发生碰撞：从麦克斯韦-玻尔兹曼分布采样新速度
-                self._sample_maxwell_boltzmann_velocity(atom)
-                step_collisions += 1
+        if step_collisions > 0:
+            # 为被选中的原子采样Maxwell-Boltzmann速度
+            v = cell.get_velocities()
+            masses = np.array([a.mass for a in cell.atoms], dtype=np.float64)
+            sigmas = np.sqrt(KB_IN_EV * self.target_temperature / masses)
+            # 只更新 mask 对应的行
+            k = step_collisions
+            new_v = np.random.normal(0.0, 1.0, (k, 3)) * sigmas[mask][:, None]
+            v[mask, :] = new_v
+            # 回写到原子对象
+            for i, m in enumerate(mask):
+                if m:
+                    cell.atoms[i].velocity = v[i]
 
         # 定期移除质心运动（维持系统稳定性）
         if step_collisions > 0 or self._total_steps % 20 == 0:  # 有碰撞时或每20步
@@ -767,6 +779,7 @@ class NoseHooverChainPropagator(Propagator):
         self.Q = None
         self._num_atoms_global = None
         self._dof = None  # 体系用于恒温器的自由度（与温度统计口径一致）
+        self._masses = None  # 原子质量数组（向量化计算用）
         self._initialized = False
 
         # 热浴变量状态
@@ -799,6 +812,11 @@ class NoseHooverChainPropagator(Propagator):
         # - 多原子: 3N-3（扣除质心平动），与 Cell.calculate_temperature 一致
         N_f = 3 if self._num_atoms_global <= 1 else 3 * self._num_atoms_global - 3
         self._dof = N_f
+        # 缓存质量数组以便后续向量化计算
+        try:
+            self._masses = np.array([a.mass for a in cell.atoms], dtype=np.float64)
+        except Exception:
+            self._masses = None
 
         # 温度单位转换
         kB_T = KB_IN_EV * self.target_temperature
@@ -832,13 +850,14 @@ class NoseHooverChainPropagator(Propagator):
         float
             总动能 (eV)
         """
-        total_kinetic = 0.0
-        for atom in cell.atoms:
-            # 计算动能：0.5 * m * v²
-            v_squared = np.dot(atom.velocity, atom.velocity)
-            kinetic = 0.5 * atom.mass * v_squared
-            total_kinetic += kinetic
-        return total_kinetic
+        v = cell.get_velocities()  # (N,3)
+        m = (
+            self._masses
+            if self._masses is not None
+            else np.array([a.mass for a in cell.atoms], dtype=np.float64)
+        )
+        vsq = np.einsum("ij,ij->i", v, v)
+        return float(0.5 * np.dot(m, vsq))
 
     def propagate(self, cell: Cell, dt: float, **kwargs: Any) -> None:
         r"""执行 Nose–Hoover 链传播（四阶 Suzuki–Yoshida）
@@ -956,21 +975,24 @@ class NoseHooverChainPropagator(Propagator):
 
         # 计算热浴"力" G_j
         if j == 0:
-            # 第一个热浴：与物理系统耦合
-            # 一致口径：多原子系统扣除质心平动，自由度为 3N-3；单原子保持 3
-            momentum_squared_over_mass = 0.0
+            # 第一个热浴：与物理系统耦合（向量化实现，口径一致）
+            v = cell.get_velocities()  # (N,3)
+            m = (
+                self._masses
+                if self._masses is not None
+                else np.array([a.mass for a in cell.atoms], dtype=np.float64)
+            )
             if self._num_atoms_global > 1:
-                total_mass = sum(atom.mass for atom in cell.atoms)
-                total_momentum = sum(atom.mass * atom.velocity for atom in cell.atoms)
-                com_velocity = total_momentum / total_mass
-                for atom in cell.atoms:
-                    dv = atom.velocity - com_velocity
-                    momentum_squared_over_mass += atom.mass * np.dot(dv, dv)
+                total_mass = float(np.sum(m))
+                com_velocity = (m[:, None] * v).sum(axis=0) / total_mass
+                dv = v - com_velocity[None, :]
+                momentum_squared_over_mass = float(
+                    np.sum(m * np.einsum("ij,ij->i", dv, dv))
+                )
             else:
-                for atom in cell.atoms:
-                    momentum_squared_over_mass += atom.mass * np.dot(
-                        atom.velocity, atom.velocity
-                    )
+                momentum_squared_over_mass = float(
+                    np.sum(m * np.einsum("ij,ij->i", v, v))
+                )
 
             G_j = (
                 momentum_squared_over_mass
@@ -1238,41 +1260,34 @@ class LangevinThermostatPropagator(Propagator):
             gamma_dt = self.friction * dt_ps
             c1 = np.exp(-gamma_dt)  # 速度衰减因子
 
-            # 记录摩擦和随机力做功
-            total_friction_work = 0.0
-            total_random_work = 0.0
+            # 向量化更新
+            V = cell.get_velocities()  # (N,3)
+            M = np.array([a.mass for a in cell.atoms], dtype=np.float64)
 
-            # 为每个原子应用Langevin修正
-            for atom in cell.atoms:
-                # 保存原始速度用于做功计算
-                v_old = atom.velocity.copy()
+            # 记录摩擦与随机做功
+            V_old = V.copy()
 
-                # BBK随机力强度：σ = sqrt(k_B*T*(1-c1²)/m)
-                # 注意：这里使用目标温度，符合热浴假设
-                variance = (
-                    KB_IN_EV * self.target_temperature * (1.0 - c1 * c1) / atom.mass
-                )
-                if variance < 0:
-                    # 数值保护：防止负方差（极小时间步长时可能发生）
-                    variance = 0.0
-                sigma = np.sqrt(variance)
+            # σ_i = sqrt(kB*T*(1-c1^2)/m_i)
+            variance = KB_IN_EV * self.target_temperature * (1.0 - c1 * c1) / M
+            variance = np.maximum(variance, 0.0)
+            sigma = np.sqrt(variance)
 
-                # 生成高斯随机向量（均值0，标准差1）
-                random_vector = np.random.normal(0.0, 1.0, 3)
+            R = np.random.normal(0.0, 1.0, V.shape)
+            V_new = c1 * V + sigma[:, None] * R
 
-                # BBK速度更新：v_new = c1*v_old + σ*R
-                atom.velocity = c1 * atom.velocity + sigma * random_vector
+            # 做功统计（近似 m * v · dv）
+            dv_friction = (c1 - 1.0) * V_old
+            dv_random = sigma[:, None] * R
+            total_friction_work = float(
+                np.sum(M * np.einsum("ij,ij->i", V_old, dv_friction))
+            )
+            total_random_work = float(
+                np.sum(M * np.einsum("ij,ij->i", V_old, dv_random))
+            )
 
-                # 计算各种做功（用于统计分析）
-                dv_friction = (c1 - 1.0) * v_old  # 摩擦导致的速度变化
-                dv_random = sigma * random_vector  # 随机力导致的速度变化
-
-                # 做功 = m * v * dv（近似）
-                friction_work = atom.mass * np.dot(v_old, dv_friction)
-                random_work = atom.mass * np.dot(v_old, dv_random)
-
-                total_friction_work += friction_work
-                total_random_work += random_work
+            # 回写速度
+            for i, atom in enumerate(cell.atoms):
+                atom.velocity = V_new[i]
 
             # 移除质心运动（保持动量守恒）
             # 注意：在Langevin动力学中，随机力可能会产生净动量

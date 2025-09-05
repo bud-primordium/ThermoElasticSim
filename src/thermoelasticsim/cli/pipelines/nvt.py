@@ -78,6 +78,14 @@ def run_nvt_pipeline(
 
     rows = []
     logger = logging.getLogger(__name__)
+    # 智能日志频率：
+    if steps <= 2000:
+        log_every = max(1, steps // 10)  # 10%
+    elif steps <= 20000:
+        log_every = 500
+    else:
+        log_every = 1000
+
     for s in range(steps):
         scheme.step(cell, pot, dt)
         if s % sample_every == 0:
@@ -96,7 +104,7 @@ def run_nvt_pipeline(
                     "E_eV": KE + PE,
                 }
             )
-        if s and (s % max(1, steps // 5) == 0):
+        if s and (s % log_every == 0):
             logger.info(f"NVT({nvt_type}) {s:6d}/{steps}: T={rows[-1]['T_K']:.1f} K")
 
     # 写CSV
