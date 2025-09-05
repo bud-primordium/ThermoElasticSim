@@ -766,6 +766,7 @@ class NoseHooverChainPropagator(Propagator):
         # 质量参数Q矩阵 - 延迟初始化（需要系统信息）
         self.Q = None
         self._num_atoms_global = None
+        self._dof = None  # 体系用于恒温器的自由度（与温度统计口径一致）
         self._initialized = False
 
         # 热浴变量状态
@@ -793,15 +794,18 @@ class NoseHooverChainPropagator(Propagator):
         """
         self._num_atoms_global = len(cell.atoms)
 
-        # 计算有效自由度（移除质心运动）
-        N_f = 3 if self._num_atoms_global == 1 else 3 * self._num_atoms_global
+        # 计算用于恒温器的一致自由度口径：
+        # - 单原子: 3
+        # - 多原子: 3N-3（扣除质心平动），与 Cell.calculate_temperature 一致
+        N_f = 3 if self._num_atoms_global <= 1 else 3 * self._num_atoms_global - 3
+        self._dof = N_f
 
         # 温度单位转换
         kB_T = KB_IN_EV * self.target_temperature
 
         # Q参数计算 (ASE公式)
         self.Q = np.zeros(self.tchain)
-        self.Q[0] = N_f * kB_T * self.tdamp**2  # 第一个热浴
+        self.Q[0] = N_f * kB_T * self.tdamp**2  # 第一个热浴（按一致自由度）
         self.Q[1:] = kB_T * self.tdamp**2  # 后续热浴
 
         self._initialized = True
@@ -953,16 +957,24 @@ class NoseHooverChainPropagator(Propagator):
         # 计算热浴"力" G_j
         if j == 0:
             # 第一个热浴：与物理系统耦合
-            # 使用标准公式：G_0 = Σ(p²/m) - 3*N*k_B*T₀
-            # 其中p²/m = m*v² = 2*KE
+            # 一致口径：多原子系统扣除质心平动，自由度为 3N-3；单原子保持 3
             momentum_squared_over_mass = 0.0
-            for atom in cell.atoms:
-                v_squared = np.dot(atom.velocity, atom.velocity)
-                momentum_squared_over_mass += atom.mass * v_squared
+            if self._num_atoms_global > 1:
+                total_mass = sum(atom.mass for atom in cell.atoms)
+                total_momentum = sum(atom.mass * atom.velocity for atom in cell.atoms)
+                com_velocity = total_momentum / total_mass
+                for atom in cell.atoms:
+                    dv = atom.velocity - com_velocity
+                    momentum_squared_over_mass += atom.mass * np.dot(dv, dv)
+            else:
+                for atom in cell.atoms:
+                    momentum_squared_over_mass += atom.mass * np.dot(
+                        atom.velocity, atom.velocity
+                    )
 
             G_j = (
                 momentum_squared_over_mass
-                - 3 * self._num_atoms_global * KB_IN_EV * self.target_temperature
+                - self._dof * KB_IN_EV * self.target_temperature
             )
         else:
             # 后续热浴：与前一个热浴耦合
@@ -1030,9 +1042,9 @@ class NoseHooverChainPropagator(Propagator):
 
         # 热浴势能
         kB_T = KB_IN_EV * self.target_temperature
-        thermostat_potential = 3 * self._num_atoms_global * kB_T * self.zeta[
-            0
-        ] + kB_T * np.sum(self.zeta[1:])
+        thermostat_potential = self._dof * kB_T * self.zeta[0] + kB_T * np.sum(
+            self.zeta[1:]
+        )
 
         return kinetic + potential + thermostat_kinetic + thermostat_potential
 

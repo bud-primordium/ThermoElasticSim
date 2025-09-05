@@ -128,6 +128,23 @@ def run_nvt_pipeline(
         )
     except Exception:
         pass
-    logging.getLogger(__name__).info(
-        f"NVT({nvt_type}) 完成: 步数={steps}, 采样间隔={sample_every}, 输出: {outdir}"
-    )
+    # 统计与RMSE
+    try:
+        import numpy as _np
+
+        T_arr = _np.array([r["T_K"] for r in rows], dtype=float)
+        T_mean = float(_np.mean(T_arr)) if T_arr.size else float("nan")
+        T_std = float(_np.std(T_arr)) if T_arr.size else float("nan")
+        T_rmse = (
+            float(_np.sqrt(_np.mean((T_arr - T0) ** 2))) if T_arr.size else float("nan")
+        )
+        logging.getLogger(__name__).info(
+            f"NVT({nvt_type}) 完成: 步数={steps}, 采样间隔={sample_every}, 输出: {outdir}"
+        )
+        logging.getLogger(__name__).info(
+            f"统计: <T> = {T_mean:.1f} ± {T_std:.1f} K; RMSE={T_rmse:.1f} K"
+        )
+    except Exception:
+        logging.getLogger(__name__).info(
+            f"NVT({nvt_type}) 完成: 步数={steps}, 采样间隔={sample_every}, 输出: {outdir}"
+        )

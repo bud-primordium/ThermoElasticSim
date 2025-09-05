@@ -162,8 +162,8 @@ class TestQParameterCalculation:
 
         nhc._initialize_Q_parameters(cell)
 
-        # 多原子系统：N_f = 3*N (不移除质心)
-        N_f = 3 * 10
+        # 多原子系统：N_f = 3*N - 3（与温度统计一致，移除质心平动）
+        N_f = 3 * 10 - 3
         kB_T = KB_IN_EV * 300.0
         expected_Q0 = N_f * kB_T * 100.0**2
         expected_Q_rest = kB_T * 100.0**2

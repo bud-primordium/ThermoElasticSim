@@ -121,6 +121,32 @@ def run_npt_pipeline(
     except Exception:
         pass
 
-    logging.getLogger(__name__).info(
-        f"NPT完成: 步数={steps}, 采样间隔={sample_every}, 输出: {outdir}"
-    )
+    # 统计与RMSE
+    try:
+        T_arr = np.array(T_hist, dtype=float)
+        P_arr = np.array(P_hist, dtype=float)
+        T_mean = float(np.mean(T_arr)) if T_arr.size else float("nan")
+        T_std = float(np.std(T_arr)) if T_arr.size else float("nan")
+        T_rmse = (
+            float(np.sqrt(np.mean((T_arr - T0) ** 2))) if T_arr.size else float("nan")
+        )
+        P_mean = float(np.mean(P_arr)) if P_arr.size else float("nan")
+        P_std = float(np.std(P_arr)) if P_arr.size else float("nan")
+        P_rmse = (
+            float(np.sqrt(np.mean((P_arr - P_target) ** 2)))
+            if P_arr.size
+            else float("nan")
+        )
+        logging.getLogger(__name__).info(
+            f"NPT完成: 步数={steps}, 采样间隔={sample_every}, 输出: {outdir}"
+        )
+        logging.getLogger(__name__).info(
+            f"统计: <P> = {P_mean:.2f} ± {P_std:.2f} GPa; RMSE={P_rmse:.2f} GPa"
+        )
+        logging.getLogger(__name__).info(
+            f"统计: <T> = {T_mean:.1f} ± {T_std:.1f} K; RMSE={T_rmse:.1f} K"
+        )
+    except Exception:
+        logging.getLogger(__name__).info(
+            f"NPT完成: 步数={steps}, 采样间隔={sample_every}, 输出: {outdir}"
+        )

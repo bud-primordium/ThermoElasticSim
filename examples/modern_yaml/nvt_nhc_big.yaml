@@ -1,0 +1,24 @@
+## NVT 场景（Nose-Hoover 链恒温器）— 大超胞对比
+## 目的：放大到 4×4×4 超胞以显著降低统计涨落
+
+scenario: nvt
+
+material: { symbol: Al, structure: fcc }
+potential: EAM_Al1
+
+run:
+  name: nvt_nhc_big_demo
+
+supercell: [4,4,4]
+
+md:
+  temperature: 200.0
+
+nvt:
+  type: nhc
+  dt: 0.2
+  steps: 15000
+  sample_every: 100
+  tdamp: 30.0         # fs 时间常数
+  tchain: 3           # 链长度
+  tloop: 1           # Suzuki–Yoshida 循环次数

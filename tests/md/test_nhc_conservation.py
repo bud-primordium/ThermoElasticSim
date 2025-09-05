@@ -23,7 +23,7 @@ E_potential_thermostat = N_f*k_B*T₀*ζ₀ + k_B*T₀*Σ(ζⱼ, j=1...M-1)
 成功标准：
 - 短期（100步）：守恒量波动 < 1e-6 eV
 - 长期（10000步）：守恒量漂移 < 1e-7 eV/ps
-- 温度标准差：符合 σ_T = T₀*sqrt(2/(3N)) 理论
+- 温度标准差：符合 σ_T = T₀*sqrt(2/N_dof) 理论（若温度统计扣除质心，则 N_dof=3N-3）
 
 创建时间: 2025-08-19
 基于: NoseHooverChainPropagator实现
@@ -113,11 +113,14 @@ class TestConservedEnergyCalculation:
         # 热浴动能
         thermostat_kinetic = np.sum(0.5 * nhc.p_zeta**2 / nhc.Q)
 
-        # 热浴势能
+        # 热浴势能（使用与实现一致的自由度口径 N_dof）
         kB_T = KB_IN_EV * 300.0
-        thermostat_potential = 3 * len(cell.atoms) * kB_T * nhc.zeta[0] + kB_T * np.sum(
-            nhc.zeta[1:]
+        N_dof = (
+            nhc._dof
+            if getattr(nhc, "_dof", None) is not None
+            else (3 if len(cell.atoms) <= 1 else 3 * len(cell.atoms) - 3)
         )
+        thermostat_potential = N_dof * kB_T * nhc.zeta[0] + kB_T * np.sum(nhc.zeta[1:])
 
         expected = kinetic + potential + thermostat_kinetic + thermostat_potential
 

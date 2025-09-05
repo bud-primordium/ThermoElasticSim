@@ -1402,7 +1402,16 @@ class MTKNPTScheme(IntegrationScheme):
 
             # 恒温器势能: N_f*k_B*T₀*ζ[0] + k_B*T₀*Σ(ζ[1:])
             kB_T = KB_IN_EV * self._thermostat.target_temperature
-            thermostat_potential = 3 * len(cell.atoms) * kB_T * self._thermostat.zeta[
+            # 使用恒温器的一致自由度口径（若可得），否则默认与温度统计一致
+            try:
+                ndof = (
+                    int(self._thermostat._dof)
+                    if getattr(self._thermostat, "_dof", None) is not None
+                    else (3 if len(cell.atoms) <= 1 else 3 * len(cell.atoms) - 3)
+                )
+            except Exception:
+                ndof = 3 if len(cell.atoms) <= 1 else 3 * len(cell.atoms) - 3
+            thermostat_potential = ndof * kB_T * self._thermostat.zeta[
                 0
             ] + kB_T * np.sum(self._thermostat.zeta[1:])
 
