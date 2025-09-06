@@ -753,8 +753,29 @@ class ModernVisualizer:
         ax.set_ylabel("Y (Å)")
         ax.set_zlabel("Z (Å)")
 
+        # 读取元数据（用于文字叠加）
+        try:
+            meta = reader.get_metadata()
+        except Exception:
+            meta = {}
+        pol = meta.get("polarization", "?")
+        src = meta.get("source_type", "?")
+        v_est = meta.get("velocity_estimate_km_s")
+        det_a = meta.get("detector_frac_a")
+        det_b = meta.get("detector_frac_b")
+
         # 初始散点
         scatter = ax.scatter([], [], [], c="b", s=50)
+        # 叠加文字对象（左上角）
+        text_box = fig.text(
+            0.02,
+            0.96,
+            "",
+            ha="left",
+            va="top",
+            fontsize=10,
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#888888", alpha=0.8),
+        )
 
         def init():
             scatter._offsets3d = ([], [], [])
@@ -770,9 +791,29 @@ class ModernVisualizer:
 
             scatter._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
 
-            ax.set_title(f"Frame {actual_idx}")
+            # 时间信息（ps）
+            t_ps = frame.get("time", actual_idx)  # 可能是ps或帧索引
+            try:
+                t_ps = float(t_ps)
+            except Exception:
+                t_ps = actual_idx
 
-            return (scatter,)
+            title = f"Frame {actual_idx}"
+            ax.set_title(title)
+
+            # 更新叠加文字
+            lines = [f"t = {t_ps:.3f} ps"]
+            if pol:
+                lines.append(f"mode = {'L' if pol == 'L' else pol}")
+            if src and src != "none":
+                lines.append(f"source = {src}")
+            if v_est is not None and v_est > 0:
+                lines.append(f"v_est ≈ {float(v_est):.2f} km/s")
+            if det_a is not None and det_b is not None:
+                lines.append(f"detectors: {det_a:.2f}Lx → {det_b:.2f}Lx")
+            text_box.set_text("\n".join(lines))
+
+            return (scatter, text_box)
 
         # 创建动画
         n_animation_frames = n_frames // skip

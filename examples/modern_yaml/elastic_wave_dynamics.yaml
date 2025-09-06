@@ -1,0 +1,65 @@
+## 弹性波传播（Phase B - MVP）——教学脚本（可切换 L/T、源类型、探针与测速法）
+##
+## 物理图像：
+## - 在 x≈0 的薄片区域给一个短脉冲（高斯或短包络正弦，tone_burst），激起沿 +x 的波包；
+##   在多个 x 位置统计“首次到达时间 t(x)”，做直线拟合得到速度 v ≈ Δx/Δt。
+##
+## 源类型说明：
+## - gaussian：g(t)=exp(−(t−t0)^2/(2σ^2))，单次脉冲，频带宽；
+## - tone_burst：s(t)=sin(2π f t)·0.5(1−cos(2π t/Tb))，0≤t≤Tb（Tb=cycles/f），窄带数周期“叮”一下。
+##
+## 测速方法优先级：
+## - 多探针到达拟合（arrival/arrival_T_guard）最直观、鲁棒；
+## - 自动回退可用互相关/包络阈值/k–ω（此文件默认 arrival/arrival_T_guard）。
+
+scenario: elastic_wave
+
+material: { symbol: Al, structure: fcc }
+
+wave:
+  density: 2.70
+  visualization:
+    enabled: true
+    planes: ["001", "110", "111"]
+    surface3d:
+      enabled: false
+
+  dynamics:
+    enabled: true
+    # 轻量演示参数：≈2 分钟
+    supercell: [24, 6, 6]
+    direction: x         # MVP: 仅 x（[100]）
+    polarization: L      # L/Ty/Tz 三选一；改为 Ty/Tz 即测横波
+    n_waves: 1           # 仅在 use_source=false 时生效（此脚本默认用源注入）
+    amplitude_velocity: 0.0  # 关闭全域初值注入，避免驻波；使用源注入
+    dt: 1.0              # fs
+    steps: 1400          # ~1.4 ps，总时长短且避免绕回
+    sample_every: 5
+
+    # 源注入（默认高斯）：不依赖解析速度
+    source:
+      enabled: true
+      type: gaussian       # gaussian | tone_burst（短包络正弦）
+      slab_fraction: 0.08  # 源厚度（Lx 的比例），越薄越“点源”
+      amplitude_velocity: 4.0e-4  # Å/fs，小扰动（线性区）
+      t0_fs: 300.0         # 高斯：脉冲中心
+      sigma_fs: 100.0      # 高斯：脉冲宽度
+      # 若改用 tone_burst：
+      # type: tone_burst
+      # cycles: 4          # 周期数（3–5）
+      # freq_THz: 0.6     # 载频（THz），越小越“长波”
+
+    # 探针/拟合空间范围：相对 Lx 的比例（0–1）
+    detectors: [0.25, 0.55]
+
+    # 测速法（L：arrival；Ty/Tz：arrival_T_guard 推荐）
+    measure:
+      method: arrival
+
+    # 可选：记录轨迹并导出GIF（atoms点云随时间）
+    record_trajectory:
+      enabled: true
+      file: examples/logs/wave_trajectory.h5
+
+run:
+  name: elastic_wave_mvp

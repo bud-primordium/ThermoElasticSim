@@ -90,3 +90,30 @@
    :members:
    :undoc-members:
    :show-inheritance:
+
+弹性波传播模拟
+--------------
+
+解析计算
+~~~~~~~~
+
+.. automodule:: thermoelasticsim.elastic.wave.analytical
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+动力学模拟
+~~~~~~~~~~
+
+.. automodule:: thermoelasticsim.elastic.wave.dynamics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+可视化工具
+~~~~~~~~~~
+
+.. automodule:: thermoelasticsim.elastic.wave.visualization
+   :members:
+   :undoc-members:
+   :show-inheritance:

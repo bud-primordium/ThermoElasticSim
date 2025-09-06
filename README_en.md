@@ -32,7 +32,15 @@ The project implements multiple MD ensembles using an operator splitting archite
    - NVT: Berendsen weak coupling, Andersen stochastic collision, Nosé-Hoover chain thermostats
    - NPT: Martyna-Tobias-Klein reversible integrator
 
-4. **Computational Architecture**
+4. **Elastic Wave Propagation Simulation**
+   - Analytical calculation: Christoffel equation for wave velocities in arbitrary directions
+   - Special directions: Exact solutions for [100], [110], [111] directions
+   - Anisotropy visualization: 2D polar plots, 3D velocity surfaces
+   - Dynamics simulation: MD plane wave excitation and propagation
+   - Multiple velocity estimation methods: Cross-correlation, arrival time fitting, k-ω spectral analysis
+   - Source excitation: Gaussian pulse, Tone Burst
+
+5. **Computational Architecture**
    - C++/Python hybrid programming with core calculations in C++
    - EAM potential and virial stress tensor calculations
    - Periodic boundary conditions with minimum image convention
@@ -40,7 +48,6 @@ The project implements multiple MD ensembles using an operator splitting archite
 
 ### Features in Development
 
-- Elastic wave propagation simulation
 - More teaching scenarios and visualization bindings (trajectory/energy/stress)
 
 ## Potential Models and Benchmark Accuracy
@@ -180,6 +187,11 @@ python -m thermoelasticsim.cli.run -c examples/modern_yaml/zero_temp_elastic.yam
 
 # Finite-temperature (preheat → NPT → NHC production)
 python -m thermoelasticsim.cli.run -c examples/modern_yaml/finite_temp_elastic.yaml
+
+# Elastic wave simulation
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave.yaml            # Analytical calculation & visualization
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave_dynamics_L.yaml # Longitudinal wave propagation
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave_dynamics_T.yaml # Transverse wave propagation
 
 # Teaching units
 python -m thermoelasticsim.cli.run -c examples/modern_yaml/relax.yaml          # zero-T relaxation (E–V/E–s curves)

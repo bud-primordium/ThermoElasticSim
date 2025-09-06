@@ -28,7 +28,14 @@ from .materials import (
     get_material_by_symbol,
 )
 from .mechanics import StrainCalculator, StressCalculator
-from .wave import ElasticWaveAnalyzer
+from .wave import (
+    DynamicsConfig,
+    ElasticWaveAnalyzer,
+    WaveExcitation,
+    plot_polar_plane,
+    plot_velocity_surface_3d,
+    simulate_plane_wave_mvp,
+)
 
 __all__ = [
     # 形变与力学
@@ -58,6 +65,11 @@ __all__ = [
     "calculate_c44_lammps_shear",
     "run_zero_temp_benchmark",
     "run_size_sweep",
-    # 弹性波（阶段A）
+    # 弹性波
     "ElasticWaveAnalyzer",
+    "WaveExcitation",
+    "DynamicsConfig",
+    "simulate_plane_wave_mvp",
+    "plot_polar_plane",
+    "plot_velocity_surface_3d",
 ]

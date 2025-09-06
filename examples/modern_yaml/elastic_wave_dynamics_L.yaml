@@ -1,0 +1,48 @@
+scenario: elastic_wave
+
+material: { symbol: Al, structure: fcc }
+
+wave:
+  density: 2.70
+  visualization:
+    enabled: true
+    planes: ["001"]
+
+  dynamics:
+    enabled: true
+    supercell: [24, 6, 6]
+    direction: x
+    polarization: L
+    n_waves: 1
+    amplitude_velocity: 0.0
+    dt: 1.0
+    steps: 1200
+    sample_every: 5
+
+    source:
+      enabled: true
+      type: gaussian
+      slab_fraction: 0.06
+      amplitude_velocity: 3.0e-4
+      t0_fs: 250.0
+      sigma_fs: 70.0
+    detectors: [0.25, 0.80]
+
+    # 纵波：使用 arrival（高斯源下更稳健）并收紧物理上限
+    measure:
+      method: arrival
+    v_max_km_s: 7.0
+
+    # 吸收边界（海绵层）：减少波在盒内绕回叠加
+    absorber:
+      enabled: true
+      slab_fraction: 0.12
+      tau_fs: 250.0
+      profile: cos2
+
+    record_trajectory:
+      enabled: true
+      file: examples/logs/wave_L_trajectory.h5
+
+run:
+  name: elastic_wave_L

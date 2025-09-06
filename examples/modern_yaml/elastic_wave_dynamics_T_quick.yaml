@@ -1,0 +1,39 @@
+scenario: elastic_wave
+
+material: { symbol: Al, structure: fcc }
+
+wave:
+  density: 2.70
+  visualization:
+    enabled: false
+
+  dynamics:
+    enabled: true
+    supercell: [24, 6, 6]
+    direction: x
+    polarization: Ty
+    n_waves: 1
+    amplitude_velocity: 0.0
+    dt: 1.0
+    steps: 520           # 快速验证，< ~1.5 分钟
+    sample_every: 5
+
+    source:
+      enabled: true
+      type: gaussian
+      slab_fraction: 0.06
+      amplitude_velocity: 5.0e-4
+      t0_fs: 250.0
+      sigma_fs: 90.0
+
+    detectors: [0.25, 0.80]
+    measure:
+      method: arrival_T_guard   # T 模式优先 arrival 带 L 护栏
+    v_max_km_s: 5.0
+
+    record_trajectory:
+      enabled: true
+      # 不指定 file → 默认存到本次 outdir 内，便于 GIF 生成
+
+run:
+  name: elastic_wave_T_quick

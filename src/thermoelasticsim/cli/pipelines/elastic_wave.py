@@ -23,6 +23,11 @@ from typing import Any
 
 from ...elastic import get_material_by_symbol
 from ...elastic.wave import ElasticWaveAnalyzer
+from ...elastic.wave.dynamics import (
+    DynamicsConfig,
+    WaveExcitation,
+    simulate_plane_wave_mvp,
+)
 from ...elastic.wave.visualization import plot_polar_plane, plot_velocity_surface_3d
 
 
@@ -225,5 +230,182 @@ def run_elastic_wave_pipeline(
             )
         else:
             log.info(f"已生成3D速度面(HTML): {list(html_paths.values())}")
+
+    # =============== Phase B（MVP）：平面波MD传播（可选） ===============
+    dyn_cfg = cfg.get("wave.dynamics", {}) or {}
+    if bool(dyn_cfg.get("enabled", False)):
+        log.info("开始运行弹性波MD传播（MVP）…（仅[100]方向）")
+        # 解析配置
+        sc = tuple(dyn_cfg.get("supercell", [64, 12, 12]))
+        dt = float(dyn_cfg.get("dt", dyn_cfg.get("timestep", 0.5)))
+        steps = int(dyn_cfg.get("steps", 40000))
+        sample_every = int(dyn_cfg.get("sample_every", 50))
+        direction = str(dyn_cfg.get("direction", "x"))
+        polarization = str(dyn_cfg.get("polarization", "L"))
+        n_waves = int(dyn_cfg.get("n_waves", 2))
+        amp_v = float(dyn_cfg.get("amplitude_velocity", 1e-4))
+        amp_u = dyn_cfg.get("amplitude_displacement", None)
+        amp_u = None if amp_u is None else float(amp_u)
+
+        dyn = DynamicsConfig(
+            supercell=sc,
+            dt_fs=dt,
+            steps=steps,
+            sample_every=sample_every,
+            direction=direction,  # MVP: 仅支持 'x'
+            polarization=polarization,  # 'L'/'Ty'/'Tz'
+            n_waves=n_waves,
+            amplitude_velocity=amp_v,
+            amplitude_displacement=amp_u,
+        )
+        exc = WaveExcitation(
+            direction=direction,
+            polarization=polarization,
+            n_waves=n_waves,
+            amplitude_velocity=amp_v,
+            amplitude_displacement=amp_u,
+            mode="standing",  # 不依赖解析相速度；默认由源注入驱动
+            phase_speed_km_s=None,
+        )
+
+        os.makedirs(outdir, exist_ok=True)
+        xt_path = os.path.join(outdir, "wave_xt.png")
+        # 源注入与记录配置（注意：使用 ConfigManager 的点路径读取嵌套字段）
+        use_source = bool(cfg.get("wave.dynamics.source.enabled", True))
+        source_slab_fraction = float(
+            cfg.get("wave.dynamics.source.slab_fraction", 0.06)
+        )
+        source_amp_v = float(cfg.get("wave.dynamics.source.amplitude_velocity", 5e-4))
+        source_t0 = float(cfg.get("wave.dynamics.source.t0_fs", 200.0))
+        source_sigma = float(cfg.get("wave.dynamics.source.sigma_fs", 80.0))
+        source_type = str(cfg.get("wave.dynamics.source.type", "gaussian"))
+        source_cycles = int(cfg.get("wave.dynamics.source.cycles", 4))
+        source_freq_thz = float(cfg.get("wave.dynamics.source.freq_THz", 1.0))
+
+        record_traj = bool(cfg.get("wave.dynamics.record_trajectory.enabled", False))
+        traj_file = cfg.get(
+            "wave.dynamics.record_trajectory.file",
+            os.path.join(outdir, "wave_trajectory.h5"),
+        )
+        measure_method = str(cfg.get("wave.dynamics.measure.method", "auto"))
+
+        # 将动态配置注入 DynamicsConfig
+        dyn.use_source = use_source
+        dyn.source_slab_fraction = source_slab_fraction
+        dyn.source_amplitude_velocity = source_amp_v
+        dyn.source_t0_fs = source_t0
+        dyn.source_sigma_fs = source_sigma
+        dyn.source_type = source_type
+        dyn.source_cycles = source_cycles
+        dyn.source_freq_thz = source_freq_thz
+        # 探针位置（可调）
+        if "detectors" in dyn_cfg:
+            dets = list(dyn_cfg.get("detectors", [0.2, 0.7]))
+            if isinstance(dets, list | tuple) and len(dets) == 2:
+                dyn.detector_frac_a = float(dets[0])
+                dyn.detector_frac_b = float(dets[1])
+        # 吸收边界（海绵层）
+        dyn.absorber_enabled = bool(cfg.get("wave.dynamics.absorber.enabled", False))
+        try:
+            dyn.absorber_slab_fraction = float(
+                cfg.get(
+                    "wave.dynamics.absorber.slab_fraction", dyn.absorber_slab_fraction
+                )
+            )
+            dyn.absorber_tau_fs = float(
+                cfg.get("wave.dynamics.absorber.tau_fs", dyn.absorber_tau_fs)
+            )
+            dyn.absorber_profile = str(
+                cfg.get("wave.dynamics.absorber.profile", dyn.absorber_profile)
+            )
+        except Exception:
+            pass
+
+        dyn.record_trajectory = record_traj
+        dyn.trajectory_file = traj_file
+        dyn.measure_method = measure_method
+        # 物理最大速度上限（用于互相关约束）
+        with contextlib.suppress(Exception):
+            dyn.v_max_km_s = float(cfg.get("wave.dynamics.v_max_km_s", dyn.v_max_km_s))
+
+        md_res = simulate_plane_wave_mvp(
+            material_symbol=material_symbol,
+            dynamics=dyn,
+            excitation=exc,
+            out_xt_path=xt_path,
+        )
+
+        # 与解析（[100]）对比（仅 L 或 T 情况）
+        try:
+            ana_100 = analyzer.calculate_wave_velocities((1.0, 0.0, 0.0))
+            v_ana = None
+            pol = polarization.strip()
+            if pol == "L":
+                v_ana = float(ana_100["longitudinal"])
+            elif pol in ("Ty", "Tz"):
+                v_ana = float(min(ana_100["transverse1"], ana_100["transverse2"]))
+            v_md = md_res.get("velocity_estimate_km_s")
+            if v_md is not None and v_ana is not None and v_ana > 0:
+                err_pct = abs(v_md - v_ana) / v_ana * 100.0
+                md_res["analytic_compare"] = {
+                    "v_md_km_s": v_md,
+                    "v_ana_km_s": v_ana,
+                    "error_percent": err_pct,
+                }
+        except Exception:
+            pass
+
+        dyn_json = os.path.join(outdir, "wave_dynamics.json")
+        try:
+            with open(dyn_json, "w", encoding="utf-8") as f:
+                json.dump(md_res, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+        result.setdefault("artifacts", {})["dynamics"] = {
+            "xt": xt_path,
+            "json": dyn_json,
+            "velocity_km_s": md_res.get("velocity_estimate_km_s"),
+        }
+        v_est = md_res.get("velocity_estimate_km_s")
+        if v_est is not None:
+            if "analytic_compare" in md_res:
+                ap = md_res["analytic_compare"]["error_percent"]
+                va = md_res["analytic_compare"]["v_ana_km_s"]
+                log.info(
+                    f"MD 波速估计 ~ {v_est:.2f} km/s；解析[{polarization or 'L'}] ~ {va:.2f} km/s；误差 ~ {ap:.1f}%"
+                )
+            else:
+                log.info(f"MD 波速估计 ~ {v_est:.2f} km/s（互相关，x=1/4L→3/4L）")
+        else:
+            reason = None
+            with contextlib.suppress(Exception):
+                reason = md_res.get("xcorr_info", {}).get("reason", None)
+            if reason:
+                log.warning(f"MD 波速估计失败（互相关失败原因: {reason}）")
+            else:
+                log.warning("MD 波速估计失败（互相关未找到有效峰值）")
+
+        # 生成GIF（若记录了轨迹）
+        # 优先使用模拟返回的轨迹文件路径（更可靠，避免与配置不一致）
+        traj_path_effective = md_res.get("trajectory_file", traj_file)
+        if record_traj and traj_path_effective and os.path.exists(traj_path_effective):
+            try:
+                from ...utils.modern_visualization import ModernVisualizer
+
+                vis = ModernVisualizer()
+                gif_path = os.path.join(outdir, "wave_trajectory.gif")
+                vis.create_trajectory_video(
+                    traj_path_effective, gif_path, fps=12, dpi=120
+                )
+                result.setdefault("artifacts", {})["trajectory"] = {
+                    "h5": traj_path_effective,
+                    "gif": gif_path,
+                }
+                log.info(f"已生成轨迹GIF: {gif_path}")
+            except Exception as e:
+                log.warning(f"轨迹GIF生成失败: {e}")
+        elif record_traj:
+            log.warning(f"未找到轨迹文件，跳过GIF生成。期望: {traj_path_effective}")
 
     return result

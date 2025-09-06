@@ -97,8 +97,8 @@ def _plane_normal(plane: str) -> np.ndarray:
     plane = plane.strip().strip("[](){}")
     if plane not in {"001", "110", "111"}:
         raise ValueError(f"不支持的平面: {plane}")
-    h, k, l = (int(ch) for ch in plane)
-    v = np.array([h, k, l], dtype=float)
+    h, k, l_idx = (int(ch) for ch in plane)
+    v = np.array([h, k, l_idx], dtype=float)
     n = np.linalg.norm(v)
     if n == 0:
         raise ValueError("非法平面索引")

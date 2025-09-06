@@ -39,9 +39,10 @@ ThermoElasticSim 文档
    :maxdepth: 2
    :caption: 拓展内容
 
-   05_potential_extensions
-   06_advanced_topics
-   07_howto
+   05_elastic_wave
+   06_potential_extensions
+   07_advanced_topics
+   08_howto
 
 .. toctree::
    :maxdepth: 3

@@ -32,7 +32,15 @@
    - NVT：Berendsen弱耦合、Andersen随机碰撞、Nosé-Hoover链恒温器
    - NPT：Martyna-Tobias-Klein可逆积分器
 
-4. **计算架构**
+4. **弹性波传播模拟**
+   - 解析计算：Christoffel方程求解任意方向波速
+   - 特殊方向：[100]、[110]、[111]波速精确解
+   - 各向异性可视化：2D极坐标图、3D速度面
+   - 动力学模拟：MD平面波激发与传播
+   - 多种测速算法：互相关、到达时间拟合、k-ω谱分析
+   - 波源激发：高斯脉冲、Tone Burst
+
+5. **计算架构**
    - C++/Python混合编程，核心计算C++实现
    - EAM势函数及维里应力张量计算
    - 周期性边界条件和最小镜像原理
@@ -40,7 +48,6 @@
 
 ### 开发中功能
 
-- 弹性波传播模拟
 - 更多教学场景与可视化绑定（轨迹/能量/应力）
 
 ## 势函数模型与基准精度
@@ -177,6 +184,11 @@ python -m thermoelasticsim.cli.run -c examples/modern_yaml/zero_temp_elastic.yam
 
 # 有限温完整（预热→NPT→NHC 生产）
 python -m thermoelasticsim.cli.run -c examples/modern_yaml/finite_temp_elastic.yaml
+
+# 弹性波模拟
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave.yaml            # 解析计算与可视化
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave_dynamics_L.yaml # 纵波传播模拟
+python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave_dynamics_T.yaml # 横波传播模拟
 
 # 教学拆分单元
 python -m thermoelasticsim.cli.run -c examples/modern_yaml/relax.yaml          # 零温弛豫（含 E–V/E–s 曲线）
