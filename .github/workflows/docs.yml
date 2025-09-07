@@ -27,6 +27,8 @@ concurrency:
 jobs:
   build-docs:
     runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg  # 强制使用非GUI后端，避免CI环境缺少显示器
 
     steps:
     - uses: actions/checkout@v4
@@ -41,6 +43,12 @@ jobs:
       with:
         enable-cache: true
         cache-dependency-glob: "**/pyproject.toml"
+
+    - name: Install CJK fonts (Noto/WenQuanYi)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends fonts-noto-cjk fonts-wqy-zenhei
+        fc-list | (grep -E "Noto|WenQuanYi|CJK|SimHei|PingFang" || true)
 
     - name: Install Python dependencies
       run: |

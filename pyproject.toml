@@ -29,8 +29,9 @@ dependencies = [
     "numba>=0.60",
     "scikit-learn>=1.5.0",
     "setuptools>=61.0",
-    "plotly>=5.22.0",
-    "kaleido>=0.2.1",
+    # 升级以匹配 Colab 预装的 kaleido>=1.0.0 兼容性要求
+    "plotly>=6.1.1",
+    "kaleido>=1.0.0",
 ]
 requires-python = ">=3.9"
 
