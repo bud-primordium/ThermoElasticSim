@@ -34,6 +34,7 @@ ThermoElasticSim 文档
    :caption: 交互式教程
 
    tutorial/01_elastic_fundamentals
+   tutorial/02_zero_temperature
 
 .. toctree::
    :maxdepth: 2

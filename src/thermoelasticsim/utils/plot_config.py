@@ -14,13 +14,22 @@ Usage:
 Created: 2025-08-17
 """
 
+import os
 import platform
+import sys
 
 import matplotlib
 
-# 使用Agg后端，避免GUI问题
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+# 在非交互环境（如Sphinx构建、命令行脚本）强制使用 Agg；
+# 在交互环境（Jupyter/IPython 内核）不强制切换，由 IPython 选择 inline 后端。
+_IN_IPYTHON = ("ipykernel" in sys.modules) or ("IPython" in sys.modules)
+if not _IN_IPYTHON and os.environ.get("MPLBACKEND", "").lower() not in (
+    "module://matplotlib_inline.backend_inline",
+    "nbagg",
+):
+    matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt  # noqa: E402  (需在设置后端后再导入)
 
 
 def get_system_fonts():
