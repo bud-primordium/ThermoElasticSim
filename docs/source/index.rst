@@ -29,6 +29,13 @@ ThermoElasticSim 文档
    conventions
 
 .. toctree::
+   :maxdepth: 1
+   :numbered:
+   :caption: 交互式教程
+
+   tutorial/01_elastic_fundamentals
+
+.. toctree::
    :maxdepth: 2
    :numbered:
    :caption: 理论与方法
@@ -37,13 +44,6 @@ ThermoElasticSim 文档
    02_zero_temperature_elastic
    03_md_and_ensembles
    04_finite_temperature_elastic
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 交互式教程
-
-   tutorial/index
-
 .. toctree::
    :maxdepth: 2
    :caption: 拓展内容

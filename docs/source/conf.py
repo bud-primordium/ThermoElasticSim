@@ -319,7 +319,12 @@ pygments_style = "sphinx"
 autodoc_member_order = "bysource"
 
 # 忽略的警告
-suppress_warnings = ["autodoc.import_error", "ref.citation", "ref.python"]
+suppress_warnings = [
+    "autodoc.import_error",
+    "ref.citation",
+    "ref.python",
+    "mystnb.unknown_mime_type",  # 抑制plotly等未知MIME类型警告
+]
 
 # 默认角色
 # 不设置默认角色，避免将普通词语当作交叉引用解析
