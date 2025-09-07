@@ -96,7 +96,7 @@
 - 阅读 :doc:`conventions` 了解术语和约定
 - 学习 :doc:`01_elastic_fundamentals` 理解理论基础
 - 探索 :doc:`02_zero_temperature_elastic` 掌握详细工作流程
-- 查看 :doc:`07_howto` 获取更多实用示例
+- 查看 :doc:`08_howto` 获取更多实用示例
 
 常见问题
 ========

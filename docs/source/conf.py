@@ -42,9 +42,9 @@ bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
 
 # MyST-NB配置
-myst_nb_execution_mode = "cache"  # 缓存执行结果，避免重复计算
-myst_nb_execution_timeout = 30  # 轻量示例超时（秒）
-myst_nb_execution_excludepatterns = [  # 排除重计算案例
+nb_execution_mode = "cache"  # 缓存执行结果，避免重复计算
+nb_execution_timeout = 30  # 轻量示例超时（秒）
+nb_execution_excludepatterns = [  # 排除重计算案例
     "tutorial/gallery/advanced/*.ipynb",
     "tutorial/**/05b_wave_propagation.ipynb",
 ]
