@@ -8,9 +8,11 @@ ThermoElasticSim 文档
 
    .. image:: https://img.shields.io/badge/version-4.0.0-blue
       :alt: Version
+      :target: https://github.com/bud-primordium/ThermoElasticSim/
 
    .. image:: https://img.shields.io/badge/license-GPL--3.0-green
       :alt: License
+      :target: https://github.com/bud-primordium/ThermoElasticSim/blob/main/LICENSE
 
 欢迎使用ThermoElasticSim文档！
 
@@ -21,6 +23,7 @@ ThermoElasticSim 文档
    :maxdepth: 1
    :caption: 快速入门
 
+   installation
    quickstart
    yaml_scenarios
    conventions
@@ -34,6 +37,12 @@ ThermoElasticSim 文档
    02_zero_temperature_elastic
    03_md_and_ensembles
    04_finite_temperature_elastic
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 交互式教程
+
+   tutorial/index
 
 .. toctree::
    :maxdepth: 2
@@ -125,7 +134,6 @@ ThermoElasticSim 文档
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
 
 参考文献
 ========

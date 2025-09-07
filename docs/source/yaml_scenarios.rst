@@ -13,17 +13,22 @@ YAML 场景快速上手
    # 零温完整（多尺寸扫描）
    python -m thermoelasticsim.cli.run -c examples/modern_yaml/zero_temp_elastic.yaml
 
-   # 有限温完整（预热→NPT→NHC生产）
+   # 有限温完整（预热→NPT→NHC 生产）
    python -m thermoelasticsim.cli.run -c examples/modern_yaml/finite_temp_elastic.yaml
 
-   # 教学单元（弛豫/NVE/NVT/NPT）
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/relax.yaml
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nve.yaml
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_langevin.yaml
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_nhc.yaml
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_andersen.yaml
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_berendsen.yaml
-   python -m thermoelasticsim.cli.run -c examples/modern_yaml/npt.yaml
+   # 弹性波模拟
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave.yaml            # 解析计算与可视化
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave_dynamics_L.yaml # 纵波传播模拟
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/elastic_wave_dynamics_T.yaml # 横波传播模拟
+
+   # 教学拆分单元
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/relax.yaml          # 零温弛豫（含 E–V/E–s 曲线）
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nve.yaml            # NVE（温度/能量演化）
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_langevin.yaml   # NVT-Langevin
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_nhc.yaml        # NVT-NHC
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_andersen.yaml   # NVT-Andersen
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/nvt_berendsen.yaml  # NVT-Berendsen
+   python -m thermoelasticsim.cli.run -c examples/modern_yaml/npt.yaml            # NPT-MTK
 
 参数说明
 ========

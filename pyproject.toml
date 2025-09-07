@@ -43,10 +43,14 @@ dev = [
     "pre-commit>=3.0",
 ]
 docs = [
-    "sphinx>=5.0",
+    "sphinx>=7.0",
     "sphinx-rtd-theme>=1.2",
-    "numpydoc>=1.5",
-    "sphinxcontrib-bibtex>=2.4.0", # 保留文献引用功能
+    "sphinxcontrib-bibtex>=2.4.0",   # 保留文献引用功能
+    "myst-nb>=1.0",                  # MyST-NB：Notebook集成
+    "myst-parser>=2.0",              # MyST语法支持
+    "ipykernel",                     # notebook执行内核
+    "jupyter",                       # notebook环境（可选）
+    "ipywidgets",                    # 交互控件（可选）
 ]
 
 

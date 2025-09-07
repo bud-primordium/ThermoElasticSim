@@ -13,22 +13,22 @@ EAM势将系统的总能量表示为对势项和嵌入能的总和。每个原�
 总能量表达式为：
 
 .. math::
-    E = \\sum_i F(\\rho_i) + \\frac{1}{2} \\sum_{i \\neq j} \\phi(r_{ij})
+    E = \sum_i F(\rho_i) + \frac{1}{2} \sum_{i \neq j} \phi(r_{ij})
 
 其中，:math:`F(\rho_i)` 是嵌入能函数，:math:`\rho_i` 是原子 :math:`i` 处的局部电子密度，
-:math:`\\phi(r_{ij})` 是原子 :math:`i` 和 :math:`j` 之间的对势函数。
+:math:`\phi(r_{ij})` 是原子 :math:`i` 和 :math:`j` 之间的对势函数。
 
 局部电子密度 :math:`\rho_i` 由以下公式计算：
 
 .. math::
-    \\rho_i = \\sum_{j \\neq i} \\psi(r_{ij})
+    \rho_i = \sum_{j \neq i} \psi(r_{ij})
 
-其中，:math:`\\psi(r_{ij})` 是原子 :math:`j` 在原子 :math:`i` 处产生的电子密度贡献函数。
+其中，:math:`\psi(r_{ij})` 是原子 :math:`j` 在原子 :math:`i` 处产生的电子密度贡献函数。
 
-作用在原子 :math:`i` 上的力 :math:`\\mathbf{F}_i` 由总能量对原子位置的负梯度给出：
+作用在原子 :math:`i` 上的力 :math:`\mathbf{F}_i` 由总能量对原子位置的负梯度给出：
 
 .. math::
-    \\mathbf{F}_i = -\\nabla_i E = -\\sum_{j \\neq i} \\left[ \\phi'(r_{ij}) + F'(\\rho_i) \\psi'(r_{ij}) + F'(\\rho_j) \\psi'(r_{ji}) \\right] \\frac{\\mathbf{r}_{ij}}{r_{ij}}
+    \mathbf{F}_i = -\nabla_i E = -\sum_{j \neq i} \left[ \phi'(r_{ij}) + F'(\rho_i) \psi'(r_{ij}) + F'(\rho_j) \psi'(r_{ji}) \right] \frac{\mathbf{r}_{ij}}{r_{ij}}
 
 References
 ----------

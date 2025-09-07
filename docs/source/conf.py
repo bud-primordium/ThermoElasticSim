@@ -32,7 +32,7 @@ extensions = [
     "sphinx.ext.intersphinx",  # 链接到其他项目文档
     "sphinx.ext.coverage",  # 文档覆盖率检查
     "sphinx.ext.todo",  # TODO标记支持
-    # "numpydoc",  # 使用napoleon即可解析NumPy风格；去除以减少噪声告警
+    "myst_nb",  # MyST-NB：Jupyter Notebook集成（包含myst_parser功能）
     "sphinxcontrib.bibtex",  # BibTeX文献引用支持
 ]
 
@@ -40,6 +40,24 @@ extensions = [
 bibtex_bibfiles = ["references.bib"]
 bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
+
+# MyST-NB配置
+myst_nb_execution_mode = "cache"  # 缓存执行结果，避免重复计算
+myst_nb_execution_timeout = 30  # 轻量示例超时（秒）
+myst_nb_execution_excludepatterns = [  # 排除重计算案例
+    "tutorial/gallery/advanced/*.ipynb",
+    "tutorial/**/05b_wave_propagation.ipynb",
+]
+nb_execution_allow_errors = False  # 不允许执行错误
+nb_execution_show_tb = True  # 显示traceback便于调试
+
+# MyST-Parser配置
+myst_enable_extensions = [
+    "dollarmath",  # $...$ 数学公式
+    "amsmath",  # LaTeX AMS扩展
+    "deflist",  # 定义列表
+    "tasklist",  # 任务列表
+]
 
 # 模板路径
 templates_path = ["_templates"]
@@ -50,7 +68,8 @@ exclude_patterns = []
 # 源文件后缀
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
+    ".md": "myst-nb",  # MyST-NB统一处理Markdown和Notebook
+    ".ipynb": "myst-nb",  # Jupyter Notebook支持
 }
 
 # 主文档
@@ -168,6 +187,18 @@ html_theme_options = {
     "includehidden": True,  # 包含隐藏的toctree
     "titles_only": False,  # 显示子标题
     "prev_next_buttons_location": "bottom",  # 上下页按钮位置
+    "vcs_pageview_mode": "edit",  # GitHub编辑链接
+    "style_external_links": True,  # 外部链接样式
+}
+
+# GitHub页面配置
+html_context = {
+    "display_github": True,  # 显示GitHub链接
+    "github_user": "bud-primordium",  # GitHub用户名
+    "github_repo": "ThermoElasticSim",  # 仓库名
+    "github_version": "main",  # 分支名
+    "conf_py_path": "/docs/source/",  # conf.py路径
+    "source_suffix": source_suffix,  # 源文件后缀
 }
 
 # 静态文件路径
