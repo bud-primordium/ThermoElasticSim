@@ -85,6 +85,11 @@ line-length = 88
 # 这会影响一些语法检查，比如py310才有的match语句
 target-version = "py311"
 
+# 扩展排除的文件和目录（在默认排除的基础上添加）
+extend-exclude = [
+    "docs/source/tutorial/*.ipynb",  # 排除教学notebook文件
+]
+
 # ========== Lint配置 ==========
 [tool.ruff.lint]
 # 选择的规则集

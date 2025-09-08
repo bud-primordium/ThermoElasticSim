@@ -11,7 +11,7 @@ repos:
       - id: ruff         # linter - 检查代码问题
         args: [--fix]    # 自动修复能修复的问题
       - id: ruff-format  # formatter - 代码格式化
-  
+
   # 其他有用的钩子
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -21,4 +21,5 @@ repos:
       - id: check-yaml           # 检查YAML语法
       - id: check-added-large-files  # 防止提交大文件
         args: [--maxkb=1000]
+        exclude: 'docs/source/tutorial/.*\.ipynb$'  # 教学notebook文件例外
       - id: check-merge-conflict  # 检查合并冲突标记

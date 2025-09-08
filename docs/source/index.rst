@@ -35,6 +35,8 @@ ThermoElasticSim 文档
 
    tutorial/01_elastic_fundamentals
    tutorial/02_zero_temperature
+   tutorial/03a_md_nve_nvt
+   tutorial/03b_md_npt_mtk
 
 .. toctree::
    :maxdepth: 2
@@ -45,6 +47,7 @@ ThermoElasticSim 文档
    02_zero_temperature_elastic
    03_md_and_ensembles
    04_finite_temperature_elastic
+
 .. toctree::
    :maxdepth: 2
    :caption: 拓展内容

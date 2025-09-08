@@ -42,10 +42,10 @@ bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
 
 # MyST-NB配置
-nb_execution_mode = "cache"  # 缓存执行结果，避免重复计算
-nb_execution_timeout = 600  # 教程执行超时（10分钟，适应MD模拟）
-nb_execution_excludepatterns = [  # 排除重计算案例
-    "tutorial/02_zero_temperature.ipynb"
+nb_execution_mode = "off"  # 关闭执行：依赖笔记本中已保存的输出
+nb_execution_timeout = 600  # 无效（off模式下不执行），保留以便本地切换
+nb_execution_excludepatterns = [  # 排除重计算案例（保留 03a/03b 以执行生成 Plotly 输出）
+    "tutorial/02_zero_temperature.ipynb",
 ]
 nb_execution_allow_errors = False  # 不允许执行错误
 nb_execution_show_tb = True  # 显示traceback便于调试
@@ -205,6 +205,10 @@ html_static_path = ["_static"]
 html_css_files = [
     "custom.css",
 ]
+html_js_files = [
+    # 为 Plotly 输出提供前端库（使用 CDN）；如需离线构建，可将该文件下载到 _static 并改为相对路径
+    "https://cdn.plot.ly/plotly-2.32.0.min.js",
+]
 
 # 网站图标
 # html_favicon = '_static/favicon.ico'
@@ -323,6 +327,12 @@ suppress_warnings = [
     "ref.citation",
     "ref.python",
     "mystnb.unknown_mime_type",  # 抑制plotly等未知MIME类型警告
+]
+
+# 优先渲染 Plotly 的 MIME 类型，确保在 HTML 中正确显示交互图
+nb_mime_priority_overrides = [
+    ("html", "application/vnd.plotly.v1+json", 10),
+    ("html", "text/html", 20),
 ]
 
 # 默认角色
