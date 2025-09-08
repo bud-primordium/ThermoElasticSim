@@ -603,7 +603,7 @@ class NoseHooverNVTScheme(IntegrationScheme):
 
         try:
             # 步骤1: Nose-Hoover恒温器半步
-            self.thermostat.propagate(cell, dt / 2)
+            self.thermostat.propagate(cell, dt / 2, potential=potential)
 
             # 步骤2: 标准Velocity-Verlet积分
             # 2a. 速度半步更新：v(t+dt/2) = v(t) + F(t)/m * dt/2
@@ -619,7 +619,7 @@ class NoseHooverNVTScheme(IntegrationScheme):
             self.v_prop.propagate(cell, dt / 2)
 
             # 步骤3: Nose-Hoover恒温器再次半步
-            self.thermostat.propagate(cell, dt / 2)
+            self.thermostat.propagate(cell, dt / 2, potential=potential)
 
             # 更新统计信息
             self._step_count += 1
@@ -1396,9 +1396,22 @@ class MTKNPTScheme(IntegrationScheme):
             from thermoelasticsim.utils.utils import KB_IN_EV
 
             # 恒温器动能: Σ(p_ζ²/2Q)
-            thermostat_kinetic = np.sum(
-                0.5 * self._thermostat.p_zeta**2 / self._thermostat.Q
-            )
+            # 若恒温器尚未初始化Q（首次调用、未propagate），先初始化；失败则视为0
+            if getattr(self._thermostat, "Q", None) is None or not getattr(
+                self._thermostat, "_initialized", False
+            ):
+                try:
+                    self._thermostat._initialize_Q_parameters(cell)
+                except Exception:
+                    thermostat_kinetic = 0.0
+                else:
+                    thermostat_kinetic = float(
+                        np.sum(0.5 * self._thermostat.p_zeta**2 / self._thermostat.Q)
+                    )
+            else:
+                thermostat_kinetic = float(
+                    np.sum(0.5 * self._thermostat.p_zeta**2 / self._thermostat.Q)
+                )
 
             # 恒温器势能: N_f*k_B*T₀*ζ[0] + k_B*T₀*Σ(ζ[1:])
             kB_T = KB_IN_EV * self._thermostat.target_temperature
@@ -1411,9 +1424,16 @@ class MTKNPTScheme(IntegrationScheme):
                 )
             except Exception:
                 ndof = 3 if len(cell.atoms) <= 1 else 3 * len(cell.atoms) - 3
-            thermostat_potential = ndof * kB_T * self._thermostat.zeta[
-                0
-            ] + kB_T * np.sum(self._thermostat.zeta[1:])
+            # 兼容 M=1 的情形（无后续链变量）
+            if (
+                getattr(self._thermostat, "tchain", 1) <= 1
+                or len(getattr(self._thermostat, "zeta", np.array([0.0]))) <= 1
+            ):
+                thermostat_potential = ndof * kB_T * float(self._thermostat.zeta[0])
+            else:
+                thermostat_potential = ndof * kB_T * float(
+                    self._thermostat.zeta[0]
+                ) + kB_T * float(np.sum(self._thermostat.zeta[1:]))
 
             thermostat_energy = thermostat_kinetic + thermostat_potential
 
@@ -1510,12 +1530,7 @@ class MTKNPTScheme(IntegrationScheme):
                     cell, potential
                 )
                 current_pressure_gpa = current_pressure_ev / 6.2415e-3
-            # 近零外压的数值漂移抑制（短程统计稳态）：将极小残差裁剪为0
-            if (
-                abs(self.target_pressure_gpa) < 0.02
-                and abs(current_pressure_gpa) < 0.25
-            ):
-                current_pressure_gpa = 0.0
+            # 教程场景：返回原始瞬时压力，不做“近零裁剪”，以便观察真实波动
         else:
             current_pressure_gpa = 0.0
 

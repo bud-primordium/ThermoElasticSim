@@ -1101,6 +1101,9 @@ class Cell:
 
         for i, atom in enumerate(self.atoms):
             atom.position = positions[i].copy()
+        # 提醒：部分算法需要访问最近使用的势能对象以计算扩展哈密顿量
+        # 若上层调用提供了 potential，可临时缓存到 Cell（教学用途）。
+        # 具体设置由算法调用者完成：cell._last_potential_object = potential
 
     def get_volume(self) -> float:
         r"""计算晶胞体积

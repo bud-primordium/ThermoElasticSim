@@ -560,17 +560,11 @@ class AndersenThermostatPropagator(Propagator):
         # 计算当前系统温度
         current_temp = cell.calculate_temperature()
 
-        # 系统级碰撞概率计算 (关键修复!)
-        # 根据研究报告: P_collision = ν × Δt
-        # 这是整个系统的碰撞概率，不是单个原子的
-        system_collision_probability = self._effective_collision_frequency * dt
-
-        # 限制碰撞概率在合理范围内
-        system_collision_probability = min(system_collision_probability, 0.5)  # 最多50%
-
-        # 向量化判定每个原子是否发生碰撞
-        per_atom_collision_probability = system_collision_probability / num_atoms
-        if per_atom_collision_probability < 0:
+        # 每个原子的碰撞概率（Andersen 原始定义）：p_atom = ν × Δt
+        # ν 单位采用 fs⁻¹，Δt 为 fs；期望每步碰撞数为 N × p_atom。
+        per_atom_collision_probability = self._effective_collision_frequency * dt
+        # 约束到 [0, 1]
+        if per_atom_collision_probability < 0.0:
             per_atom_collision_probability = 0.0
         elif per_atom_collision_probability > 1.0:
             per_atom_collision_probability = 1.0
@@ -609,10 +603,15 @@ class AndersenThermostatPropagator(Propagator):
 
         # 定期输出统计信息
         if self._total_steps % 1000 == 0:
-            actual_collision_rate = self._total_collisions / self._total_steps
-            expected_rate = self._effective_collision_frequency
+            # 实际/期望的均是“每步碰撞数”口径
+            actual_collisions_per_step = self._total_collisions / self._total_steps
+            expected_collisions_per_step = (
+                num_atoms * self._effective_collision_frequency * dt
+            )
             rate_ratio = (
-                (actual_collision_rate / expected_rate) if expected_rate > 0 else 0
+                (actual_collisions_per_step / expected_collisions_per_step)
+                if expected_collisions_per_step > 0
+                else 0.0
             )
             temp_error = (
                 abs(current_temp - self.target_temperature)
@@ -624,7 +623,7 @@ class AndersenThermostatPropagator(Propagator):
                 f"Andersen统计 (#{self._total_steps}步): T={current_temp:.1f}K, 误差={temp_error:.2f}%"
             )
             print(
-                f"  碰撞率: 实际={actual_collision_rate:.6f}, 期望={expected_rate:.6f}, 比值={rate_ratio:.3f}"
+                f"  每步碰撞数: 实际={actual_collisions_per_step:.4f}, 期望={expected_collisions_per_step:.4f}, 比值={rate_ratio:.3f}"
             )
 
     def _sample_maxwell_boltzmann_velocity(self, atom) -> None:
@@ -832,7 +831,10 @@ class NoseHooverChainPropagator(Propagator):
             f"NHC初始化: N_atoms={self._num_atoms_global}, N_f={N_f}, "
             f"T={self.target_temperature}K, τ={self.tdamp}fs"
         )
-        print(f"Q参数: Q[0]={self.Q[0]:.3e}, Q[1:]={self.Q[1]:.3e}")
+        if self.tchain > 1:
+            print(f"Q参数: Q[0]={self.Q[0]:.3e}, Q[1]={self.Q[1]:.3e}")
+        else:
+            print(f"Q参数: Q[0]={self.Q[0]:.3e}")
 
     def _calculate_instantaneous_kinetic_energy(self, cell: Cell) -> float:
         """计算瞬时动能
@@ -903,8 +905,8 @@ class NoseHooverChainPropagator(Propagator):
                 # 执行单次NHC积分循环
                 self._nhc_integration_loop(cell, sub_delta)
 
-        # 更新统计信息
-        self._update_statistics(cell)
+        # 更新统计信息（传递 potential 以评估扩展哈密顿量）
+        self._update_statistics(cell, potential=kwargs.get("potential"))
 
     def _nhc_integration_loop(self, cell: Cell, delta: float) -> None:
         r"""单次 NHC 积分循环（对称回文序列）
@@ -1012,7 +1014,7 @@ class NoseHooverChainPropagator(Propagator):
             coupling_factor = np.exp(-delta4 * self.p_zeta[j + 1] / self.Q[j + 1])
             self.p_zeta[j] *= coupling_factor
 
-    def _update_statistics(self, cell: Cell) -> None:
+    def _update_statistics(self, cell: Cell, potential=None) -> None:
         """更新统计信息"""
         self._total_steps += 1
 
@@ -1022,7 +1024,7 @@ class NoseHooverChainPropagator(Propagator):
 
         # 记录守恒量（扩展哈密顿量）
         try:
-            conserved_energy = self.get_conserved_energy(cell)
+            conserved_energy = self.get_conserved_energy(cell, potential=potential)
             self._conserved_energy_history.append(conserved_energy)
         except Exception:
             # 如果计算失败，记录NaN
@@ -1034,7 +1036,7 @@ class NoseHooverChainPropagator(Propagator):
             self._temp_history.pop(0)
             self._conserved_energy_history.pop(0)
 
-    def get_conserved_energy(self, cell: Cell) -> float:
+    def get_conserved_energy(self, cell: Cell, potential=None) -> float:
         r"""计算 NHC 扩展哈密顿量（守恒量）
 
         .. math::
@@ -1057,7 +1059,19 @@ class NoseHooverChainPropagator(Propagator):
 
         # 动能和势能
         kinetic = self._calculate_instantaneous_kinetic_energy(cell)
-        potential = cell.calculate_potential_energy()
+        # 兼容：优先使用显式传入的势能对象
+        if potential is None:
+            # 尝试从 Cell 获取（若提供），否则报错
+            if (
+                hasattr(cell, "_last_potential_object")
+                and cell._last_potential_object is not None
+            ):
+                potential = cell._last_potential_object
+            else:
+                raise RuntimeError(
+                    "NHC需要计算势能，请传入 potential 或在 Cell 上提供 _last_potential_object。"
+                )
+        potential_energy = potential.calculate_energy(cell)
 
         # 热浴动能
         thermostat_kinetic = np.sum(0.5 * self.p_zeta**2 / self.Q)
@@ -1068,7 +1082,7 @@ class NoseHooverChainPropagator(Propagator):
             self.zeta[1:]
         )
 
-        return kinetic + potential + thermostat_kinetic + thermostat_potential
+        return kinetic + potential_energy + thermostat_kinetic + thermostat_potential
 
     def get_statistics(self) -> dict:
         """获取详细统计信息"""
