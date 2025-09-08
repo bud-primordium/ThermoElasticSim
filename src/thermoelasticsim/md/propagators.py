@@ -1264,72 +1264,112 @@ class LangevinThermostatPropagator(Propagator):
             raise ValueError(f"时间步长必须为正数，得到 dt={dt} fs")
 
         try:
-            # 转换时间单位：dt从fs转换为ps（因为friction单位是ps⁻¹）
+            # 时间单位转换：dt从fs转换为ps（摩擦系数单位为ps⁻¹）
             dt_ps = dt / 1000.0  # fs -> ps
 
             # 计算当前温度用于监控
             current_temp = self._calculate_temperature(cell)
 
-            # BBK算法常数
+            # BBK (Brünger-Brooks-Karplus) 算法常数
             gamma_dt = self.friction * dt_ps
-            c1 = np.exp(-gamma_dt)  # 速度衰减因子
+            damping_factor = np.exp(-gamma_dt)  # 速度阻尼因子 c1 = exp(-γΔt)
 
-            # 向量化更新
-            V = cell.get_velocities()  # (N,3)
-            M = np.array([a.mass for a in cell.atoms], dtype=np.float64)
+            # ===== 核心修复：在零质心子空间中执行Ornstein-Uhlenbeck过程 =====
+            # 获取系统状态
+            velocities = cell.get_velocities()  # 所有原子速度 (N,3)
+            masses = np.array([a.mass for a in cell.atoms], dtype=np.float64)
+            total_mass = float(np.sum(masses))
 
-            # 记录摩擦与随机做功
-            V_old = V.copy()
+            # 步骤1：投影到零质心子空间
+            # 计算并移除质心速度，确保在约束子空间内演化
+            com_velocity = (masses[:, None] * velocities).sum(axis=0) / total_mass
+            velocities_in_com_frame = velocities - com_velocity  # 零质心坐标系下的速度
 
-            # σ_i = sqrt(kB*T*(1-c1^2)/m_i)
-            variance = KB_IN_EV * self.target_temperature * (1.0 - c1 * c1) / M
-            variance = np.maximum(variance, 0.0)
-            sigma = np.sqrt(variance)
+            # 保存用于做功计算
+            velocities_old = velocities_in_com_frame.copy()
 
-            R = np.random.normal(0.0, 1.0, V.shape)
-            V_new = c1 * V + sigma[:, None] * R
-
-            # 做功统计（近似 m * v · dv）
-            dv_friction = (c1 - 1.0) * V_old
-            dv_random = sigma[:, None] * R
-            total_friction_work = float(
-                np.sum(M * np.einsum("ij,ij->i", V_old, dv_friction))
+            # 步骤2：计算满足涨落-耗散定理的随机力标准差
+            # σ_i = sqrt(kB*T*(1-exp(-2γΔt))/m_i)
+            # 注意：(1-c1²) = (1-exp(-2γΔt)) 保证正确的温度涨落
+            variance_per_atom = (
+                KB_IN_EV * self.target_temperature * (1.0 - damping_factor**2) / masses
             )
-            total_random_work = float(
-                np.sum(M * np.einsum("ij,ij->i", V_old, dv_random))
+            variance_per_atom = np.maximum(variance_per_atom, 0.0)  # 数值稳定性
+            random_force_sigma = np.sqrt(variance_per_atom)
+
+            # 步骤3：生成满足质心动量守恒的随机增量
+            # 关键：随机力必须在零质心子空间内，即 Σ(m_i * Δv_i^random) = 0
+            gaussian_noise = np.random.normal(0.0, 1.0, velocities.shape)
+            random_velocity_increment = (
+                random_force_sigma[:, None] * gaussian_noise
+            )  # 未约束的随机增量
+
+            # 投影到零质心子空间（移除质心分量）
+            random_com = (masses[:, None] * random_velocity_increment).sum(
+                axis=0
+            ) / total_mass
+            random_velocity_increment -= random_com  # 满足质心动量守恒约束
+
+            # 步骤4：Ornstein-Uhlenbeck更新（BBK积分）
+            # v(t+Δt) = exp(-γΔt) * v(t) + σ * R(t)
+            # 这里v和R都在零质心子空间内
+            velocities_new = (
+                damping_factor * velocities_in_com_frame + random_velocity_increment
             )
 
-            # 回写速度
+            # 步骤5：计算做功（用于诊断涨落-耗散平衡）
+            friction_velocity_change = (
+                damping_factor - 1.0
+            ) * velocities_old  # 摩擦力导致的速度变化
+            friction_work = float(
+                np.sum(
+                    masses
+                    * np.einsum("ij,ij->i", velocities_old, friction_velocity_change)
+                )
+            )
+            random_work = float(
+                np.sum(
+                    masses
+                    * np.einsum("ij,ij->i", velocities_old, random_velocity_increment)
+                )
+            )
+
+            # 步骤6：更新原子速度
+            # 重要：不再调用remove_com_motion()，因为已经在零质心子空间内
             for i, atom in enumerate(cell.atoms):
-                atom.velocity = V_new[i]
-
-            # 移除质心运动（保持动量守恒）
-            # 注意：在Langevin动力学中，随机力可能会产生净动量
-            cell.remove_com_motion()
+                atom.velocity = velocities_new[i]
 
             # 更新统计信息
             self._total_steps += 1
             self._temperature_history.append(current_temp)
-            self._friction_work_history.append(total_friction_work)
-            self._random_work_history.append(total_random_work)
+            self._friction_work_history.append(friction_work)
+            self._random_work_history.append(random_work)
 
-            # 定期输出统计信息（每1000步）
+            # 定期输出诊断信息（每1000步）
             if self._total_steps % 1000 == 0:
                 final_temp = self._calculate_temperature(cell)
-                temp_error = (
-                    abs(final_temp - self.target_temperature)
-                    / self.target_temperature
-                    * 100
+                temp_deviation = abs(final_temp - self.target_temperature)
+                temp_relative_error = temp_deviation / self.target_temperature * 100
+
+                # 计算最近1000步的平均做功
+                recent_friction_work = np.mean(self._friction_work_history[-1000:])
+                recent_random_work = np.mean(self._random_work_history[-1000:])
+
+                # 涨落-耗散平衡检查：理想情况下摩擦做功与随机做功应相互抵消
+                energy_balance_ratio = abs(
+                    (recent_friction_work + recent_random_work)
+                    / max(abs(recent_friction_work), 1e-10)
                 )
-                avg_friction_work = np.mean(self._friction_work_history[-1000:])
-                avg_random_work = np.mean(self._random_work_history[-1000:])
 
                 print(
-                    f"Langevin统计 (#{self._total_steps}步): T={final_temp:.1f}K, 误差={temp_error:.2f}%"
+                    f"Langevin恒温器 [步数={self._total_steps:6d}]: "
+                    f"T={final_temp:6.1f}K (目标={self.target_temperature:.0f}K, 误差={temp_relative_error:4.1f}%)"
                 )
-                print(
-                    f"  能量平衡: 摩擦做功={avg_friction_work:.3e} eV, 随机做功={avg_random_work:.3e} eV"
-                )
+                if self._total_steps <= 5000:  # 初期显示更多诊断信息
+                    print(
+                        f"  涨落-耗散平衡: 摩擦做功={recent_friction_work:+.3e} eV, "
+                        f"随机做功={recent_random_work:+.3e} eV, 平衡度={energy_balance_ratio:.3f}"
+                    )
 
         except Exception as e:
             raise RuntimeError(f"Langevin恒温器传播失败: {str(e)}") from e
