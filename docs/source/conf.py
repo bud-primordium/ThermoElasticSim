@@ -45,9 +45,7 @@ bibtex_reference_style = "author_year"
 nb_execution_mode = "cache"  # 缓存执行结果，避免重复计算
 nb_execution_timeout = 600  # 教程执行超时（10分钟，适应MD模拟）
 nb_execution_excludepatterns = [  # 排除重计算案例
-    "tutorial/gallery/advanced/*.ipynb",
-    "tutorial/**/05b_wave_propagation.ipynb",
-    "tutorial/04_finite_temperature.ipynb",  # 有限温MD耗时较长，本地预执行
+    "tutorial/02_zero_temperature.ipynb"
 ]
 nb_execution_allow_errors = False  # 不允许执行错误
 nb_execution_show_tb = True  # 显示traceback便于调试
