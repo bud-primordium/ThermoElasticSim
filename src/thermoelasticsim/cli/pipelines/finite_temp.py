@@ -72,13 +72,13 @@ def run_finite_temp_pipeline(
     # 2) NPT 预平衡（MTK）
     npt = cfg.get("finite_temp.npt", {})
     P_target = float(cfg.get("md.pressure", 0.0))
-    # Faster defaults: 0.5 fs timestep, ~0.2 ps duration by default
+    # Defaults: 0.5 fs timestep, ~1.0 ps duration by default
     npt_dt = float(npt.get("dt", 0.5))
     tdamp = float(npt.get("tdamp", 50.0))
     pdamp = float(npt.get("pdamp", 150.0))
-    npt_steps = int(npt.get("steps", 400))  # 0.2 ps @ 0.5 fs
-    npt_sample = int(npt.get("sample_every", 20))
-    ma_window_ps = float(npt.get("ma_window_ps", 0.2))
+    npt_steps = int(npt.get("steps", 2000))  # ~1.0 ps @ 0.5 fs
+    npt_sample = int(npt.get("sample_every", 50))
+    ma_window_ps = float(npt.get("ma_window_ps", 0.5))
     scheme_npt = create_mtk_npt_scheme(
         T, P_target, tdamp, pdamp, int(npt.get("tchain", 3)), int(npt.get("pchain", 3))
     )
