@@ -596,12 +596,98 @@ def main():
             "coeffs": coeffs.tolist(),
         }
 
-    res_C11 = do_series(
-        "C11", strain_set["C11"]["mode"], strain_set["C11"]["magnitudes"]
-    )
-    res_C12 = do_series(
-        "C12", strain_set["C12"]["mode"], strain_set["C12"]["magnitudes"]
-    )
+    def do_series_normal(mags: np.ndarray) -> tuple[dict[str, Any], dict[str, Any]]:
+        """单次 normal 采样同时拟合 C11 与 C12。
+
+        使用立方晶系线弹性关系：σxx=C11·εxx，σyy=σzz=C12·εxx。
+        """
+        xs: list[float] = []
+        y11: list[float] = []
+        e11: list[float] = []
+        y12: list[float] = []
+        e12: list[float] = []
+        samples: list[dict[str, Any]] = []
+
+        for m in mags:
+            dcell = apply_strain(eq_cell, "xx", float(m))
+            stat = nhc_sample_stress(
+                dcell,
+                pot,
+                target_T,
+                dt=float(cfg.get("finite_temp.nhc.dt", 0.5)),
+                tdamp=float(
+                    cfg.get(
+                        "finite_temp.nhc.tdamp",
+                        cfg.get("thermostats.nose_hoover.tdamp", 50.0),
+                    )
+                ),
+                pre_steps=int(cfg.get("finite_temp.nhc.pre_steps", 5000)),
+                prod_steps=int(cfg.get("finite_temp.nhc.prod_steps", 10000)),
+                sample_every=int(cfg.get("finite_temp.nhc.sample_every", 50)),
+                label=f"normal {m:+.2%}",
+                logger=logger,
+            )
+            if not stat.get("success", False):
+                logger.error(f"normal {m:+.2%} 采样失败")
+                continue
+
+            sig_avg = stat["avg_sigma"]  # GPa
+            sig_std = stat["std_sigma"]
+
+            # 零点偏置校正
+            y11_val = float(sig_avg[0, 0] - sigma_zero[0, 0])
+            y12_val = float(
+                (
+                    (sig_avg[1, 1] - sigma_zero[1, 1])
+                    + (sig_avg[2, 2] - sigma_zero[2, 2])
+                )
+                / 2.0
+            )
+            e11_val = float(sig_std[0, 0])
+            e12_val = float(0.5 * (sig_std[1, 1] + sig_std[2, 2]))
+
+            xs.append(float(m))
+            y11.append(y11_val)
+            e11.append(e11_val)
+            y12.append(y12_val)
+            e12.append(e12_val)
+            samples.append(
+                {
+                    "strain": float(m),
+                    "sigma": sig_avg.tolist(),
+                    "sigma_std": sig_std.tolist(),
+                    "temp_avg": stat["avg_T"],
+                    "temp_std": stat["std_T"],
+                }
+            )
+
+        if len(xs) >= 2:
+            C11, coeffs11 = fit_elastic_constant(np.array(xs), np.array(y11))
+            C12, coeffs12 = fit_elastic_constant(np.array(xs), np.array(y12))
+        else:
+            C11, coeffs11 = float("nan"), np.array([np.nan, np.nan])
+            C12, coeffs12 = float("nan"), np.array([np.nan, np.nan])
+
+        res11 = {
+            "points": samples,
+            "strains": xs,
+            "stresses": y11,
+            "errors": e11,
+            "value": C11,
+            "coeffs": coeffs11.tolist(),
+        }
+        res12 = {
+            "points": samples,
+            "strains": xs,
+            "stresses": y12,
+            "errors": e12,
+            "value": C12,
+            "coeffs": coeffs12.tolist(),
+        }
+        return res11, res12
+
+    # 正常方向：一次采样同时得到 C11 与 C12
+    res_C11, res_C12 = do_series_normal(strain_set["C11"]["magnitudes"])
     res_C44 = do_series(
         "C44", strain_set["C44"]["mode"], strain_set["C44"]["magnitudes"]
     )
