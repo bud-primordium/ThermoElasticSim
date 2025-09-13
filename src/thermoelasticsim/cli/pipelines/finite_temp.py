@@ -58,7 +58,7 @@ def run_finite_temp_pipeline(
     T = float(cfg.get("md.temperature", mat.temperature or 300.0))
     pre = cfg.get("finite_temp.preheat", {})
     pre_dt = float(pre.get("dt", 0.5))
-    pre_steps = int(pre.get("steps", 10000))
+    pre_steps = int(pre.get("steps", 5000))
     friction = float(pre.get("friction", 3.0))
     assign_maxwell(cell, 20.0)
     scheme_pre = LangevinNVTScheme(target_temperature=T, friction=friction)
@@ -72,12 +72,13 @@ def run_finite_temp_pipeline(
     # 2) NPT 预平衡（MTK）
     npt = cfg.get("finite_temp.npt", {})
     P_target = float(cfg.get("md.pressure", 0.0))
-    npt_dt = float(npt.get("dt", 0.15))
+    # Faster defaults: 0.5 fs timestep, ~0.2 ps duration by default
+    npt_dt = float(npt.get("dt", 0.5))
     tdamp = float(npt.get("tdamp", 50.0))
     pdamp = float(npt.get("pdamp", 150.0))
-    npt_steps = int(npt.get("steps", 20000))
-    npt_sample = int(npt.get("sample_every", 50))
-    ma_window_ps = float(npt.get("ma_window_ps", 0.5))
+    npt_steps = int(npt.get("steps", 400))  # 0.2 ps @ 0.5 fs
+    npt_sample = int(npt.get("sample_every", 20))
+    ma_window_ps = float(npt.get("ma_window_ps", 0.2))
     scheme_npt = create_mtk_npt_scheme(
         T, P_target, tdamp, pdamp, int(npt.get("tchain", 3)), int(npt.get("pchain", 3))
     )
@@ -151,9 +152,9 @@ def run_finite_temp_pipeline(
     nhc_cfg = cfg.get("finite_temp.nhc", {})
     nhc_dt = float(nhc_cfg.get("dt", 0.5))
     nhc_tdamp = float(nhc_cfg.get("tdamp", 50.0))
-    pre_steps = int(nhc_cfg.get("pre_steps", 6000))
-    prod_steps = int(nhc_cfg.get("prod_steps", 20000))
-    sample_every = int(nhc_cfg.get("sample_every", 50))
+    pre_steps = int(nhc_cfg.get("pre_steps", 5000))
+    prod_steps = int(nhc_cfg.get("prod_steps", 10000))
+    sample_every = int(nhc_cfg.get("sample_every", 100))
 
     def _nhc_series(eq_cell, mode: str, mags: Iterable[float]):
         nhc = NoseHooverChainPropagator(
@@ -201,13 +202,72 @@ def run_finite_temp_pipeline(
         return xs, ys, es, coeffs, Cval
 
     default_mags = [-0.005, -0.004, -0.003, -0.002, 0.002, 0.003, 0.004, 0.005]
-    mags_c11 = cfg.get("finite_temp.strains.C11", default_mags)
-    mags_c12 = cfg.get("finite_temp.strains.C12", default_mags)
+    mags_normal = cfg.get("finite_temp.strains.normal", default_mags)
     mags_c44 = cfg.get("finite_temp.strains.C44", default_mags)
 
     eq_cell = cell.copy()
-    xs11, ys11, es11, coeffs11, C11 = _nhc_series(eq_cell.copy(), "xx", mags_c11)
-    xs12, ys12, es12, coeffs12, C12 = _nhc_series(eq_cell.copy(), "xx", mags_c12)
+
+    # Combine C11 and C12 from a single normal-strain series (εxx)
+    def _nhc_series_normal(eq_cell, mags: Iterable[float]):
+        nhc = NoseHooverChainPropagator(
+            target_temperature=T,
+            tdamp=nhc_tdamp,
+            tchain=int(nhc_cfg.get("tchain", 3)),
+            tloop=int(nhc_cfg.get("tloop", 1)),
+        )
+        for i in range(pre_steps):
+            nhc.propagate(eq_cell, nhc_dt)
+            if i and (i % max(1, pre_steps // 3) == 0):
+                logger.info(
+                    f"NHC 预平衡 {i:6d}/{pre_steps}: T={eq_cell.calculate_temperature():.1f} K"
+                )
+        xs: list[float] = []
+        y11: list[float] = []
+        e11: list[float] = []
+        y12: list[float] = []
+        e12: list[float] = []
+        for m in mags:
+            dcell = apply_strain(eq_cell, "xx", float(m))
+            temps: list[float] = []
+            sigmas: list[np.ndarray] = []
+            for s in range(prod_steps):
+                nhc.propagate(dcell, nhc_dt)
+                if s % sample_every == 0:
+                    temps.append(dcell.calculate_temperature())
+                    sigmas.append(dcell.calculate_stress_tensor(pot) * EV_TO_GPA)
+                if s and (s % max(1, prod_steps // 4) == 0):
+                    logger.info(
+                        f"NHC 生产 normal {s:6d}/{prod_steps}: T={temps[-1]:.1f} K"
+                    )
+            sig_avg = np.mean(sigmas, axis=0)
+            sig_std = np.std(sigmas, axis=0)
+            # Bias-corrected components
+            y11.append(float(sig_avg[0, 0] - sigma_zero[0, 0]))
+            e11.append(float(sig_std[0, 0]))
+            y12.append(
+                float(
+                    (
+                        (sig_avg[1, 1] - sigma_zero[1, 1])
+                        + (sig_avg[2, 2] - sigma_zero[2, 2])
+                    )
+                    / 2.0
+                )
+            )
+            e12.append(float(0.5 * (sig_std[1, 1] + sig_std[2, 2])))
+            xs.append(float(m))
+        if len(xs) >= 2:
+            coeffs11 = np.polyfit(np.array(xs), np.array(y11), 1)
+            C11 = float(coeffs11[0])
+            coeffs12 = np.polyfit(np.array(xs), np.array(y12), 1)
+            C12 = float(coeffs12[0])
+        else:
+            coeffs11, C11 = [0.0, 0.0], float("nan")
+            coeffs12, C12 = [0.0, 0.0], float("nan")
+        return (xs, y11, e11, coeffs11, C11), (xs, y12, e12, coeffs12, C12)
+
+    (xs11, ys11, es11, coeffs11, C11), (xs12, ys12, es12, coeffs12, C12) = (
+        _nhc_series_normal(eq_cell.copy(), mags_normal)
+    )
     xs44, ys44, es44, coeffs44, C44 = _nhc_series(eq_cell.copy(), "yz", mags_c44)
 
     p11 = plot_series(outdir, "C11", xs11, ys11, es11, coeffs11, C11)
