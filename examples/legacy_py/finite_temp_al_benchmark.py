@@ -214,15 +214,15 @@ def run_mtk_npt(
     dt: float = 0.5,
     tdamp: float = 50.0,
     pdamp: float = 150.0,
-    steps: int = 5000,
-    sample_every: int = 50,
-    ma_window_ps: float = 0.5,
+    steps: int = 400,
+    sample_every: int = 20,
+    ma_window_ps: float = 0.2,
 ) -> dict[str, Any]:
     """运行 MTK-NPT 并记录压力/体积/温度，输出压力演化图。
 
     说明：
     - 默认为 256 原子、dt=0.5 fs、pdamp=150 fs，压力更平滑（比 30 fs 更稳）
-    - steps=5000 即 2.5 ps；可按需延长至 3–5 ps 获得更小统计误差
+    - steps=400 即约 0.2 ps；如需更稳统计可将 steps 提高到 2000–5000
     """
     logger.info(
         f"MTK-NPT: T={T} K, P={P_target_GPa} GPa, dt={dt} fs, tdamp={tdamp} fs, pdamp={pdamp} fs, steps={steps}"
@@ -254,7 +254,7 @@ def run_mtk_npt(
             P_gpa = (-np.trace(sigma) / 3.0) / 6.2415e-3
             pressures_gpa.append(P_gpa)
             volumes.append(cell.volume)
-        if (s % (500)) == 0:
+        if s % max(1, steps // 10) == 0:
             logger.info(
                 f"NPT {s:6d}: T={temps[-1]:.1f}K, P={pressures_gpa[-1]:+.3f} GPa, V={volumes[-1]:.2f} Å³"
             )
@@ -463,7 +463,7 @@ def main():
         target_P,
         logger,
         run_dir,
-        dt=float(cfg.get("finite_temp.npt.dt", 0.3)),
+        dt=float(cfg.get("finite_temp.npt.dt", 0.5)),
         tdamp=float(
             cfg.get(
                 "finite_temp.npt.tdamp", cfg.get("thermostats.nose_hoover.tdamp", 50.0)
@@ -472,9 +472,9 @@ def main():
         pdamp=float(
             cfg.get("finite_temp.npt.pdamp", cfg.get("barostats.mtk.pdamp", 150.0))
         ),
-        steps=int(cfg.get("finite_temp.npt.steps", 2000)),
-        sample_every=int(cfg.get("finite_temp.npt.sample_every", 50)),
-        ma_window_ps=float(cfg.get("finite_temp.npt.ma_window_ps", 0.5)),
+        steps=int(cfg.get("finite_temp.npt.steps", 400)),
+        sample_every=int(cfg.get("finite_temp.npt.sample_every", 20)),
+        ma_window_ps=float(cfg.get("finite_temp.npt.ma_window_ps", 0.2)),
     )
     logger.info(
         f"NPT 结果: <P>={npt_stats['avg_pressure_GPa']:+.3f}±{npt_stats['std_pressure_GPa']:.3f} GPa, V={npt_stats['final_volume']:.2f} Å³"
