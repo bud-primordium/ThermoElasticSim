@@ -160,7 +160,7 @@ def run_langevin_preheat(
     logger: logging.Logger,
     *,
     dt: float = 0.5,
-    steps: int = 10000,
+    steps: int = 5000,
     friction: float = 3.0,
 ) -> dict[str, list[float]]:
     from thermoelasticsim.md.schemes import LangevinNVTScheme
@@ -211,18 +211,18 @@ def run_mtk_npt(
     logger: logging.Logger,
     run_dir: str,
     *,
-    dt: float = 0.15,
+    dt: float = 0.5,
     tdamp: float = 50.0,
     pdamp: float = 150.0,
-    steps: int = 20000,
+    steps: int = 5000,
     sample_every: int = 50,
     ma_window_ps: float = 0.5,
 ) -> dict[str, Any]:
     """运行 MTK-NPT 并记录压力/体积/温度，输出压力演化图。
 
     说明：
-    - 默认为 256 原子、dt=0.15 fs、pdamp=150 fs，压力更平滑（比 30 fs 更稳）
-    - steps=20000 即 3 ps；可按需延长至 20–50 ps 获得更小统计误差
+    - 默认为 256 原子、dt=0.5 fs、pdamp=150 fs，压力更平滑（比 30 fs 更稳）
+    - steps=5000 即 2.5 ps；可按需延长至 3–5 ps 获得更小统计误差
     """
     logger.info(
         f"MTK-NPT: T={T} K, P={P_target_GPa} GPa, dt={dt} fs, tdamp={tdamp} fs, pdamp={pdamp} fs, steps={steps}"
@@ -254,7 +254,7 @@ def run_mtk_npt(
             P_gpa = (-np.trace(sigma) / 3.0) / 6.2415e-3
             pressures_gpa.append(P_gpa)
             volumes.append(cell.volume)
-        if (s % (2000)) == 0:
+        if (s % (500)) == 0:
             logger.info(
                 f"NPT {s:6d}: T={temps[-1]:.1f}K, P={pressures_gpa[-1]:+.3f} GPa, V={volumes[-1]:.2f} Å³"
             )
@@ -346,22 +346,37 @@ def nhc_sample_stress(
     *,
     dt: float = 0.5,
     tdamp: float = 50.0,
-    pre_steps: int = 10000,
+    pre_steps: int = 5000,
     prod_steps: int = 20000,
-    sample_every: int = 50,
+    sample_every: int = 100,
+    label: str | None = None,
+    logger: logging.Logger | None = None,
 ) -> dict[str, Any]:
     nhc = NoseHooverChainPropagator(
         target_temperature=T, tdamp=tdamp, tchain=3, tloop=1
     )
+    # 设置上下文，便于内部初始化日志包含“在哪一步”
+    if label is not None:
+        nhc.context_label = f"{label}"
     stress_calc = StressCalculator()
 
     # 预平衡
+    if logger:
+        logger.info(
+            f"NHC 预平衡开始: {label or ''} dt={dt} fs, steps={pre_steps}, tdamp={tdamp} fs"
+        )
     for s in range(pre_steps):
         nhc.propagate(cell, dt)
-        if (s + 1) % 2000 == 0:
-            pass
+        if logger and (s + 1) % 2000 == 0:
+            logger.info(
+                f"NHC 预平衡进度: {s + 1}/{pre_steps} (T≈{cell.calculate_temperature():.1f}K)"
+            )
 
     # 生产采样
+    if logger:
+        logger.info(
+            f"NHC 生产开始: {label or ''} dt={dt} fs, steps={prod_steps}, sample_every={sample_every}"
+        )
     stresses: list[np.ndarray] = []
     temps: list[float] = []
     for s in range(prod_steps):
@@ -370,6 +385,8 @@ def nhc_sample_stress(
             sigma = stress_calc.compute_stress(cell, pot) * EV_TO_GPA  # GPa
             stresses.append(sigma)
             temps.append(cell.calculate_temperature())
+        if logger and (s + 1) % max(2000, sample_every * 20) == 0:
+            logger.info(f"NHC 生产进度: {s + 1}/{prod_steps}, 已采样={len(stresses)}")
 
     if not stresses:
         return {"success": False}
@@ -429,7 +446,7 @@ def main():
 
     # 2) 预热 + MTK-NPT 预平衡（带压力演化图）
     pre_dt = float(cfg.get("finite_temp.preheat.dt", 0.5))
-    pre_steps = int(cfg.get("finite_temp.preheat.steps", 10000))
+    pre_steps = int(cfg.get("finite_temp.preheat.steps", 3000))
     pre_gamma = float(
         cfg.get(
             "finite_temp.preheat.friction",
@@ -446,7 +463,7 @@ def main():
         target_P,
         logger,
         run_dir,
-        dt=float(cfg.get("finite_temp.npt.dt", 0.15)),
+        dt=float(cfg.get("finite_temp.npt.dt", 0.3)),
         tdamp=float(
             cfg.get(
                 "finite_temp.npt.tdamp", cfg.get("thermostats.nose_hoover.tdamp", 50.0)
@@ -455,7 +472,7 @@ def main():
         pdamp=float(
             cfg.get("finite_temp.npt.pdamp", cfg.get("barostats.mtk.pdamp", 150.0))
         ),
-        steps=int(cfg.get("finite_temp.npt.steps", 20000)),
+        steps=int(cfg.get("finite_temp.npt.steps", 2000)),
         sample_every=int(cfg.get("finite_temp.npt.sample_every", 50)),
         ma_window_ps=float(cfg.get("finite_temp.npt.ma_window_ps", 0.5)),
     )
@@ -529,9 +546,11 @@ def main():
                         cfg.get("thermostats.nose_hoover.tdamp", 50.0),
                     )
                 ),
-                pre_steps=int(cfg.get("finite_temp.nhc.pre_steps", 6000)),
-                prod_steps=int(cfg.get("finite_temp.nhc.prod_steps", 20000)),
+                pre_steps=int(cfg.get("finite_temp.nhc.pre_steps", 5000)),
+                prod_steps=int(cfg.get("finite_temp.nhc.prod_steps", 10000)),
                 sample_every=int(cfg.get("finite_temp.nhc.sample_every", 50)),
+                label=f"{name} {m:+.2%}",
+                logger=logger,
             )
             if not stat.get("success", False):
                 logger.error(f"{name} {m:+.2%} 采样失败")

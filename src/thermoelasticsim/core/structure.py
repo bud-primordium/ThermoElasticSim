@@ -829,6 +829,26 @@ class Cell:
         """
         return np.array([atom.velocity for atom in self.atoms], dtype=np.float64)
 
+    def set_velocities(self, velocities: np.ndarray) -> None:
+        """设置所有原子的速度
+
+        Parameters
+        ----------
+        velocities : numpy.ndarray
+            速度数组，形状为 (num_atoms, 3)
+
+        Raises
+        ------
+        ValueError
+            当输入数组形状与原子数不匹配时抛出
+        """
+        if velocities.shape != (len(self.atoms), 3):
+            raise ValueError(
+                f"速度数组形状错误: 期望({len(self.atoms)}, 3), 实际{velocities.shape}"
+            )
+        for i, atom in enumerate(self.atoms):
+            atom.velocity = velocities[i].copy()
+
     def get_forces(self):
         """
         获取所有原子的力信息

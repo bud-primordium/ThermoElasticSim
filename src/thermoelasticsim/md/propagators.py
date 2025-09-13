@@ -76,12 +76,12 @@ class PositionPropagator(Propagator):
         **kwargs : Any
             未使用，保持接口一致性
         """
-        for atom in cell.atoms:
-            # 位置更新：r(t+dt) = r(t) + v(t)*dt
-            atom.position += atom.velocity * dt
-
-            # 应用周期性边界条件
-            atom.position = cell.apply_periodic_boundary(atom.position)
+        # 向量化更新位置并一次性应用PBC，减少Python循环开销
+        positions = cell.get_positions()
+        velocities = cell.get_velocities()
+        new_positions = positions + velocities * dt
+        new_positions = cell.apply_periodic_boundary(new_positions)
+        cell.set_positions(new_positions)
 
 
 class VelocityPropagator(Propagator):
@@ -111,9 +111,12 @@ class VelocityPropagator(Propagator):
         该方法假设所有原子的力(atom.force)已经正确计算。
         如果力未计算或已过期，结果将不正确。
         """
-        for atom in cell.atoms:
-            # 速度更新：v(t+dt) = v(t) + F(t)/m*dt
-            atom.velocity += atom.force / atom.mass * dt
+        # 向量化速度更新，减少Python循环开销
+        velocities = cell.get_velocities()
+        forces = cell.get_forces()
+        masses = np.array([a.mass for a in cell.atoms], dtype=np.float64)
+        new_velocities = velocities + (forces / masses[:, None]) * dt
+        cell.set_velocities(new_velocities)
 
 
 class ForcePropagator(Propagator):
@@ -273,18 +276,17 @@ class BerendsenThermostatPropagator(Propagator):
             1.0 + (dt / self.tau) * (self.target_temperature / current_temp - 1.0)
         )
 
-        # ASE风格数值稳定性保护：限制缩放因子在合理范围内
-        # 根据研究报告，这防止了过度的速度缩放，提供数值稳定性
-        # 放宽限制从0.9-1.1到0.8-1.2，允许更大的温度调节
+        # 数值稳定性保护：限制缩放因子在较窄范围，避免长时间积累导致漂移/爆炸
         scaling_factor = raw_scaling_factor
         limited = False
 
-        if raw_scaling_factor > 1.2:
-            scaling_factor = 1.2
+        upper, lower = 1.05, 0.95
+        if raw_scaling_factor > upper:
+            scaling_factor = upper
             limited = True
             self._upper_limited += 1
-        elif raw_scaling_factor < 0.8:
-            scaling_factor = 0.8
+        elif raw_scaling_factor < lower:
+            scaling_factor = lower
             limited = True
             self._lower_limited += 1
 
@@ -325,9 +327,10 @@ class BerendsenThermostatPropagator(Propagator):
                 f"   当前温度={current_temp:.1f}K, 目标温度={self.target_temperature}K, τ_T={self.tau}fs"
             )
 
-        # 应用速度缩放： v_new = λ * v_old
-        for atom in cell.atoms:
-            atom.velocity *= scaling_factor
+        # 应用速度缩放： v_new = λ * v_old（向量化）
+        v = cell.get_velocities()
+        v *= scaling_factor
+        cell.set_velocities(v)
 
         # 更新统计信息
         self._total_scaling_steps += 1
@@ -789,6 +792,8 @@ class NoseHooverChainPropagator(Propagator):
         self._total_steps = 0
         self._temp_history = []
         self._conserved_energy_history = []
+        # 可选：上下文标签，用于日志打印（例如 "NVT预平衡 C11 +0.30%"）
+        self.context_label: str | None = None
 
     def _initialize_Q_parameters(self, cell: Cell) -> None:
         """初始化质量参数Q矩阵
@@ -827,8 +832,9 @@ class NoseHooverChainPropagator(Propagator):
 
         self._initialized = True
 
+        ctx = f" [{self.context_label}]" if getattr(self, "context_label", None) else ""
         print(
-            f"NHC初始化: N_atoms={self._num_atoms_global}, N_f={N_f}, "
+            f"NHC初始化{ctx}: N_atoms={self._num_atoms_global}, N_f={N_f}, "
             f"T={self.target_temperature}K, τ={self.tdamp}fs"
         )
         if self.tchain > 1:
@@ -939,9 +945,13 @@ class NoseHooverChainPropagator(Propagator):
 
         # 步骤3: 缩放粒子速度（关键的热浴耦合）
         # v *= exp(-delta * p_ζ[0] / Q[0])
-        scaling_factor = np.exp(-delta * self.p_zeta[0] / self.Q[0])
-        for atom in cell.atoms:
-            atom.velocity *= scaling_factor
+        # 数值保护：限制指数参数，避免溢出导致NaN
+        _arg = -delta * self.p_zeta[0] / self.Q[0]
+        scaling_factor = np.exp(np.clip(_arg, -50.0, 50.0))
+        # 统一缩放速度（向量化）
+        v = cell.get_velocities()
+        v *= scaling_factor
+        cell.set_velocities(v)
 
         # 步骤4: "向后"传播热浴链（0, 1, ..., M-1）
         for j in range(self.tchain):
@@ -972,7 +982,8 @@ class NoseHooverChainPropagator(Propagator):
         """
         # 第一部分：来自后续热浴的耦合（如果存在）
         if j < self.tchain - 1:
-            coupling_factor = np.exp(-delta4 * self.p_zeta[j + 1] / self.Q[j + 1])
+            _arg = -delta4 * self.p_zeta[j + 1] / self.Q[j + 1]
+            coupling_factor = np.exp(np.clip(_arg, -50.0, 50.0))
             self.p_zeta[j] *= coupling_factor
 
         # 计算热浴"力" G_j
@@ -1011,7 +1022,8 @@ class NoseHooverChainPropagator(Propagator):
 
         # 第二部分：再次来自后续热浴的耦合
         if j < self.tchain - 1:
-            coupling_factor = np.exp(-delta4 * self.p_zeta[j + 1] / self.Q[j + 1])
+            _arg2 = -delta4 * self.p_zeta[j + 1] / self.Q[j + 1]
+            coupling_factor = np.exp(np.clip(_arg2, -50.0, 50.0))
             self.p_zeta[j] *= coupling_factor
 
     def _update_statistics(self, cell: Cell, potential=None) -> None:
@@ -1022,9 +1034,12 @@ class NoseHooverChainPropagator(Propagator):
         current_temp = cell.calculate_temperature()
         self._temp_history.append(current_temp)
 
-        # 记录守恒量（扩展哈密顿量）
+        # 记录守恒量（扩展哈密顿量）——为降低开销，仅低频评估
         try:
-            conserved_energy = self.get_conserved_energy(cell, potential=potential)
+            if (self._total_steps % 100) == 0 and potential is not None:
+                conserved_energy = self.get_conserved_energy(cell, potential=potential)
+            else:
+                conserved_energy = float("nan")
             self._conserved_energy_history.append(conserved_energy)
         except Exception:
             # 如果计算失败，记录NaN
@@ -1059,19 +1074,28 @@ class NoseHooverChainPropagator(Propagator):
 
         # 动能和势能
         kinetic = self._calculate_instantaneous_kinetic_energy(cell)
-        # 兼容：优先使用显式传入的势能对象
-        if potential is None:
-            # 尝试从 Cell 获取（若提供），否则报错
+        # 势能计算的向后兼容处理：
+        # 1) 若显式传入 potential，对象应实现 calculate_energy(cell)
+        # 2) 否则优先使用 cell._last_potential_object（若存在）
+        # 3) 再否则，若 Cell 提供 calculate_potential_energy()（无参），则直接调用以获取标量势能
+        # 4) 若以上均不可用，则报错并提示调用方式
+        if potential is not None:
+            potential_energy = potential.calculate_energy(cell)
+        else:
             if (
                 hasattr(cell, "_last_potential_object")
                 and cell._last_potential_object is not None
             ):
-                potential = cell._last_potential_object
+                potential_energy = cell._last_potential_object.calculate_energy(cell)
+            elif hasattr(cell, "calculate_potential_energy") and callable(
+                cell.calculate_potential_energy
+            ):
+                # 兼容旧测试/用法：mock 或简化函数直接返回势能标量
+                potential_energy = cell.calculate_potential_energy()
             else:
                 raise RuntimeError(
                     "NHC需要计算势能，请传入 potential 或在 Cell 上提供 _last_potential_object。"
                 )
-        potential_energy = potential.calculate_energy(cell)
 
         # 热浴动能
         thermostat_kinetic = np.sum(0.5 * self.p_zeta**2 / self.Q)
@@ -1336,8 +1360,8 @@ class LangevinThermostatPropagator(Propagator):
 
             # 步骤6：更新原子速度
             # 重要：不再调用remove_com_motion()，因为已经在零质心子空间内
-            for i, atom in enumerate(cell.atoms):
-                atom.velocity = velocities_new[i]
+            # 批量更新速度（向量化赋值）
+            cell.set_velocities(velocities_new)
 
             # 更新统计信息
             self._total_steps += 1
